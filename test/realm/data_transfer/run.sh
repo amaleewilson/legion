@@ -9,9 +9,17 @@ nelems=(
     "32768"
     "65536"
     "131072"
+    "262144"
+    "524288"
+    "1048576"
+    "2097152"
+    "4194304"
+    "8388608"
+    "16777216"
+    "33554432"
 	)
 
-output_file=perfdata_$1$(date +"%Y%m%d%H%M").csv
+output_file=data/perfdata_$1$(date +"%Y%m%d%H%M").csv
 
 echo "method,time,fieldIDcount,elemcount,bytes,bytesPerNano" > $output_file
 

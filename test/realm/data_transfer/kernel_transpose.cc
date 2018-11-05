@@ -107,6 +107,94 @@ void top_level_task(const void *args, size_t arglen,
   new_runSoAtoAoSTest(0, &arg_v, m);
 }
 
+
+void memcpy_method(CUdeviceptr d_C, float *h_A, unsigned int mem_size_A, unsigned int size_A){
+
+  float *h_C;
+  checkCudaErrors(cuMemHostAlloc((void**)&h_C, mem_size_A, 0));
+
+  // create and start timer
+  StopWatchInterface *timer = NULL;
+  sdkCreateTimer(&timer);
+
+  // start the timer
+  sdkStartTimer(&timer);
+ 
+
+#ifdef NO_TRANSPOSE
+  checkCudaErrors(cuMemcpyHtoD(d_C, h_A, mem_size_A));
+  checkCudaErrors(cuCtxSynchronize());
+#elif TRANSPOSE1
+
+   for (size_t i = 0; i < size_A; ++i){
+        if (i % 2 == 0){
+            h_C[i] = h_A[i/2];
+        }
+        else{
+            h_C[i] = h_A[i/2 + size_A/2];
+        }
+   } 
+
+  checkCudaErrors(cuMemcpyHtoD(d_C, h_C, mem_size_A));
+  checkCudaErrors(cuCtxSynchronize());
+
+
+#endif
+
+  // stop and destroy timer
+  sdkStopTimer(&timer);
+  
+  float memcpy_time = sdkGetTimerValue(&timer);
+  sdkDeleteTimer(&timer);
+
+
+#ifdef CHECK_COPY
+  float *h_Ccheck = reinterpret_cast<float *>(malloc(mem_size_A));
+  checkCudaErrors(cuMemcpyDtoH(reinterpret_cast<void *>(h_Ccheck), d_C, mem_size_A)); 
+  checkCudaErrors(cuCtxSynchronize());
+
+  bool correct = true;
+  for (size_t i = 0; i < size_A; ++i){
+#ifdef NO_TRANSPOSE
+    if (h_Ccheck[i] - h_A[i] > 1e-5){
+        correct = false;
+        std::cout << "h_Ccheck[" << i << "] " << h_Ccheck[i] << " h_A : " << h_A[i] << std::endl; 
+    }
+#elif TRANSPOSE1
+    if (fabs(h_Ccheck[i] - h_C[i]) > 1e-5){
+        correct = false;
+    }
+#endif
+  }  
+
+  if (!correct){
+      std::cout << "failed test" << std::endl;
+  }
+  else{
+      std::cout << "PASSED test" << std::endl;
+  }
+  free(h_Ccheck);
+
+#endif
+    
+
+
+  checkCudaErrors(cuMemFree(d_C));
+  checkCudaErrors(cuMemFreeHost(h_A));
+ 
+  std::string method = "memcpy";
+
+#ifdef NO_TRANSPOSE
+  method += "_no_transpose";
+#elif TRANSPOSE1
+  method += "_transpose1";
+#endif
+
+
+  std::cout << method << "," << memcpy_time  << ",2," << num_elems << "," << mem_size_A << "," << mem_size_A/memcpy_time/1000000 << std::endl;
+
+}
+
 void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
 
   Rect<1> bounds(0, num_elems-1);
@@ -125,17 +213,9 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   InstanceLayoutConstraints aos_ilc(field_sizes, 1); //AOS 
   InstanceLayoutConstraints soa_ilc(field_sizes, 0); //SOA 
 
-  /*
-  int dim_order[4];
-  dim_order[0] = FID_Q;
-  dim_order[1] = FID_R;
-  dim_order[2] = FID_S;
-  dim_order[3] = FID_T;
-*/
 
-  int dim_order[2];
-  dim_order[0] = FID_Q;
-  dim_order[1] = FID_R;
+  int dim_order[1];
+  dim_order[0] = 0;
 
 
     // src mem
@@ -149,23 +229,23 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
       tgt[0].field_id = FID_Q;
       tgt[0].size = field_sizes[FID_Q];
 
-      int fill_value = 89;
+      float fill_value = 89.0;
       e = is.fill(tgt, ProfilingRequestSet(), &fill_value, sizeof(fill_value), e);
       e.wait();
 
-      fill_value = 29;
+      fill_value = 29.0;
       tgt[0].field_id = FID_R;
       tgt[0].size = field_sizes[FID_R];
       e = is.fill(tgt, ProfilingRequestSet(), &fill_value, sizeof(fill_value), e);
       e.wait();
 /*
-      fill_value = 59;
+      fill_value = 59.0;
       tgt[0].field_id = FID_S;
       tgt[0].size = field_sizes[FID_S];
       e = is.fill(tgt, ProfilingRequestSet(), &fill_value, sizeof(fill_value), e);
       e.wait();
 
-      fill_value = 39;
+      fill_value = 39.0;
       tgt[0].field_id = FID_T;
       tgt[0].size = field_sizes[FID_T];
       e = is.fill(tgt, ProfilingRequestSet(), &fill_value, sizeof(fill_value), e);
@@ -207,8 +287,10 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   unsigned int mem_size_A = sizeof(float) * size_A;
   
   
-    int tst[size_A];
-    int* tst_ptr = tst;
+    //float tst[size_A];
+    //void* tst_ptr = tst;
+    //float* tst_ptr = new float[size_A];
+    float* tst_ptr = new float[size_A];
     
     //MemoryImpl *src_memory = get_runtime()->get_memory_impl(src_insts[0]); 
     //float *src_base =  reinterpret_cast<float *>(src_memory->get_direct_ptr(0, mem_size_A)); 
@@ -217,25 +299,25 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
 
     //void *src_base = LocalCPUMemory(src_insts[0].get_location()).get_direct_ptr(0, mem_size_A);
 // necessary to read this again???
+    
     src_insts[0].read_untyped(0, tst_ptr, mem_size_A);
+    
     //src_insts[0].read_untyped(0, h_A, mem_size_A);
-
-    /*
-    log_app.print() << " og s_inst";
+/*
+    log_app.print() << V" og s_inst";
 
     for (int i = 0; i < 20; ++i){
-      log_app.print() << tst[i];
+      log_app.print() <<  tst_ptr[i];
     }
-    */
+*/
 
-
-  float *h_A2;
-  checkCudaErrors(cuMemHostAlloc((void**)&h_A2, mem_size_A, 0));
+  float *h_A;
+  checkCudaErrors(cuMemHostAlloc((void**)&h_A, mem_size_A, 0));
 
 
 
     for (size_t i = 0; i < size_A; ++i){
-        h_A2[i] = tst_ptr[i];
+        h_A[i] = tst_ptr[i];
         //std::cout << "test " << src_base[i] << std::endl;
         //h_A[i] = *((float*)(src_base[i]));
     }
@@ -244,15 +326,20 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   // read_untyped does not work with the cumemhostalloc'd h_A
   //src_insts[0].read_untyped(0, h_A, mem_size_A);
 
-    float *h_B2;
-  h_B2 = &(h_A2[num_elems]);
+    float *h_B;
+  h_B = &(h_A[num_elems]);
 
   //std::cout << "h_A[0] " << h_A[0] << "\n";
 
-  CUdeviceptr d_C2;
-  checkCudaErrors(cuMemAlloc(&d_C2, mem_size_A));
+  CUdeviceptr d_C;
+  checkCudaErrors(cuMemAlloc(&d_C, mem_size_A));
   
-  // create and start timer
+ 
+#ifdef MEMCPY
+    memcpy_method(d_C, h_A, mem_size_A, size_A);
+#elif KERNEL
+    std::string method = "kernel";
+    // create and start timer
   StopWatchInterface *timer = NULL;
   sdkCreateTimer(&timer);
 
@@ -262,15 +349,23 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
 
 ////// kernel timing
   dim3 block(block_size, 1, 1);
-  dim3 grid((num_elems*2)/block_size, 1, 1);
+  dim3 grid((num_elems*2)/block_size, 1, 1);// 2 is number of FID's
 
+ // 2 is number of FID's, this var not used in kernel
       size_t num_elems2 = (size_t)(size_A / 2);
       size_t elem_size = sizeof(float);
-      void *args[5] = {&h_A2, &h_B2, &d_C2, &elem_size, &num_elems2};
       // new CUDA 4.0 Driver API Kernel launch call
+#ifdef TRANSPOSE1
+      void *args[5] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2};
+#elif TRANSPOSE2
+      void *args[3] = {&h_A, &d_C, &num_elems2};
+#elif NO_TRANSPOSE
+      void *args[2] = {&h_A, &d_C};
+#endif
       checkCudaErrors(cuLaunchKernel( // TODO: double check the culaunch kernel api 
           copy_func, grid.x, grid.y, grid.z, block.x, block.y, block.z,
           2 * block_size * block_size * sizeof(float), NULL, args, NULL));
+
 
   checkCudaErrors(cuCtxSynchronize());
 
@@ -283,14 +378,66 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   //printf("Copy time for cumemcpyhtod: %f (ms)\n", sdkGetTimerValue(&timer));
   sdkDeleteTimer(&timer);
   ///// end kernel timing 
+ 
+#ifdef CHECK_COPY
+  float *h_Ccheck = reinterpret_cast<float *>(malloc(mem_size_A));
+  checkCudaErrors(cuMemcpyDtoH(reinterpret_cast<void *>(h_Ccheck), d_C, mem_size_A)); 
+  checkCudaErrors(cuCtxSynchronize());
+
+  bool correct = true;
+
+  for (int i = 0; i < size_A; i++) {
+    //
+    //printf("A_h[%05d]=%.8f, h_C=%.8f \n", i, h_A[i], h_Ccheck[i]);
+   // h_C[0] should be the first element in the original, 
+   // h_C[1] should be the num_elem'th element in the original.
+#ifndef NO_TRANSPOSE
+   if (i%2 == 0){
+    if (fabs(h_Ccheck[i] - 89) > 1e-5) {
+     correct = false;
+    }
+   }
+   else{
+    if (fabs(h_Ccheck[i] - 29) > 1e-5) {
+      correct = false;
+    }
+   }
+#else
+    if (fabs(h_Ccheck[i] - h_A[i]) > 1e-5){
+        correct = false;
+    }
+#endif
+  }
+
+  if (!correct){
+      std::cout << "failed test" << std::endl;
+  }
+  else{
+      std::cout << "PASSED test" << std::endl;
+  }
   
+  free(h_Ccheck);
+#endif
+  
+#ifdef TRANSPOSE1
+  method += "_transpose1";
+#elif TRANSPOSE2
+  method += "_transpose2";
+#elif NO_TRANSPOSE
+  method += "_no_transpose";
+#endif
 
-
-  checkCudaErrors(cuMemFreeHost(h_A2));
-  checkCudaErrors(cuMemFree(d_C2));
+  checkCudaErrors(cuMemFreeHost(h_A));
+  checkCudaErrors(cuMemFree(d_C));
   checkCudaErrors(cuCtxDestroy(cuContext));
 
-  std::cout << "kernel_transpose," << kernel_time  << ",2," << num_elems << "," << mem_size_A << "," << mem_size_A/kernel_time/1000000 << std::endl;
+  std::cout << method << "," << kernel_time  << ",2," << num_elems << "," << mem_size_A << "," << mem_size_A/kernel_time/1000000 << std::endl;
+
+#endif
+ 
+ 
+ 
+
 }
 
 
@@ -403,8 +550,13 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
   if (CUDA_SUCCESS != status) {
     goto Error;
   }
-
+#ifdef TRANSPOSE1
     status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS32_32bit");
+#elif TRANSPOSE2
+    status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS232_32bit");
+#elif NO_TRANSPOSE
+    status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSbasic32_32bit");
+#endif
 
   if (CUDA_SUCCESS != status) {
     goto Error;
