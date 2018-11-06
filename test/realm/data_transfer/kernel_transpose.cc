@@ -255,7 +255,7 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
 
       /*
     int tst[20];
-    int* tst_ptr = tst;
+    sharedtst_ptr = tst;
 
     s_inst.read_untyped(0, tst_ptr, 80);
 
@@ -361,6 +361,8 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
       void *args[3] = {&h_A, &d_C, &num_elems2};
 #elif NO_TRANSPOSE
       void *args[2] = {&h_A, &d_C};
+#elif SHARE_TRANSPOSE
+      void *args[5] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2};
 #endif
       checkCudaErrors(cuLaunchKernel( // TODO: double check the culaunch kernel api 
           copy_func, grid.x, grid.y, grid.z, block.x, block.y, block.z,
@@ -425,6 +427,8 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   method += "_transpose2";
 #elif NO_TRANSPOSE
   method += "_no_transpose";
+#elif SHARE_TRANSPOSE
+  method += "_share_transpose";
 #endif
 
   checkCudaErrors(cuMemFreeHost(h_A));
@@ -556,6 +560,8 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
     status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS232_32bit");
 #elif NO_TRANSPOSE
     status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSbasic32_32bit");
+#elif SHARE_TRANSPOSE
+    status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSshared32_32bit");
 #endif
 
   if (CUDA_SUCCESS != status) {

@@ -20,6 +20,47 @@
 */
 
 template <int block_size, typename size_type>
+__device__ void copykernelAoSshared(float *h_src_A, float *h_src_B, float *d_dst, size_type elem_size, size_type elem_count) {
+    // Block index
+  size_type bx = blockIdx.x;
+  size_type by = blockIdx.y;
+
+  // Thread index
+  size_type tx = threadIdx.x;
+  size_type ty = threadIdx.y;
+
+    size_type bdx = blockDim.x;
+    size_type bdy = blockDim.y;
+
+    // want ptr to start of each field id. 
+
+    __shared__ float tmp_d_dst[block_size];
+  //  tmp_d_dst[0] = 22.3;
+
+    size_type dst_idx = (bx + by*gridDim.x) * (bdx*bdy) + (ty*bdx) + tx; 
+    size_t t_idx = dst_idx % block_size;
+    //size_type dst_idx = bx*bdx + tx; 
+
+
+    //getting same perf for one elem per thread and for 2 elem per thread,
+   //but 8 elem per thread slows it down a lot. 
+    
+    if (dst_idx % 2 == 0){
+        //d_dst[dst_idx] = h_src_A[dst_idx/2];
+        // May be worth seeing if accessing host memory differently will improve performance
+        tmp_d_dst[t_idx] = h_src_A[dst_idx/2];
+    }
+    else{
+        //d_dst[dst_idx] = h_src_B[dst_idx/2];
+        tmp_d_dst[t_idx] = h_src_B[dst_idx/2];
+    }
+
+    __syncthreads();
+
+    d_dst[dst_idx] = tmp_d_dst[t_idx];
+}
+
+template <int block_size, typename size_type>
 __device__ void copykernelAoS(float *h_src_A, float *h_src_B, float *d_dst, size_type elem_size, size_type elem_count) {
     // Block index
   size_type bx = blockIdx.x;
@@ -153,6 +194,10 @@ extern "C" __global__ void copykernelAoS232_32bit(float *h_src_A, float *d_dst,
 extern "C" __global__ void copykernelAoSmulti32_32bit(float *h_src_A, float *h_src_B, float *d_dst,
                                                 int e_size, int e_count) {
   copykernelAoSmulti<32, int>(h_src_A, h_src_B, d_dst, e_size, e_count);
+}
+extern "C" __global__ void copykernelAoSshared32_32bit(float *h_src_A, float *h_src_B, float *d_dst,
+                                                int e_size, int e_count) {
+  copykernelAoSshared<32, int>(h_src_A, h_src_B, d_dst, e_size, e_count);
 }
 extern "C" __global__ void copykernelAoS32_32bit(float *h_src_A, float *h_src_B, float *d_dst,
                                                 int e_size, int e_count) {
