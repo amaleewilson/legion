@@ -238,19 +238,18 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
       tgt[0].size = field_sizes[FID_R];
       e = is.fill(tgt, ProfilingRequestSet(), &fill_value, sizeof(fill_value), e);
       e.wait();
-/*
+
       fill_value = 59.0;
       tgt[0].field_id = FID_S;
       tgt[0].size = field_sizes[FID_S];
       e = is.fill(tgt, ProfilingRequestSet(), &fill_value, sizeof(fill_value), e);
       e.wait();
-
+      
       fill_value = 39.0;
       tgt[0].field_id = FID_T;
       tgt[0].size = field_sizes[FID_T];
       e = is.fill(tgt, ProfilingRequestSet(), &fill_value, sizeof(fill_value), e);
       e.wait();
-*/
       src_insts.push_back(s_inst);
 
       /*
@@ -271,8 +270,8 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
 
   CUfunction copy_func = NULL;
   
-  //Adjust this variable.
   int block_size = 32;
+  //int block_size = 64; // This cut bw in half 
 
   CUresult error_id = initCUDA(argc, argv, &copy_func);
   if (error_id != CUDA_SUCCESS) {
@@ -280,16 +279,13 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
            getCudaDrvErrorString(error_id));
     exit(EXIT_FAILURE);
   }
+      size_t fid_count = field_sizes.size(); 
 
 
     // 2 fid's 
-  unsigned int size_A = num_elems * 2;
+  unsigned int size_A = num_elems * fid_count;
   unsigned int mem_size_A = sizeof(float) * size_A;
   
-  
-    //float tst[size_A];
-    //void* tst_ptr = tst;
-    //float* tst_ptr = new float[size_A];
     float* tst_ptr = new float[size_A];
     
     //MemoryImpl *src_memory = get_runtime()->get_memory_impl(src_insts[0]); 
@@ -349,20 +345,20 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
 
 ////// kernel timing
   dim3 block(block_size, 1, 1);
-  dim3 grid((num_elems*2)/block_size, 1, 1);// 2 is number of FID's
+  dim3 grid((size_A)/block_size, 1, 1);// 2 is number of FID's
 
  // 2 is number of FID's, this var not used in kernel
-      size_t num_elems2 = (size_t)(size_A / 2);
+      size_t num_elems2 = (size_t)(size_A / fid_count);
       size_t elem_size = sizeof(float);
       // new CUDA 4.0 Driver API Kernel launch call
 #ifdef TRANSPOSE1
-      void *args[5] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2};
+      void *args[6] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2, &fid_count};
 #elif TRANSPOSE2
       void *args[3] = {&h_A, &d_C, &num_elems2};
 #elif NO_TRANSPOSE
       void *args[2] = {&h_A, &d_C};
 #elif SHARE_TRANSPOSE
-      void *args[5] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2};
+      void *args[6] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2, &fid_count};
 #endif
       checkCudaErrors(cuLaunchKernel( // TODO: double check the culaunch kernel api 
           copy_func, grid.x, grid.y, grid.z, block.x, block.y, block.z,
@@ -389,21 +385,13 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   bool correct = true;
 
   for (int i = 0; i < size_A; i++) {
-    //
     //printf("A_h[%05d]=%.8f, h_C=%.8f \n", i, h_A[i], h_Ccheck[i]);
    // h_C[0] should be the first element in the original, 
    // h_C[1] should be the num_elem'th element in the original.
 #ifndef NO_TRANSPOSE
-   if (i%2 == 0){
-    if (fabs(h_Ccheck[i] - 89) > 1e-5) {
+    if (fabs(h_Ccheck[i] - h_A[i/fid_count + (i%fid_count)*num_elems]) > 1e-5) {
      correct = false;
     }
-   }
-   else{
-    if (fabs(h_Ccheck[i] - 29) > 1e-5) {
-      correct = false;
-    }
-   }
 #else
     if (fabs(h_Ccheck[i] - h_A[i]) > 1e-5){
         correct = false;
@@ -435,7 +423,7 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   checkCudaErrors(cuMemFree(d_C));
   checkCudaErrors(cuCtxDestroy(cuContext));
 
-  std::cout << method << "," << kernel_time  << ",2," << num_elems << "," << mem_size_A << "," << mem_size_A/kernel_time/1000000 << std::endl;
+  std::cout << method << "," << kernel_time  << "," << fid_count << "," << num_elems << "," << mem_size_A << "," << mem_size_A/kernel_time/1000000 << std::endl;
 
 #endif
  

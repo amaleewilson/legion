@@ -20,7 +20,8 @@
 */
 
 template <int block_size, typename size_type>
-__device__ void copykernelAoSshared(float *h_src_A, float *h_src_B, float *d_dst, size_type elem_size, size_type elem_count) {
+__device__ void copykernelAoSshared(float *h_src_A, float *h_src_B, float *d_dst, size_type elem_size, 
+        size_type elem_count, size_type fid_count) {
     // Block index
   size_type bx = blockIdx.x;
   size_type by = blockIdx.y;
@@ -44,7 +45,11 @@ __device__ void copykernelAoSshared(float *h_src_A, float *h_src_B, float *d_dst
 
     //getting same perf for one elem per thread and for 2 elem per thread,
    //but 8 elem per thread slows it down a lot. 
-    
+
+    tmp_d_dst[t_idx] = h_src_A[(dst_idx/fid_count) + (dst_idx%fid_count)*elem_count];
+
+
+/*
     if (dst_idx % 2 == 0){
         //d_dst[dst_idx] = h_src_A[dst_idx/2];
         // May be worth seeing if accessing host memory differently will improve performance
@@ -54,14 +59,15 @@ __device__ void copykernelAoSshared(float *h_src_A, float *h_src_B, float *d_dst
         //d_dst[dst_idx] = h_src_B[dst_idx/2];
         tmp_d_dst[t_idx] = h_src_B[dst_idx/2];
     }
-
+*/
     __syncthreads();
 
     d_dst[dst_idx] = tmp_d_dst[t_idx];
 }
 
 template <int block_size, typename size_type>
-__device__ void copykernelAoS(float *h_src_A, float *h_src_B, float *d_dst, size_type elem_size, size_type elem_count) {
+__device__ void copykernelAoS(float *h_src_A, float *h_src_B, float *d_dst, size_type elem_size, 
+        size_type elem_count, size_type fid_count) {
     // Block index
   size_type bx = blockIdx.x;
   size_type by = blockIdx.y;
@@ -85,7 +91,11 @@ __device__ void copykernelAoS(float *h_src_A, float *h_src_B, float *d_dst, size
 
     //getting same perf for one elem per thread and for 2 elem per thread,
    //but 8 elem per thread slows it down a lot. 
-    
+   
+
+    d_dst[dst_idx] = h_src_A[(dst_idx/fid_count) + (dst_idx%fid_count)*elem_count];
+
+   /* 
     if (dst_idx % 2 == 0){
         d_dst[dst_idx] = h_src_A[dst_idx/2];
         // May be worth seeing if accessing host memory differently will improve performance
@@ -93,6 +103,7 @@ __device__ void copykernelAoS(float *h_src_A, float *h_src_B, float *d_dst, size
     else{
         d_dst[dst_idx] = h_src_B[dst_idx/2];
     }
+    */
 }
 
 template <int block_size, typename size_type>
@@ -196,11 +207,11 @@ extern "C" __global__ void copykernelAoSmulti32_32bit(float *h_src_A, float *h_s
   copykernelAoSmulti<32, int>(h_src_A, h_src_B, d_dst, e_size, e_count);
 }
 extern "C" __global__ void copykernelAoSshared32_32bit(float *h_src_A, float *h_src_B, float *d_dst,
-                                                int e_size, int e_count) {
-  copykernelAoSshared<32, int>(h_src_A, h_src_B, d_dst, e_size, e_count);
+                                                int e_size, int e_count, int fid_count) {
+  copykernelAoSshared<32, int>(h_src_A, h_src_B, d_dst, e_size, e_count, fid_count);
 }
 extern "C" __global__ void copykernelAoS32_32bit(float *h_src_A, float *h_src_B, float *d_dst,
-                                                int e_size, int e_count) {
-  copykernelAoS<32, int>(h_src_A, h_src_B, d_dst, e_size, e_count);
+                                                int e_size, int e_count, int fid_count) {
+  copykernelAoS<32, int>(h_src_A, h_src_B, d_dst, e_size, e_count, fid_count);
 }
 #endif  // #ifndef _COPY_KERNEL_H_
