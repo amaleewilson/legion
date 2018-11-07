@@ -107,7 +107,7 @@ __device__ void copykernelAoS(float *h_src_A, float *h_src_B, float *d_dst, size
 }
 
 template <int block_size, typename size_type>
-__device__ void copykernelAoS2(float *h_src_A, float *d_dst, size_type elem_count) {
+__device__ void copykernelAoS2(float *h_src_A, float *d_dst, size_type elem_count, size_type fid_count) {
     // Block index
   size_type bx = blockIdx.x;
   size_type by = blockIdx.y;
@@ -126,15 +126,17 @@ __device__ void copykernelAoS2(float *h_src_A, float *d_dst, size_type elem_coun
   //  tmp_d_dst[0] = 22.3;
 
     size_type dst_idx = (bx + by*gridDim.x) * (bdx*bdy) + (ty*bdx) + tx; 
+    
+    d_dst[dst_idx] = h_src_A[(dst_idx/fid_count) + (dst_idx%fid_count)*elem_count];
     //size_type dst_idx = bx*bdx + tx; 
-
+/*
     if (dst_idx < elem_count){
         d_dst[2*dst_idx] = h_src_A[dst_idx];
     }
     else{
         d_dst[2*(dst_idx-elem_count) + 1] = h_src_A[dst_idx];
     }
-
+*/
     //getting same perf for one elem per thread and for 2 elem per thread,
    //but 8 elem per thread slows it down a lot. 
 }
@@ -199,8 +201,8 @@ extern "C" __global__ void copykernelAoSbasic32_32bit(float *h_src_A, float *d_d
   copykernelAoSbasic<32, int>(h_src_A, d_dst);
 }
 extern "C" __global__ void copykernelAoS232_32bit(float *h_src_A, float *d_dst,
-                                                int e_count) {
-  copykernelAoS2<32, int>(h_src_A, d_dst, e_count);
+                                                int e_count, int fid_count) {
+  copykernelAoS2<32, int>(h_src_A, d_dst, e_count, fid_count);
 }
 extern "C" __global__ void copykernelAoSmulti32_32bit(float *h_src_A, float *h_src_B, float *d_dst,
                                                 int e_size, int e_count) {

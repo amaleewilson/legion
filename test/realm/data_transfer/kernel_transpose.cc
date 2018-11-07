@@ -108,7 +108,7 @@ void top_level_task(const void *args, size_t arglen,
 }
 
 
-void memcpy_method(CUdeviceptr d_C, float *h_A, unsigned int mem_size_A, unsigned int size_A){
+void memcpy_method(CUdeviceptr d_C, float *h_A, unsigned int mem_size_A, unsigned int size_A, size_t fid_count){
 
   float *h_C;
   checkCudaErrors(cuMemHostAlloc((void**)&h_C, mem_size_A, 0));
@@ -120,6 +120,7 @@ void memcpy_method(CUdeviceptr d_C, float *h_A, unsigned int mem_size_A, unsigne
   // start the timer
   sdkStartTimer(&timer);
  
+    int elem_count = size_A/fid_count;
 
 #ifdef NO_TRANSPOSE
   checkCudaErrors(cuMemcpyHtoD(d_C, h_A, mem_size_A));
@@ -127,12 +128,7 @@ void memcpy_method(CUdeviceptr d_C, float *h_A, unsigned int mem_size_A, unsigne
 #elif TRANSPOSE1
 
    for (size_t i = 0; i < size_A; ++i){
-        if (i % 2 == 0){
-            h_C[i] = h_A[i/2];
-        }
-        else{
-            h_C[i] = h_A[i/2 + size_A/2];
-        }
+        h_C[i] = h_A[i/fid_count + (i%fid_count)*elem_count];
    } 
 
   checkCudaErrors(cuMemcpyHtoD(d_C, h_C, mem_size_A));
@@ -191,7 +187,7 @@ void memcpy_method(CUdeviceptr d_C, float *h_A, unsigned int mem_size_A, unsigne
 #endif
 
 
-  std::cout << method << "," << memcpy_time  << ",2," << num_elems << "," << mem_size_A << "," << mem_size_A/memcpy_time/1000000 << std::endl;
+  std::cout << method << "," << memcpy_time  << "," << fid_count << "," << num_elems << "," << mem_size_A << "," << mem_size_A/memcpy_time/1000000 << std::endl;
 
 }
 
@@ -332,7 +328,7 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   
  
 #ifdef MEMCPY
-    memcpy_method(d_C, h_A, mem_size_A, size_A);
+    memcpy_method(d_C, h_A, mem_size_A, size_A, fid_count);
 #elif KERNEL
     std::string method = "kernel";
     // create and start timer
@@ -354,7 +350,7 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
 #ifdef TRANSPOSE1
       void *args[6] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2, &fid_count};
 #elif TRANSPOSE2
-      void *args[3] = {&h_A, &d_C, &num_elems2};
+      void *args[4] = {&h_A, &d_C, &num_elems2, &fid_count};
 #elif NO_TRANSPOSE
       void *args[2] = {&h_A, &d_C};
 #elif SHARE_TRANSPOSE
