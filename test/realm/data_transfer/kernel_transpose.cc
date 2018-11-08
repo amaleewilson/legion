@@ -565,11 +565,20 @@ Error:
 
 int main(int argc, char **argv)
 {
-num_elems = std::stoi(argv[1]);
+//num_elems = std::stoi(argv[1]);
 
   Runtime rt;
 
   rt.init(&argc, &argv);
+
+
+  for(int i = 1; i < argc; i++) {
+    if(!strcmp(argv[i], "-ne")) {
+      num_elems = std::stoi(argv[++i]);
+      continue;
+    }
+
+  }
 
   rt.register_task(TOP_LEVEL_TASK, top_level_task);
 
