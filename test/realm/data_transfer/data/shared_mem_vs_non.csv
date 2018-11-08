@@ -1,4 +1,4 @@
-methon,time,fieldIDcount,elemcount,bytes,bytesPerNano
+method,time,fieldIDcount,elemcount,bytes,bytesPerNano
 kernel_transpose1,195.105,4,134217728,2147483648,11.0068
 kernel_transpose1,195.205,4,134217728,2147483648,11.0012
 kernel_transpose1,194.653,4,134217728,2147483648,11.0324
