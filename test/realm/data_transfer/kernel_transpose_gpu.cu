@@ -19,6 +19,38 @@
 #endif
 */
 
+template <int block_size, typename size_type, int fid_count>
+__device__ void copykernelAoSsharedmulti(float *h_src_A, float *h_src_B, float *d_dst, size_type elem_size, 
+        size_type elem_count) {
+    // Block index
+  size_type bx = blockIdx.x;
+  size_type by = blockIdx.y;
+
+  // Thread index
+  size_type tx = threadIdx.x;
+  size_type ty = threadIdx.y;
+
+    size_type bdx = blockDim.x;
+    size_type bdy = blockDim.y;
+
+    // want ptr to start of each field id. 
+
+    __shared__ float tmp_d_dst[block_size*fid_count];
+  //  tmp_d_dst[0] = 22.3;
+
+    size_type t_id = ((bx + by*gridDim.x) * (bdx*bdy) + (ty*bdx) + tx);
+
+  
+    size_type c_sz = fid_count;
+    
+
+    for (size_type i = 0; i < fid_count; ++i){
+      tmp_d_dst[t_id%block_size*c_sz + i] = h_src_A[elem_count*i + t_id];
+      d_dst[t_id*c_sz + i] = tmp_d_dst[t_id%block_size*c_sz + i];  
+    }
+
+
+}
 template <int block_size, typename size_type>
 __device__ void copykernelAoSshared(float *h_src_A, float *h_src_B, float *d_dst, size_type elem_size, 
         size_type elem_count, size_type fid_count) {
@@ -207,6 +239,10 @@ extern "C" __global__ void copykernelAoS232_32bit(float *h_src_A, float *d_dst,
 extern "C" __global__ void copykernelAoSmulti32_32bit(float *h_src_A, float *h_src_B, float *d_dst,
                                                 int e_size, int e_count) {
   copykernelAoSmulti<32, int>(h_src_A, h_src_B, d_dst, e_size, e_count);
+}
+extern "C" __global__ void copykernelAoSsharedmulti32_32bit(float *h_src_A, float *h_src_B, float *d_dst,
+                                                int e_size, int e_count, int fid_count) {
+  copykernelAoSsharedmulti<32, int, 4/*fid_count*/>(h_src_A, h_src_B, d_dst, e_size, e_count);
 }
 extern "C" __global__ void copykernelAoSshared32_32bit(float *h_src_A, float *h_src_B, float *d_dst,
                                                 int e_size, int e_count, int fid_count) {

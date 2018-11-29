@@ -341,12 +341,18 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
 
 ////// kernel timing
   dim3 block(block_size, 1, 1);
+#ifndef SHARE_TRANSPOSE_MULTI
   dim3 grid((size_A)/block_size, 1, 1);// 2 is number of FID's
-
+#else
+  dim3 grid((size_A)/block_size/fid_count, 1, 1);// 2 is number of FID's
+#endif
  // 2 is number of FID's, this var not used in kernel
       size_t num_elems2 = (size_t)(size_A / fid_count);
       size_t elem_size = sizeof(float);
       // new CUDA 4.0 Driver API Kernel launch call
+      
+      // size_t shared_size = block_size * sizeof(float);
+      size_t shared_size = block_size * sizeof(float);
 #ifdef TRANSPOSE1
       void *args[6] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2, &fid_count};
 #elif TRANSPOSE2
@@ -355,10 +361,12 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
       void *args[2] = {&h_A, &d_C};
 #elif SHARE_TRANSPOSE
       void *args[6] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2, &fid_count};
+#elif SHARE_TRANSPOSE_MULTI
+      void *args[6] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2, &fid_count};
 #endif
       checkCudaErrors(cuLaunchKernel( // TODO: double check the culaunch kernel api 
           copy_func, grid.x, grid.y, grid.z, block.x, block.y, block.z,
-          2 * block_size * block_size * sizeof(float), NULL, args, NULL));
+          shared_size, NULL, args, NULL));
 
 
   checkCudaErrors(cuCtxSynchronize());
@@ -385,11 +393,15 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
    // h_C[0] should be the first element in the original, 
    // h_C[1] should be the num_elem'th element in the original.
 #ifndef NO_TRANSPOSE
-    if (fabs(h_Ccheck[i] - h_A[i/fid_count + (i%fid_count)*num_elems]) > 1e-5) {
+        //std::cout << "h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
+  
+      if (fabs(h_Ccheck[i] - h_A[i/fid_count + (i%fid_count)*num_elems]) > 1e-5) {
+//        std::cout << "h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
      correct = false;
     }
 #else
     if (fabs(h_Ccheck[i] - h_A[i]) > 1e-5){
+        std::cout << "h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
         correct = false;
     }
 #endif
@@ -411,6 +423,8 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   method += "_transpose2";
 #elif NO_TRANSPOSE
   method += "_no_transpose";
+#elif SHARE_TRANSPOSE_MULTI
+  method += "_share_transpose_multi";
 #elif SHARE_TRANSPOSE
   method += "_share_transpose";
 #endif
@@ -544,6 +558,8 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
     status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS232_32bit");
 #elif NO_TRANSPOSE
     status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSbasic32_32bit");
+#elif SHARE_TRANSPOSE_MULTI
+    status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSsharedmulti32_32bit");
 #elif SHARE_TRANSPOSE
     status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSshared32_32bit");
 #endif
