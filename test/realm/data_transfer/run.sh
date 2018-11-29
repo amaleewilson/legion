@@ -21,14 +21,14 @@ nelems=(
 
 output_file=data/perfdata_$1$(date +"%Y%m%d%H%M").csv
 
-echo "method,time,fieldIDcount,elemcount,bytes,bytesPerNano" > $output_file
+echo "method,time,fieldIDcount,elemcount,bytes,bytesPerNano,machine" > $output_file
 
 for n in ${nelems[*]};
 do
 
         for i in {1..10};
         do
-            echo "$(./$1 $n)" >> $output_file;
+            echo "$(./$1 -ne $n),$2" >> $output_file;
         done
 
 done
