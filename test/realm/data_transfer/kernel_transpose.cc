@@ -341,11 +341,6 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
 
 ////// kernel timing
   dim3 block(block_size, 1, 1);
-#ifndef SHARE_TRANSPOSE_MULTI
-  dim3 grid((size_A)/block_size, 1, 1);// 2 is number of FID's
-#else
-  dim3 grid((size_A)/block_size/fid_count, 1, 1);// 2 is number of FID's
-#endif
  // 2 is number of FID's, this var not used in kernel
       size_t num_elems2 = (size_t)(size_A / fid_count);
       size_t elem_size = sizeof(float);
@@ -354,14 +349,30 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
       // size_t shared_size = block_size * sizeof(float);
       size_t shared_size = block_size * sizeof(float);
 #ifdef TRANSPOSE1
+  dim3 grid((size_A)/block_size, 1, 1); // Copies 1 elem per thread
       void *args[6] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2, &fid_count};
 #elif TRANSPOSE2
+  dim3 grid((size_A)/block_size, 1, 1); // Copies 1 elem per thread
       void *args[4] = {&h_A, &d_C, &num_elems2, &fid_count};
 #elif NO_TRANSPOSE
+  dim3 grid((size_A)/block_size, 1, 1); // Copies 1 elem per thread
       void *args[2] = {&h_A, &d_C};
 #elif SHARE_TRANSPOSE
+  dim3 grid((size_A)/block_size, 1, 1); // Copies 1 elem per thread
       void *args[6] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2, &fid_count};
-#elif SHARE_TRANSPOSE_MULTI
+#elif TRANSPOSE_MULTI8
+      //dim3 grid((size_A)/block_size/8, 1, 1);// 2 is number of FID's
+      dim3 grid((size_A)/block_size/8, 1, 1); // Copies 8 elems per thread
+      void *args[6] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2, &fid_count};
+#elif TRANSPOSE_MULTI4
+      dim3 grid((size_A)/block_size/4, 1, 1); // Copies 4 elems per thread
+      void *args[6] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2, &fid_count};
+#elif SHARE_TRANSPOSE_MULTI8
+      //dim3 grid((size_A)/block_size/8, 1, 1);// 2 is number of FID's
+      dim3 grid((size_A)/block_size/8, 1, 1); // Copies 8 elems per thread
+      void *args[6] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2, &fid_count};
+#elif SHARE_TRANSPOSE_MULTI4
+      dim3 grid((size_A)/block_size/4, 1, 1); // Copies 4 elems per thread
       void *args[6] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2, &fid_count};
 #endif
       checkCudaErrors(cuLaunchKernel( // TODO: double check the culaunch kernel api 
@@ -423,8 +434,14 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   method += "_transpose2";
 #elif NO_TRANSPOSE
   method += "_no_transpose";
-#elif SHARE_TRANSPOSE_MULTI
-  method += "_share_transpose_multi";
+#elif TRANSPOSE_MULTI8
+  method += "_transpose_multi8";
+#elif TRANSPOSE_MULTI4
+  method += "_transpose_multi4";
+#elif SHARE_TRANSPOSE_MULTI8
+  method += "_share_transpose_multi8";
+#elif SHARE_TRANSPOSE_MULTI4
+  method += "_share_transpose_multi4";
 #elif SHARE_TRANSPOSE
   method += "_share_transpose";
 #endif
@@ -558,8 +575,14 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
     status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS232_32bit");
 #elif NO_TRANSPOSE
     status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSbasic32_32bit");
-#elif SHARE_TRANSPOSE_MULTI
-    status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSsharedmulti32_32bit");
+#elif TRANSPOSE_MULTI8
+    status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSnewmulti32_32bit_8");
+#elif TRANSPOSE_MULTI4
+    status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSnewmulti32_32bit_4");
+#elif SHARE_TRANSPOSE_MULTI8
+    status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSsharedmulti32_32bit_8");
+#elif SHARE_TRANSPOSE_MULTI4
+    status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSsharedmulti32_32bit_4");
 #elif SHARE_TRANSPOSE
     status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSshared32_32bit");
 #endif
