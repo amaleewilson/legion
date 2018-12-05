@@ -1,0 +1,2881 @@
+method,time,fieldIDcount,elemcount,bytes,bytesPerNano,machine
+PASSED test
+kernel_transpose1,0.031,4,1024,16384,0.528516,cn401
+PASSED test
+kernel_transpose1,0.031,4,1024,16384,0.528516,cn401
+PASSED test
+kernel_transpose1,0.027,4,1024,16384,0.606815,cn401
+PASSED test
+kernel_transpose1,0.03,4,1024,16384,0.546133,cn401
+PASSED test
+kernel_transpose1,0.027,4,1024,16384,0.606815,cn401
+PASSED test
+kernel_transpose1,0.027,4,1024,16384,0.606815,cn401
+PASSED test
+kernel_transpose1,0.026,4,1024,16384,0.630154,cn401
+PASSED test
+kernel_transpose1,0.027,4,1024,16384,0.606815,cn401
+PASSED test
+kernel_transpose1,0.026,4,1024,16384,0.630154,cn401
+PASSED test
+kernel_transpose1,0.026,4,1024,16384,0.630154,cn401
+PASSED test
+kernel_transpose1,0.029,4,2048,32768,1.12993,cn401
+PASSED test
+kernel_transpose1,0.028,4,2048,32768,1.17029,cn401
+PASSED test
+kernel_transpose1,0.03,4,2048,32768,1.09227,cn401
+PASSED test
+kernel_transpose1,0.031,4,2048,32768,1.05703,cn401
+PASSED test
+kernel_transpose1,0.032,4,2048,32768,1.024,cn401
+PASSED test
+kernel_transpose1,0.031,4,2048,32768,1.05703,cn401
+PASSED test
+kernel_transpose1,0.028,4,2048,32768,1.17029,cn401
+PASSED test
+kernel_transpose1,0.028,4,2048,32768,1.17029,cn401
+PASSED test
+kernel_transpose1,0.028,4,2048,32768,1.17029,cn401
+PASSED test
+kernel_transpose1,0.031,4,2048,32768,1.05703,cn401
+PASSED test
+kernel_transpose1,0.032,4,4096,65536,2.048,cn401
+PASSED test
+kernel_transpose1,0.031,4,4096,65536,2.11406,cn401
+PASSED test
+kernel_transpose1,0.035,4,4096,65536,1.87246,cn401
+PASSED test
+kernel_transpose1,0.031,4,4096,65536,2.11406,cn401
+PASSED test
+kernel_transpose1,0.035,4,4096,65536,1.87246,cn401
+PASSED test
+kernel_transpose1,0.034,4,4096,65536,1.92753,cn401
+PASSED test
+kernel_transpose1,0.032,4,4096,65536,2.048,cn401
+PASSED test
+kernel_transpose1,0.03,4,4096,65536,2.18453,cn401
+PASSED test
+kernel_transpose1,0.035,4,4096,65536,1.87246,cn401
+PASSED test
+kernel_transpose1,0.03,4,4096,65536,2.18453,cn401
+PASSED test
+kernel_transpose1,0.036,4,8192,131072,3.64089,cn401
+PASSED test
+kernel_transpose1,0.038,4,8192,131072,3.44926,cn401
+PASSED test
+kernel_transpose1,0.039,4,8192,131072,3.36082,cn401
+PASSED test
+kernel_transpose1,0.041,4,8192,131072,3.19688,cn401
+PASSED test
+kernel_transpose1,0.041,4,8192,131072,3.19688,cn401
+PASSED test
+kernel_transpose1,0.037,4,8192,131072,3.54249,cn401
+PASSED test
+kernel_transpose1,0.037,4,8192,131072,3.54249,cn401
+PASSED test
+kernel_transpose1,0.037,4,8192,131072,3.54249,cn401
+PASSED test
+kernel_transpose1,0.036,4,8192,131072,3.64089,cn401
+PASSED test
+kernel_transpose1,0.036,4,8192,131072,3.64089,cn401
+PASSED test
+kernel_transpose1,0.05,4,16384,262144,5.24288,cn401
+PASSED test
+kernel_transpose1,0.051,4,16384,262144,5.14008,cn401
+PASSED test
+kernel_transpose1,0.049,4,16384,262144,5.34988,cn401
+PASSED test
+kernel_transpose1,0.049,4,16384,262144,5.34988,cn401
+PASSED test
+kernel_transpose1,0.05,4,16384,262144,5.24288,cn401
+PASSED test
+kernel_transpose1,0.049,4,16384,262144,5.34988,cn401
+PASSED test
+kernel_transpose1,0.047,4,16384,262144,5.57753,cn401
+PASSED test
+kernel_transpose1,0.052,4,16384,262144,5.04123,cn401
+PASSED test
+kernel_transpose1,0.051,4,16384,262144,5.14008,cn401
+PASSED test
+kernel_transpose1,0.045,4,16384,262144,5.82542,cn401
+PASSED test
+kernel_transpose1,0.071,4,32768,524288,7.38434,cn401
+PASSED test
+kernel_transpose1,0.072,4,32768,524288,7.28178,cn401
+PASSED test
+kernel_transpose1,0.077,4,32768,524288,6.80894,cn401
+PASSED test
+kernel_transpose1,0.068,4,32768,524288,7.71012,cn401
+PASSED test
+kernel_transpose1,0.068,4,32768,524288,7.71012,cn401
+PASSED test
+kernel_transpose1,0.074,4,32768,524288,7.08497,cn401
+PASSED test
+kernel_transpose1,0.081,4,32768,524288,6.47269,cn401
+PASSED test
+kernel_transpose1,0.07,4,32768,524288,7.48983,cn401
+PASSED test
+kernel_transpose1,0.069,4,32768,524288,7.59838,cn401
+PASSED test
+kernel_transpose1,0.067,4,32768,524288,7.82519,cn401
+PASSED test
+kernel_transpose1,0.116,4,65536,1048576,9.03945,cn401
+PASSED test
+kernel_transpose1,0.11,4,65536,1048576,9.53251,cn401
+PASSED test
+kernel_transpose1,0.113,4,65536,1048576,9.27943,cn401
+PASSED test
+kernel_transpose1,0.117,4,65536,1048576,8.96219,cn401
+PASSED test
+kernel_transpose1,0.114,4,65536,1048576,9.19804,cn401
+PASSED test
+kernel_transpose1,0.121,4,65536,1048576,8.66592,cn401
+PASSED test
+kernel_transpose1,0.113,4,65536,1048576,9.27943,cn401
+PASSED test
+kernel_transpose1,0.119,4,65536,1048576,8.81156,cn401
+PASSED test
+kernel_transpose1,0.111,4,65536,1048576,9.44663,cn401
+PASSED test
+kernel_transpose1,0.114,4,65536,1048576,9.19804,cn401
+PASSED test
+kernel_transpose1,0.205,4,131072,2097152,10.23,cn401
+PASSED test
+kernel_transpose1,0.216,4,131072,2097152,9.70904,cn401
+PASSED test
+kernel_transpose1,0.203,4,131072,2097152,10.3308,cn401
+PASSED test
+kernel_transpose1,0.232,4,131072,2097152,9.03945,cn401
+PASSED test
+kernel_transpose1,0.212,4,131072,2097152,9.89223,cn401
+PASSED test
+kernel_transpose1,0.222,4,131072,2097152,9.44663,cn401
+PASSED test
+kernel_transpose1,0.22,4,131072,2097152,9.53251,cn401
+PASSED test
+kernel_transpose1,0.21,4,131072,2097152,9.98644,cn401
+PASSED test
+kernel_transpose1,0.208,4,131072,2097152,10.0825,cn401
+PASSED test
+kernel_transpose1,0.224,4,131072,2097152,9.36228,cn401
+PASSED test
+kernel_transpose1,0.405,4,262144,4194304,10.3563,cn401
+PASSED test
+kernel_transpose1,0.445,4,262144,4194304,9.4254,cn401
+PASSED test
+kernel_transpose1,0.448,4,262144,4194304,9.36228,cn401
+PASSED test
+kernel_transpose1,0.447,4,262144,4194304,9.38323,cn401
+PASSED test
+kernel_transpose1,0.432,4,262144,4194304,9.70904,cn401
+PASSED test
+kernel_transpose1,0.444,4,262144,4194304,9.44663,cn401
+PASSED test
+kernel_transpose1,0.441,4,262144,4194304,9.51089,cn401
+PASSED test
+kernel_transpose1,0.442,4,262144,4194304,9.48938,cn401
+PASSED test
+kernel_transpose1,0.403,4,262144,4194304,10.4077,cn401
+PASSED test
+kernel_transpose1,0.444,4,262144,4194304,9.44663,cn401
+PASSED test
+kernel_transpose1,0.865,4,524288,8388608,9.69781,cn401
+PASSED test
+kernel_transpose1,0.831,4,524288,8388608,10.0946,cn401
+PASSED test
+kernel_transpose1,0.868,4,524288,8388608,9.6643,cn401
+PASSED test
+kernel_transpose1,0.86,4,524288,8388608,9.7542,cn401
+PASSED test
+kernel_transpose1,0.861,4,524288,8388608,9.74287,cn401
+PASSED test
+kernel_transpose1,0.861,4,524288,8388608,9.74287,cn401
+PASSED test
+kernel_transpose1,0.708,4,524288,8388608,11.8483,cn401
+PASSED test
+kernel_transpose1,0.862,4,524288,8388608,9.73156,cn401
+PASSED test
+kernel_transpose1,0.834,4,524288,8388608,10.0583,cn401
+PASSED test
+kernel_transpose1,0.866,4,524288,8388608,9.68661,cn401
+PASSED test
+kernel_transpose1,1.377,4,1048576,16777216,12.1839,cn401
+PASSED test
+kernel_transpose1,1.462,4,1048576,16777216,11.4755,cn401
+PASSED test
+kernel_transpose1,1.698,4,1048576,16777216,9.88058,cn401
+PASSED test
+kernel_transpose1,1.375,4,1048576,16777216,12.2016,cn401
+PASSED test
+kernel_transpose1,1.693,4,1048576,16777216,9.90976,cn401
+PASSED test
+kernel_transpose1,1.698,4,1048576,16777216,9.88058,cn401
+PASSED test
+kernel_transpose1,1.691,4,1048576,16777216,9.92148,cn401
+PASSED test
+kernel_transpose1,1.698,4,1048576,16777216,9.88058,cn401
+PASSED test
+kernel_transpose1,1.565,4,1048576,16777216,10.7203,cn401
+PASSED test
+kernel_transpose1,1.698,4,1048576,16777216,9.88058,cn401
+PASSED test
+kernel_transpose1,2.721,4,2097152,33554432,12.3317,cn401
+PASSED test
+kernel_transpose1,2.741,4,2097152,33554432,12.2417,cn401
+PASSED test
+kernel_transpose1,2.792,4,2097152,33554432,12.0181,cn401
+PASSED test
+kernel_transpose1,2.776,4,2097152,33554432,12.0873,cn401
+PASSED test
+kernel_transpose1,2.759,4,2097152,33554432,12.1618,cn401
+PASSED test
+kernel_transpose1,2.813,4,2097152,33554432,11.9283,cn401
+PASSED test
+kernel_transpose1,2.839,4,2097152,33554432,11.8191,cn401
+PASSED test
+kernel_transpose1,2.743,4,2097152,33554432,12.2327,cn401
+PASSED test
+kernel_transpose1,2.728,4,2097152,33554432,12.3,cn401
+PASSED test
+kernel_transpose1,2.732,4,2097152,33554432,12.282,cn401
+PASSED test
+kernel_transpose1,6.029,4,4194304,67108864,11.131,cn401
+PASSED test
+kernel_transpose1,5.857,4,4194304,67108864,11.4579,cn401
+PASSED test
+kernel_transpose1,6.306,4,4194304,67108864,10.6421,cn401
+PASSED test
+kernel_transpose1,5.433,4,4194304,67108864,12.3521,cn401
+PASSED test
+kernel_transpose1,5.994,4,4194304,67108864,11.196,cn401
+PASSED test
+kernel_transpose1,5.409,4,4194304,67108864,12.4069,cn401
+PASSED test
+kernel_transpose1,6.026,4,4194304,67108864,11.1366,cn401
+PASSED test
+kernel_transpose1,5.687,4,4194304,67108864,11.8004,cn401
+PASSED test
+kernel_transpose1,5.965,4,4194304,67108864,11.2504,cn401
+PASSED test
+kernel_transpose1,5.637,4,4194304,67108864,11.9051,cn401
+PASSED test
+kernel_transpose1,10.769,4,8388608,134217728,12.4633,cn401
+PASSED test
+kernel_transpose1,10.771,4,8388608,134217728,12.461,cn401
+PASSED test
+kernel_transpose1,10.774,4,8388608,134217728,12.4576,cn401
+PASSED test
+kernel_transpose1,11.138,4,8388608,134217728,12.0504,cn401
+PASSED test
+kernel_transpose1,10.819,4,8388608,134217728,12.4057,cn401
+PASSED test
+kernel_transpose1,10.77,4,8388608,134217728,12.4622,cn401
+PASSED test
+kernel_transpose1,10.831,4,8388608,134217728,12.392,cn401
+PASSED test
+kernel_transpose1,10.802,4,8388608,134217728,12.4253,cn401
+PASSED test
+kernel_transpose1,10.774,4,8388608,134217728,12.4576,cn401
+PASSED test
+kernel_transpose1,10.817,4,8388608,134217728,12.408,cn401
+PASSED test
+kernel_transpose1,21.75,4,16777216,268435456,12.3419,cn401
+PASSED test
+kernel_transpose1,21.611,4,16777216,268435456,12.4212,cn401
+PASSED test
+kernel_transpose1,21.969,4,16777216,268435456,12.2188,cn401
+PASSED test
+kernel_transpose1,21.989,4,16777216,268435456,12.2077,cn401
+PASSED test
+kernel_transpose1,21.71,4,16777216,268435456,12.3646,cn401
+PASSED test
+kernel_transpose1,21.567,4,16777216,268435456,12.4466,cn401
+PASSED test
+kernel_transpose1,21.692,4,16777216,268435456,12.3749,cn401
+PASSED test
+kernel_transpose1,21.549,4,16777216,268435456,12.457,cn401
+PASSED test
+kernel_transpose1,21.512,4,16777216,268435456,12.4784,cn401
+PASSED test
+kernel_transpose1,21.596,4,16777216,268435456,12.4299,cn401
+PASSED test
+kernel_transpose1,43.022,4,33554432,536870912,12.479,cn401
+PASSED test
+kernel_transpose1,43.098,4,33554432,536870912,12.457,cn401
+PASSED test
+kernel_transpose1,43.059,4,33554432,536870912,12.4683,cn401
+PASSED test
+kernel_transpose1,43.037,4,33554432,536870912,12.4746,cn401
+PASSED test
+kernel_transpose1,43.022,4,33554432,536870912,12.479,cn401
+PASSED test
+kernel_transpose1,43.31,4,33554432,536870912,12.396,cn401
+PASSED test
+kernel_transpose1,42.999,4,33554432,536870912,12.4857,cn401
+PASSED test
+kernel_transpose1,43.214,4,33554432,536870912,12.4235,cn401
+PASSED test
+kernel_transpose1,43.325,4,33554432,536870912,12.3917,cn401
+PASSED test
+kernel_transpose1,43.095,4,33554432,536870912,12.4578,cn401
+PASSED test
+kernel_transpose2,0.026,4,1024,16384,0.630154,cn401
+PASSED test
+kernel_transpose2,0.024,4,1024,16384,0.682667,cn401
+PASSED test
+kernel_transpose2,0.025,4,1024,16384,0.65536,cn401
+PASSED test
+kernel_transpose2,0.026,4,1024,16384,0.630154,cn401
+PASSED test
+kernel_transpose2,0.029,4,1024,16384,0.564966,cn401
+PASSED test
+kernel_transpose2,0.024,4,1024,16384,0.682667,cn401
+PASSED test
+kernel_transpose2,0.026,4,1024,16384,0.630154,cn401
+PASSED test
+kernel_transpose2,0.025,4,1024,16384,0.65536,cn401
+PASSED test
+kernel_transpose2,0.025,4,1024,16384,0.65536,cn401
+PASSED test
+kernel_transpose2,0.03,4,1024,16384,0.546133,cn401
+PASSED test
+kernel_transpose2,0.028,4,2048,32768,1.17029,cn401
+PASSED test
+kernel_transpose2,0.031,4,2048,32768,1.05703,cn401
+PASSED test
+kernel_transpose2,0.027,4,2048,32768,1.21363,cn401
+PASSED test
+kernel_transpose2,0.031,4,2048,32768,1.05703,cn401
+PASSED test
+kernel_transpose2,0.027,4,2048,32768,1.21363,cn401
+PASSED test
+kernel_transpose2,0.035,4,2048,32768,0.936229,cn401
+PASSED test
+kernel_transpose2,0.028,4,2048,32768,1.17029,cn401
+PASSED test
+kernel_transpose2,0.026,4,2048,32768,1.26031,cn401
+PASSED test
+kernel_transpose2,0.037,4,2048,32768,0.885622,cn401
+PASSED test
+kernel_transpose2,0.026,4,2048,32768,1.26031,cn401
+PASSED test
+kernel_transpose2,0.031,4,4096,65536,2.11406,cn401
+PASSED test
+kernel_transpose2,0.033,4,4096,65536,1.98594,cn401
+PASSED test
+kernel_transpose2,0.031,4,4096,65536,2.11406,cn401
+PASSED test
+kernel_transpose2,0.031,4,4096,65536,2.11406,cn401
+PASSED test
+kernel_transpose2,0.031,4,4096,65536,2.11406,cn401
+PASSED test
+kernel_transpose2,0.036,4,4096,65536,1.82044,cn401
+PASSED test
+kernel_transpose2,0.031,4,4096,65536,2.11406,cn401
+PASSED test
+kernel_transpose2,0.034,4,4096,65536,1.92753,cn401
+PASSED test
+kernel_transpose2,0.031,4,4096,65536,2.11406,cn401
+PASSED test
+kernel_transpose2,0.032,4,4096,65536,2.048,cn401
+PASSED test
+kernel_transpose2,0.043,4,8192,131072,3.04819,cn401
+PASSED test
+kernel_transpose2,0.04,4,8192,131072,3.2768,cn401
+PASSED test
+kernel_transpose2,0.041,4,8192,131072,3.19688,cn401
+PASSED test
+kernel_transpose2,0.04,4,8192,131072,3.2768,cn401
+PASSED test
+kernel_transpose2,0.04,4,8192,131072,3.2768,cn401
+PASSED test
+kernel_transpose2,0.041,4,8192,131072,3.19688,cn401
+PASSED test
+kernel_transpose2,0.039,4,8192,131072,3.36082,cn401
+PASSED test
+kernel_transpose2,0.041,4,8192,131072,3.19688,cn401
+PASSED test
+kernel_transpose2,0.041,4,8192,131072,3.19688,cn401
+PASSED test
+kernel_transpose2,0.042,4,8192,131072,3.12076,cn401
+PASSED test
+kernel_transpose2,0.054,4,16384,262144,4.85452,cn401
+PASSED test
+kernel_transpose2,0.055,4,16384,262144,4.76625,cn401
+PASSED test
+kernel_transpose2,0.053,4,16384,262144,4.94611,cn401
+PASSED test
+kernel_transpose2,0.052,4,16384,262144,5.04123,cn401
+PASSED test
+kernel_transpose2,0.058,4,16384,262144,4.51972,cn401
+PASSED test
+kernel_transpose2,0.056,4,16384,262144,4.68114,cn401
+PASSED test
+kernel_transpose2,0.055,4,16384,262144,4.76625,cn401
+PASSED test
+kernel_transpose2,0.055,4,16384,262144,4.76625,cn401
+PASSED test
+kernel_transpose2,0.059,4,16384,262144,4.44312,cn401
+PASSED test
+kernel_transpose2,0.051,4,16384,262144,5.14008,cn401
+PASSED test
+kernel_transpose2,0.075,4,32768,524288,6.99051,cn401
+PASSED test
+kernel_transpose2,0.077,4,32768,524288,6.80894,cn401
+PASSED test
+kernel_transpose2,0.078,4,32768,524288,6.72164,cn401
+PASSED test
+kernel_transpose2,0.076,4,32768,524288,6.89853,cn401
+PASSED test
+kernel_transpose2,0.075,4,32768,524288,6.99051,cn401
+PASSED test
+kernel_transpose2,0.075,4,32768,524288,6.99051,cn401
+PASSED test
+kernel_transpose2,0.078,4,32768,524288,6.72164,cn401
+PASSED test
+kernel_transpose2,0.074,4,32768,524288,7.08497,cn401
+PASSED test
+kernel_transpose2,0.078,4,32768,524288,6.72164,cn401
+PASSED test
+kernel_transpose2,0.081,4,32768,524288,6.47269,cn401
+PASSED test
+kernel_transpose2,0.121,4,65536,1048576,8.66592,cn401
+PASSED test
+kernel_transpose2,0.119,4,65536,1048576,8.81156,cn401
+PASSED test
+kernel_transpose2,0.135,4,65536,1048576,7.76723,cn401
+PASSED test
+kernel_transpose2,0.121,4,65536,1048576,8.66592,cn401
+PASSED test
+kernel_transpose2,0.12,4,65536,1048576,8.73813,cn401
+PASSED test
+kernel_transpose2,0.122,4,65536,1048576,8.59488,cn401
+PASSED test
+kernel_transpose2,0.12,4,65536,1048576,8.73813,cn401
+PASSED test
+kernel_transpose2,0.117,4,65536,1048576,8.96219,cn401
+PASSED test
+kernel_transpose2,0.121,4,65536,1048576,8.66592,cn401
+PASSED test
+kernel_transpose2,0.121,4,65536,1048576,8.66592,cn401
+PASSED test
+kernel_transpose2,0.224,4,131072,2097152,9.36228,cn401
+PASSED test
+kernel_transpose2,0.217,4,131072,2097152,9.6643,cn401
+PASSED test
+kernel_transpose2,0.233,4,131072,2097152,9.00065,cn401
+PASSED test
+kernel_transpose2,0.251,4,131072,2097152,8.35519,cn401
+PASSED test
+kernel_transpose2,0.251,4,131072,2097152,8.35519,cn401
+PASSED test
+kernel_transpose2,0.217,4,131072,2097152,9.6643,cn401
+PASSED test
+kernel_transpose2,0.222,4,131072,2097152,9.44663,cn401
+PASSED test
+kernel_transpose2,0.216,4,131072,2097152,9.70904,cn401
+PASSED test
+kernel_transpose2,0.215,4,131072,2097152,9.7542,cn401
+PASSED test
+kernel_transpose2,0.216,4,131072,2097152,9.70904,cn401
+PASSED test
+kernel_transpose2,0.447,4,262144,4194304,9.38323,cn401
+PASSED test
+kernel_transpose2,0.465,4,262144,4194304,9.02001,cn401
+PASSED test
+kernel_transpose2,0.465,4,262144,4194304,9.02001,cn401
+PASSED test
+kernel_transpose2,0.458,4,262144,4194304,9.15787,cn401
+PASSED test
+kernel_transpose2,0.47,4,262144,4194304,8.92405,cn401
+PASSED test
+kernel_transpose2,0.405,4,262144,4194304,10.3563,cn401
+PASSED test
+kernel_transpose2,0.461,4,262144,4194304,9.09827,cn401
+PASSED test
+kernel_transpose2,0.464,4,262144,4194304,9.03945,cn401
+PASSED test
+kernel_transpose2,0.467,4,262144,4194304,8.98138,cn401
+PASSED test
+kernel_transpose2,0.459,4,262144,4194304,9.13792,cn401
+PASSED test
+kernel_transpose2,0.89,4,524288,8388608,9.4254,cn401
+PASSED test
+kernel_transpose2,0.887,4,524288,8388608,9.45728,cn401
+PASSED test
+kernel_transpose2,0.888,4,524288,8388608,9.44663,cn401
+PASSED test
+kernel_transpose2,0.891,4,524288,8388608,9.41482,cn401
+PASSED test
+kernel_transpose2,0.897,4,524288,8388608,9.35185,cn401
+PASSED test
+kernel_transpose2,0.9,4,524288,8388608,9.32068,cn401
+PASSED test
+kernel_transpose2,0.898,4,524288,8388608,9.34143,cn401
+PASSED test
+kernel_transpose2,0.892,4,524288,8388608,9.40427,cn401
+PASSED test
+kernel_transpose2,0.741,4,524288,8388608,11.3207,cn401
+PASSED test
+kernel_transpose2,0.861,4,524288,8388608,9.74287,cn401
+PASSED test
+kernel_transpose2,1.754,4,1048576,16777216,9.56512,cn401
+PASSED test
+kernel_transpose2,1.859,4,1048576,16777216,9.02486,cn401
+PASSED test
+kernel_transpose2,1.759,4,1048576,16777216,9.53793,cn401
+PASSED test
+kernel_transpose2,1.762,4,1048576,16777216,9.52169,cn401
+PASSED test
+kernel_transpose2,1.784,4,1048576,16777216,9.40427,cn401
+PASSED test
+kernel_transpose2,1.774,4,1048576,16777216,9.45728,cn401
+PASSED test
+kernel_transpose2,1.765,4,1048576,16777216,9.5055,cn401
+PASSED test
+kernel_transpose2,2.118,4,1048576,16777216,7.92125,cn401
+PASSED test
+kernel_transpose2,1.772,4,1048576,16777216,9.46795,cn401
+PASSED test
+kernel_transpose2,1.774,4,1048576,16777216,9.45728,cn401
+PASSED test
+kernel_transpose2,2.751,4,2097152,33554432,12.1972,cn401
+PASSED test
+kernel_transpose2,2.748,4,2097152,33554432,12.2105,cn401
+PASSED test
+kernel_transpose2,2.743,4,2097152,33554432,12.2327,cn401
+PASSED test
+kernel_transpose2,2.749,4,2097152,33554432,12.206,cn401
+PASSED test
+kernel_transpose2,2.735,4,2097152,33554432,12.2685,cn401
+PASSED test
+kernel_transpose2,2.749,4,2097152,33554432,12.206,cn401
+PASSED test
+kernel_transpose2,2.739,4,2097152,33554432,12.2506,cn401
+PASSED test
+kernel_transpose2,2.78,4,2097152,33554432,12.0699,cn401
+PASSED test
+kernel_transpose2,2.742,4,2097152,33554432,12.2372,cn401
+PASSED test
+kernel_transpose2,2.745,4,2097152,33554432,12.2238,cn401
+PASSED test
+kernel_transpose2,6.309,4,4194304,67108864,10.637,cn401
+PASSED test
+kernel_transpose2,6.286,4,4194304,67108864,10.6759,cn401
+PASSED test
+kernel_transpose2,6.447,4,4194304,67108864,10.4093,cn401
+PASSED test
+kernel_transpose2,6.359,4,4194304,67108864,10.5534,cn401
+PASSED test
+kernel_transpose2,5.706,4,4194304,67108864,11.7611,cn401
+PASSED test
+kernel_transpose2,6.295,4,4194304,67108864,10.6607,cn401
+PASSED test
+kernel_transpose2,6.346,4,4194304,67108864,10.575,cn401
+PASSED test
+kernel_transpose2,5.439,4,4194304,67108864,12.3385,cn401
+PASSED test
+kernel_transpose2,5.432,4,4194304,67108864,12.3544,cn401
+PASSED test
+kernel_transpose2,5.457,4,4194304,67108864,12.2978,cn401
+PASSED test
+kernel_transpose2,10.859,4,8388608,134217728,12.36,cn401
+PASSED test
+kernel_transpose2,11.643,4,8388608,134217728,11.5278,cn401
+PASSED test
+kernel_transpose2,10.849,4,8388608,134217728,12.3714,cn401
+PASSED test
+kernel_transpose2,10.849,4,8388608,134217728,12.3714,cn401
+PASSED test
+kernel_transpose2,10.844,4,8388608,134217728,12.3771,cn401
+PASSED test
+kernel_transpose2,10.85,4,8388608,134217728,12.3703,cn401
+PASSED test
+kernel_transpose2,10.856,4,8388608,134217728,12.3635,cn401
+PASSED test
+kernel_transpose2,11.541,4,8388608,134217728,11.6296,cn401
+PASSED test
+kernel_transpose2,10.943,4,8388608,134217728,12.2652,cn401
+PASSED test
+kernel_transpose2,10.847,4,8388608,134217728,12.3737,cn401
+PASSED test
+kernel_transpose2,21.899,4,16777216,268435456,12.2579,cn401
+PASSED test
+kernel_transpose2,21.654,4,16777216,268435456,12.3966,cn401
+PASSED test
+kernel_transpose2,21.657,4,16777216,268435456,12.3949,cn401
+PASSED test
+kernel_transpose2,21.662,4,16777216,268435456,12.392,cn401
+PASSED test
+kernel_transpose2,22.104,4,16777216,268435456,12.1442,cn401
+PASSED test
+kernel_transpose2,21.974,4,16777216,268435456,12.216,cn401
+PASSED test
+kernel_transpose2,21.762,4,16777216,268435456,12.3351,cn401
+PASSED test
+kernel_transpose2,21.658,4,16777216,268435456,12.3943,cn401
+PASSED test
+kernel_transpose2,21.787,4,16777216,268435456,12.3209,cn401
+PASSED test
+kernel_transpose2,21.665,4,16777216,268435456,12.3903,cn401
+PASSED test
+kernel_transpose2,43.336,4,33554432,536870912,12.3886,cn401
+PASSED test
+kernel_transpose2,43.928,4,33554432,536870912,12.2216,cn401
+PASSED test
+kernel_transpose2,43.646,4,33554432,536870912,12.3006,cn401
+PASSED test
+kernel_transpose2,43.283,4,33554432,536870912,12.4037,cn401
+PASSED test
+kernel_transpose2,43.562,4,33554432,536870912,12.3243,cn401
+PASSED test
+kernel_transpose2,43.278,4,33554432,536870912,12.4052,cn401
+PASSED test
+kernel_transpose2,43.276,4,33554432,536870912,12.4057,cn401
+PASSED test
+kernel_transpose2,43.266,4,33554432,536870912,12.4086,cn401
+PASSED test
+kernel_transpose2,43.873,4,33554432,536870912,12.2369,cn401
+PASSED test
+kernel_transpose2,43.564,4,33554432,536870912,12.3237,cn401
+PASSED test
+kernel_transpose_multi8,0.034,4,1024,16384,0.481882,cn401
+PASSED test
+kernel_transpose_multi8,0.034,4,1024,16384,0.481882,cn401
+PASSED test
+kernel_transpose_multi8,0.032,4,1024,16384,0.512,cn401
+PASSED test
+kernel_transpose_multi8,0.031,4,1024,16384,0.528516,cn401
+PASSED test
+kernel_transpose_multi8,0.033,4,1024,16384,0.496485,cn401
+PASSED test
+kernel_transpose_multi8,0.032,4,1024,16384,0.512,cn401
+PASSED test
+kernel_transpose_multi8,0.035,4,1024,16384,0.468114,cn401
+PASSED test
+kernel_transpose_multi8,0.038,4,1024,16384,0.431158,cn401
+PASSED test
+kernel_transpose_multi8,0.031,4,1024,16384,0.528516,cn401
+PASSED test
+kernel_transpose_multi8,0.032,4,1024,16384,0.512,cn401
+PASSED test
+kernel_transpose_multi8,0.033,4,2048,32768,0.99297,cn401
+PASSED test
+kernel_transpose_multi8,0.033,4,2048,32768,0.99297,cn401
+PASSED test
+kernel_transpose_multi8,0.035,4,2048,32768,0.936229,cn401
+PASSED test
+kernel_transpose_multi8,0.033,4,2048,32768,0.99297,cn401
+PASSED test
+kernel_transpose_multi8,0.032,4,2048,32768,1.024,cn401
+PASSED test
+kernel_transpose_multi8,0.032,4,2048,32768,1.024,cn401
+PASSED test
+kernel_transpose_multi8,0.032,4,2048,32768,1.024,cn401
+PASSED test
+kernel_transpose_multi8,0.035,4,2048,32768,0.936229,cn401
+PASSED test
+kernel_transpose_multi8,0.036,4,2048,32768,0.910222,cn401
+PASSED test
+kernel_transpose_multi8,0.035,4,2048,32768,0.936229,cn401
+PASSED test
+kernel_transpose_multi8,0.034,4,4096,65536,1.92753,cn401
+PASSED test
+kernel_transpose_multi8,0.038,4,4096,65536,1.72463,cn401
+PASSED test
+kernel_transpose_multi8,0.039,4,4096,65536,1.68041,cn401
+PASSED test
+kernel_transpose_multi8,0.039,4,4096,65536,1.68041,cn401
+PASSED test
+kernel_transpose_multi8,0.035,4,4096,65536,1.87246,cn401
+PASSED test
+kernel_transpose_multi8,0.039,4,4096,65536,1.68041,cn401
+PASSED test
+kernel_transpose_multi8,0.035,4,4096,65536,1.87246,cn401
+PASSED test
+kernel_transpose_multi8,0.039,4,4096,65536,1.68041,cn401
+PASSED test
+kernel_transpose_multi8,0.039,4,4096,65536,1.68041,cn401
+PASSED test
+kernel_transpose_multi8,0.035,4,4096,65536,1.87246,cn401
+PASSED test
+kernel_transpose_multi8,0.047,4,8192,131072,2.78877,cn401
+PASSED test
+kernel_transpose_multi8,0.046,4,8192,131072,2.84939,cn401
+PASSED test
+kernel_transpose_multi8,0.046,4,8192,131072,2.84939,cn401
+PASSED test
+kernel_transpose_multi8,0.046,4,8192,131072,2.84939,cn401
+PASSED test
+kernel_transpose_multi8,0.048,4,8192,131072,2.73067,cn401
+PASSED test
+kernel_transpose_multi8,0.045,4,8192,131072,2.91271,cn401
+PASSED test
+kernel_transpose_multi8,0.046,4,8192,131072,2.84939,cn401
+PASSED test
+kernel_transpose_multi8,0.049,4,8192,131072,2.67494,cn401
+PASSED test
+kernel_transpose_multi8,0.049,4,8192,131072,2.67494,cn401
+PASSED test
+kernel_transpose_multi8,0.046,4,8192,131072,2.84939,cn401
+PASSED test
+kernel_transpose_multi8,0.068,4,16384,262144,3.85506,cn401
+PASSED test
+kernel_transpose_multi8,0.068,4,16384,262144,3.85506,cn401
+PASSED test
+kernel_transpose_multi8,0.068,4,16384,262144,3.85506,cn401
+PASSED test
+kernel_transpose_multi8,0.07,4,16384,262144,3.74491,cn401
+PASSED test
+kernel_transpose_multi8,0.065,4,16384,262144,4.03298,cn401
+PASSED test
+kernel_transpose_multi8,0.072,4,16384,262144,3.64089,cn401
+PASSED test
+kernel_transpose_multi8,0.072,4,16384,262144,3.64089,cn401
+PASSED test
+kernel_transpose_multi8,0.075,4,16384,262144,3.49525,cn401
+PASSED test
+kernel_transpose_multi8,0.068,4,16384,262144,3.85506,cn401
+PASSED test
+kernel_transpose_multi8,0.07,4,16384,262144,3.74491,cn401
+PASSED test
+kernel_transpose_multi8,0.118,4,32768,524288,4.44312,cn401
+PASSED test
+kernel_transpose_multi8,0.116,4,32768,524288,4.51972,cn401
+PASSED test
+kernel_transpose_multi8,0.116,4,32768,524288,4.51972,cn401
+PASSED test
+kernel_transpose_multi8,0.112,4,32768,524288,4.68114,cn401
+PASSED test
+kernel_transpose_multi8,0.115,4,32768,524288,4.55903,cn401
+PASSED test
+kernel_transpose_multi8,0.114,4,32768,524288,4.59902,cn401
+PASSED test
+kernel_transpose_multi8,0.114,4,32768,524288,4.59902,cn401
+PASSED test
+kernel_transpose_multi8,0.116,4,32768,524288,4.51972,cn401
+PASSED test
+kernel_transpose_multi8,0.119,4,32768,524288,4.40578,cn401
+PASSED test
+kernel_transpose_multi8,0.119,4,32768,524288,4.40578,cn401
+PASSED test
+kernel_transpose_multi8,0.197,4,65536,1048576,5.32272,cn401
+PASSED test
+kernel_transpose_multi8,0.202,4,65536,1048576,5.19097,cn401
+PASSED test
+kernel_transpose_multi8,0.198,4,65536,1048576,5.29584,cn401
+PASSED test
+kernel_transpose_multi8,0.207,4,65536,1048576,5.06558,cn401
+PASSED test
+kernel_transpose_multi8,0.198,4,65536,1048576,5.29584,cn401
+PASSED test
+kernel_transpose_multi8,0.201,4,65536,1048576,5.2168,cn401
+PASSED test
+kernel_transpose_multi8,0.208,4,65536,1048576,5.04123,cn401
+PASSED test
+kernel_transpose_multi8,0.199,4,65536,1048576,5.26923,cn401
+PASSED test
+kernel_transpose_multi8,0.203,4,65536,1048576,5.1654,cn401
+PASSED test
+kernel_transpose_multi8,0.201,4,65536,1048576,5.2168,cn401
+PASSED test
+kernel_transpose_multi8,0.38,4,131072,2097152,5.51882,cn401
+PASSED test
+kernel_transpose_multi8,0.382,4,131072,2097152,5.48993,cn401
+PASSED test
+kernel_transpose_multi8,0.38,4,131072,2097152,5.51882,cn401
+PASSED test
+kernel_transpose_multi8,0.383,4,131072,2097152,5.47559,cn401
+PASSED test
+kernel_transpose_multi8,0.384,4,131072,2097152,5.46133,cn401
+PASSED test
+kernel_transpose_multi8,0.398,4,131072,2097152,5.26923,cn401
+PASSED test
+kernel_transpose_multi8,0.395,4,131072,2097152,5.30925,cn401
+PASSED test
+kernel_transpose_multi8,0.386,4,131072,2097152,5.43304,cn401
+PASSED test
+kernel_transpose_multi8,0.377,4,131072,2097152,5.56274,cn401
+PASSED test
+kernel_transpose_multi8,0.391,4,131072,2097152,5.36356,cn401
+PASSED test
+kernel_transpose_multi8,0.757,4,262144,4194304,5.54069,cn401
+PASSED test
+kernel_transpose_multi8,0.754,4,262144,4194304,5.56274,cn401
+PASSED test
+kernel_transpose_multi8,0.755,4,262144,4194304,5.55537,cn401
+PASSED test
+kernel_transpose_multi8,0.756,4,262144,4194304,5.54802,cn401
+PASSED test
+kernel_transpose_multi8,0.75,4,262144,4194304,5.59241,cn401
+PASSED test
+kernel_transpose_multi8,0.751,4,262144,4194304,5.58496,cn401
+PASSED test
+kernel_transpose_multi8,0.747,4,262144,4194304,5.61486,cn401
+PASSED test
+kernel_transpose_multi8,0.748,4,262144,4194304,5.60736,cn401
+PASSED test
+kernel_transpose_multi8,0.735,4,262144,4194304,5.70654,cn401
+PASSED test
+kernel_transpose_multi8,0.751,4,262144,4194304,5.58496,cn401
+PASSED test
+kernel_transpose_multi8,1.442,4,524288,8388608,5.81734,cn401
+PASSED test
+kernel_transpose_multi8,1.452,4,524288,8388608,5.77728,cn401
+PASSED test
+kernel_transpose_multi8,1.453,4,524288,8388608,5.7733,cn401
+PASSED test
+kernel_transpose_multi8,1.461,4,524288,8388608,5.74169,cn401
+PASSED test
+kernel_transpose_multi8,1.448,4,524288,8388608,5.79324,cn401
+PASSED test
+kernel_transpose_multi8,1.448,4,524288,8388608,5.79324,cn401
+PASSED test
+kernel_transpose_multi8,1.452,4,524288,8388608,5.77728,cn401
+PASSED test
+kernel_transpose_multi8,1.474,4,524288,8388608,5.69105,cn401
+PASSED test
+kernel_transpose_multi8,1.442,4,524288,8388608,5.81734,cn401
+PASSED test
+kernel_transpose_multi8,1.459,4,524288,8388608,5.74956,cn401
+PASSED test
+kernel_transpose_multi8,3.465,4,1048576,16777216,4.84191,cn401
+PASSED test
+kernel_transpose_multi8,2.844,4,1048576,16777216,5.89916,cn401
+PASSED test
+kernel_transpose_multi8,2.838,4,1048576,16777216,5.91163,cn401
+PASSED test
+kernel_transpose_multi8,2.77,4,1048576,16777216,6.05676,cn401
+PASSED test
+kernel_transpose_multi8,2.784,4,1048576,16777216,6.0263,cn401
+PASSED test
+kernel_transpose_multi8,2.874,4,1048576,16777216,5.83758,cn401
+PASSED test
+kernel_transpose_multi8,3.267,4,1048576,16777216,5.13536,cn401
+PASSED test
+kernel_transpose_multi8,2.77,4,1048576,16777216,6.05676,cn401
+PASSED test
+kernel_transpose_multi8,2.788,4,1048576,16777216,6.01765,cn401
+PASSED test
+kernel_transpose_multi8,2.839,4,1048576,16777216,5.90955,cn401
+PASSED test
+kernel_transpose_multi8,5.536,4,2097152,33554432,6.06113,cn401
+PASSED test
+kernel_transpose_multi8,5.529,4,2097152,33554432,6.06881,cn401
+PASSED test
+kernel_transpose_multi8,5.546,4,2097152,33554432,6.0502,cn401
+PASSED test
+kernel_transpose_multi8,5.54,4,2097152,33554432,6.05676,cn401
+PASSED test
+kernel_transpose_multi8,5.553,4,2097152,33554432,6.04258,cn401
+PASSED test
+kernel_transpose_multi8,5.659,4,2097152,33554432,5.92939,cn401
+PASSED test
+kernel_transpose_multi8,5.551,4,2097152,33554432,6.04475,cn401
+PASSED test
+kernel_transpose_multi8,5.659,4,2097152,33554432,5.92939,cn401
+PASSED test
+kernel_transpose_multi8,5.541,4,2097152,33554432,6.05566,cn401
+PASSED test
+kernel_transpose_multi8,5.538,4,2097152,33554432,6.05894,cn401
+PASSED test
+kernel_transpose_multi8,10.993,4,4194304,67108864,6.10469,cn401
+PASSED test
+kernel_transpose_multi8,11.731,4,4194304,67108864,5.72064,cn401
+PASSED test
+kernel_transpose_multi8,11.409,4,4194304,67108864,5.8821,cn401
+PASSED test
+kernel_transpose_multi8,11.062,4,4194304,67108864,6.06661,cn401
+PASSED test
+kernel_transpose_multi8,11.29,4,4194304,67108864,5.9441,cn401
+PASSED test
+kernel_transpose_multi8,11.018,4,4194304,67108864,6.09084,cn401
+PASSED test
+kernel_transpose_multi8,11.817,4,4194304,67108864,5.67901,cn401
+PASSED test
+kernel_transpose_multi8,11.66,4,4194304,67108864,5.75548,cn401
+PASSED test
+kernel_transpose_multi8,11.001,4,4194304,67108864,6.10025,cn401
+PASSED test
+kernel_transpose_multi8,11.692,4,4194304,67108864,5.73972,cn401
+PASSED test
+kernel_transpose_multi8,22.724,4,8388608,134217728,5.90643,cn401
+PASSED test
+kernel_transpose_multi8,21.983,4,8388608,134217728,6.10552,cn401
+PASSED test
+kernel_transpose_multi8,22.364,4,8388608,134217728,6.00151,cn401
+PASSED test
+kernel_transpose_multi8,21.977,4,8388608,134217728,6.10719,cn401
+PASSED test
+kernel_transpose_multi8,21.969,4,8388608,134217728,6.10941,cn401
+PASSED test
+kernel_transpose_multi8,21.975,4,8388608,134217728,6.10775,cn401
+PASSED test
+kernel_transpose_multi8,21.968,4,8388608,134217728,6.10969,cn401
+PASSED test
+kernel_transpose_multi8,22.134,4,8388608,134217728,6.06387,cn401
+PASSED test
+kernel_transpose_multi8,22.692,4,8388608,134217728,5.91476,cn401
+PASSED test
+kernel_transpose_multi8,22.115,4,8388608,134217728,6.06908,cn401
+PASSED test
+kernel_transpose_multi8,44.153,4,16777216,268435456,6.07967,cn401
+PASSED test
+kernel_transpose_multi8,43.904,4,16777216,268435456,6.11415,cn401
+PASSED test
+kernel_transpose_multi8,43.917,4,16777216,268435456,6.11234,cn401
+PASSED test
+kernel_transpose_multi8,44.503,4,16777216,268435456,6.03185,cn401
+PASSED test
+kernel_transpose_multi8,44.25,4,16777216,268435456,6.06634,cn401
+PASSED test
+kernel_transpose_multi8,44.334,4,16777216,268435456,6.05484,cn401
+PASSED test
+kernel_transpose_multi8,44.577,4,16777216,268435456,6.02184,cn401
+PASSED test
+kernel_transpose_multi8,44.21,4,16777216,268435456,6.07183,cn401
+PASSED test
+kernel_transpose_multi8,44.168,4,16777216,268435456,6.0776,cn401
+PASSED test
+kernel_transpose_multi8,44.426,4,16777216,268435456,6.04231,cn401
+PASSED test
+kernel_transpose_multi8,87.773,4,33554432,536870912,6.11658,cn401
+PASSED test
+kernel_transpose_multi8,88.309,4,33554432,536870912,6.07946,cn401
+PASSED test
+kernel_transpose_multi8,87.784,4,33554432,536870912,6.11582,cn401
+PASSED test
+kernel_transpose_multi8,87.77,4,33554432,536870912,6.11679,cn401
+PASSED test
+kernel_transpose_multi8,88.156,4,33554432,536870912,6.09001,cn401
+PASSED test
+kernel_transpose_multi8,88.186,4,33554432,536870912,6.08794,cn401
+PASSED test
+kernel_transpose_multi8,88.29,4,33554432,536870912,6.08077,cn401
+PASSED test
+kernel_transpose_multi8,87.95,4,33554432,536870912,6.10427,cn401
+PASSED test
+kernel_transpose_multi8,88.331,4,33554432,536870912,6.07794,cn401
+PASSED test
+kernel_transpose_multi8,88.377,4,33554432,536870912,6.07478,cn401
+PASSED test
+kernel_transpose_multi4,0.032,4,1024,16384,0.512,cn401
+PASSED test
+kernel_transpose_multi4,0.032,4,1024,16384,0.512,cn401
+PASSED test
+kernel_transpose_multi4,0.029,4,1024,16384,0.564966,cn401
+PASSED test
+kernel_transpose_multi4,0.029,4,1024,16384,0.564966,cn401
+PASSED test
+kernel_transpose_multi4,0.032,4,1024,16384,0.512,cn401
+PASSED test
+kernel_transpose_multi4,0.028,4,1024,16384,0.585143,cn401
+PASSED test
+kernel_transpose_multi4,0.029,4,1024,16384,0.564966,cn401
+PASSED test
+kernel_transpose_multi4,0.028,4,1024,16384,0.585143,cn401
+PASSED test
+kernel_transpose_multi4,0.033,4,1024,16384,0.496485,cn401
+PASSED test
+kernel_transpose_multi4,0.028,4,1024,16384,0.585143,cn401
+PASSED test
+kernel_transpose_multi4,0.027,4,2048,32768,1.21363,cn401
+PASSED test
+kernel_transpose_multi4,0.028,4,2048,32768,1.17029,cn401
+PASSED test
+kernel_transpose_multi4,0.032,4,2048,32768,1.024,cn401
+PASSED test
+kernel_transpose_multi4,0.029,4,2048,32768,1.12993,cn401
+PASSED test
+kernel_transpose_multi4,0.032,4,2048,32768,1.024,cn401
+PASSED test
+kernel_transpose_multi4,0.03,4,2048,32768,1.09227,cn401
+PASSED test
+kernel_transpose_multi4,0.029,4,2048,32768,1.12993,cn401
+PASSED test
+kernel_transpose_multi4,0.032,4,2048,32768,1.024,cn401
+PASSED test
+kernel_transpose_multi4,0.032,4,2048,32768,1.024,cn401
+PASSED test
+kernel_transpose_multi4,0.033,4,2048,32768,0.99297,cn401
+PASSED test
+kernel_transpose_multi4,0.031,4,4096,65536,2.11406,cn401
+PASSED test
+kernel_transpose_multi4,0.032,4,4096,65536,2.048,cn401
+PASSED test
+kernel_transpose_multi4,0.03,4,4096,65536,2.18453,cn401
+PASSED test
+kernel_transpose_multi4,0.034,4,4096,65536,1.92753,cn401
+PASSED test
+kernel_transpose_multi4,0.035,4,4096,65536,1.87246,cn401
+PASSED test
+kernel_transpose_multi4,0.031,4,4096,65536,2.11406,cn401
+PASSED test
+kernel_transpose_multi4,0.034,4,4096,65536,1.92753,cn401
+PASSED test
+kernel_transpose_multi4,0.036,4,4096,65536,1.82044,cn401
+PASSED test
+kernel_transpose_multi4,0.03,4,4096,65536,2.18453,cn401
+PASSED test
+kernel_transpose_multi4,0.034,4,4096,65536,1.92753,cn401
+PASSED test
+kernel_transpose_multi4,0.04,4,8192,131072,3.2768,cn401
+PASSED test
+kernel_transpose_multi4,0.039,4,8192,131072,3.36082,cn401
+PASSED test
+kernel_transpose_multi4,0.04,4,8192,131072,3.2768,cn401
+PASSED test
+kernel_transpose_multi4,0.036,4,8192,131072,3.64089,cn401
+PASSED test
+kernel_transpose_multi4,0.04,4,8192,131072,3.2768,cn401
+PASSED test
+kernel_transpose_multi4,0.036,4,8192,131072,3.64089,cn401
+PASSED test
+kernel_transpose_multi4,0.036,4,8192,131072,3.64089,cn401
+PASSED test
+kernel_transpose_multi4,0.037,4,8192,131072,3.54249,cn401
+PASSED test
+kernel_transpose_multi4,0.04,4,8192,131072,3.2768,cn401
+PASSED test
+kernel_transpose_multi4,0.04,4,8192,131072,3.2768,cn401
+PASSED test
+kernel_transpose_multi4,0.046,4,16384,262144,5.69878,cn401
+PASSED test
+kernel_transpose_multi4,0.05,4,16384,262144,5.24288,cn401
+PASSED test
+kernel_transpose_multi4,0.046,4,16384,262144,5.69878,cn401
+PASSED test
+kernel_transpose_multi4,0.047,4,16384,262144,5.57753,cn401
+PASSED test
+kernel_transpose_multi4,0.051,4,16384,262144,5.14008,cn401
+PASSED test
+kernel_transpose_multi4,0.046,4,16384,262144,5.69878,cn401
+PASSED test
+kernel_transpose_multi4,0.047,4,16384,262144,5.57753,cn401
+PASSED test
+kernel_transpose_multi4,0.051,4,16384,262144,5.14008,cn401
+PASSED test
+kernel_transpose_multi4,0.048,4,16384,262144,5.46133,cn401
+PASSED test
+kernel_transpose_multi4,0.052,4,16384,262144,5.04123,cn401
+PASSED test
+kernel_transpose_multi4,0.071,4,32768,524288,7.38434,cn401
+PASSED test
+kernel_transpose_multi4,0.08,4,32768,524288,6.5536,cn401
+PASSED test
+kernel_transpose_multi4,0.073,4,32768,524288,7.18203,cn401
+PASSED test
+kernel_transpose_multi4,0.071,4,32768,524288,7.38434,cn401
+PASSED test
+kernel_transpose_multi4,0.077,4,32768,524288,6.80894,cn401
+PASSED test
+kernel_transpose_multi4,0.072,4,32768,524288,7.28178,cn401
+PASSED test
+kernel_transpose_multi4,0.068,4,32768,524288,7.71012,cn401
+PASSED test
+kernel_transpose_multi4,0.073,4,32768,524288,7.18203,cn401
+PASSED test
+kernel_transpose_multi4,0.073,4,32768,524288,7.18203,cn401
+PASSED test
+kernel_transpose_multi4,0.072,4,32768,524288,7.28178,cn401
+PASSED test
+kernel_transpose_multi4,0.116,4,65536,1048576,9.03945,cn401
+PASSED test
+kernel_transpose_multi4,0.116,4,65536,1048576,9.03945,cn401
+PASSED test
+kernel_transpose_multi4,0.112,4,65536,1048576,9.36228,cn401
+PASSED test
+kernel_transpose_multi4,0.11,4,65536,1048576,9.53251,cn401
+PASSED test
+kernel_transpose_multi4,0.111,4,65536,1048576,9.44663,cn401
+PASSED test
+kernel_transpose_multi4,0.11,4,65536,1048576,9.53251,cn401
+PASSED test
+kernel_transpose_multi4,0.115,4,65536,1048576,9.11805,cn401
+PASSED test
+kernel_transpose_multi4,0.123,4,65536,1048576,8.52501,cn401
+PASSED test
+kernel_transpose_multi4,0.115,4,65536,1048576,9.11805,cn401
+PASSED test
+kernel_transpose_multi4,0.111,4,65536,1048576,9.44663,cn401
+PASSED test
+kernel_transpose_multi4,0.24,4,131072,2097152,8.73813,cn401
+PASSED test
+kernel_transpose_multi4,0.24,4,131072,2097152,8.73813,cn401
+PASSED test
+kernel_transpose_multi4,0.202,4,131072,2097152,10.3819,cn401
+PASSED test
+kernel_transpose_multi4,0.209,4,131072,2097152,10.0342,cn401
+PASSED test
+kernel_transpose_multi4,0.209,4,131072,2097152,10.0342,cn401
+PASSED test
+kernel_transpose_multi4,0.216,4,131072,2097152,9.70904,cn401
+PASSED test
+kernel_transpose_multi4,0.208,4,131072,2097152,10.0825,cn401
+PASSED test
+kernel_transpose_multi4,0.207,4,131072,2097152,10.1312,cn401
+PASSED test
+kernel_transpose_multi4,0.239,4,131072,2097152,8.7747,cn401
+PASSED test
+kernel_transpose_multi4,0.206,4,131072,2097152,10.1804,cn401
+PASSED test
+kernel_transpose_multi4,0.457,4,262144,4194304,9.17791,cn401
+PASSED test
+kernel_transpose_multi4,0.444,4,262144,4194304,9.44663,cn401
+PASSED test
+kernel_transpose_multi4,0.455,4,262144,4194304,9.21825,cn401
+PASSED test
+kernel_transpose_multi4,0.377,4,262144,4194304,11.1255,cn401
+PASSED test
+kernel_transpose_multi4,0.456,4,262144,4194304,9.19804,cn401
+PASSED test
+kernel_transpose_multi4,0.46,4,262144,4194304,9.11805,cn401
+PASSED test
+kernel_transpose_multi4,0.452,4,262144,4194304,9.27943,cn401
+PASSED test
+kernel_transpose_multi4,0.457,4,262144,4194304,9.17791,cn401
+PASSED test
+kernel_transpose_multi4,0.431,4,262144,4194304,9.73156,cn401
+PASSED test
+kernel_transpose_multi4,0.459,4,262144,4194304,9.13792,cn401
+PASSED test
+kernel_transpose_multi4,0.896,4,524288,8388608,9.36228,cn401
+PASSED test
+kernel_transpose_multi4,0.904,4,524288,8388608,9.27943,cn401
+PASSED test
+kernel_transpose_multi4,0.895,4,524288,8388608,9.37275,cn401
+PASSED test
+kernel_transpose_multi4,0.902,4,524288,8388608,9.30001,cn401
+PASSED test
+kernel_transpose_multi4,0.899,4,524288,8388608,9.33104,cn401
+PASSED test
+kernel_transpose_multi4,0.908,4,524288,8388608,9.23855,cn401
+PASSED test
+kernel_transpose_multi4,0.855,4,524288,8388608,9.81124,cn401
+PASSED test
+kernel_transpose_multi4,0.898,4,524288,8388608,9.34143,cn401
+PASSED test
+kernel_transpose_multi4,0.909,4,524288,8388608,9.22839,cn401
+PASSED test
+kernel_transpose_multi4,0.901,4,524288,8388608,9.31033,cn401
+PASSED test
+kernel_transpose_multi4,1.773,4,1048576,16777216,9.46262,cn401
+PASSED test
+kernel_transpose_multi4,1.769,4,1048576,16777216,9.48401,cn401
+PASSED test
+kernel_transpose_multi4,1.771,4,1048576,16777216,9.4733,cn401
+PASSED test
+kernel_transpose_multi4,1.766,4,1048576,16777216,9.50012,cn401
+PASSED test
+kernel_transpose_multi4,1.762,4,1048576,16777216,9.52169,cn401
+PASSED test
+kernel_transpose_multi4,1.765,4,1048576,16777216,9.5055,cn401
+PASSED test
+kernel_transpose_multi4,1.772,4,1048576,16777216,9.46795,cn401
+PASSED test
+kernel_transpose_multi4,1.772,4,1048576,16777216,9.46795,cn401
+PASSED test
+kernel_transpose_multi4,1.763,4,1048576,16777216,9.51629,cn401
+PASSED test
+kernel_transpose_multi4,1.965,4,1048576,16777216,8.53802,cn401
+PASSED test
+kernel_transpose_multi4,2.732,4,2097152,33554432,12.282,cn401
+PASSED test
+kernel_transpose_multi4,2.74,4,2097152,33554432,12.2461,cn401
+PASSED test
+kernel_transpose_multi4,3.505,4,2097152,33554432,9.5733,cn401
+PASSED test
+kernel_transpose_multi4,2.742,4,2097152,33554432,12.2372,cn401
+PASSED test
+kernel_transpose_multi4,2.734,4,2097152,33554432,12.273,cn401
+PASSED test
+kernel_transpose_multi4,2.725,4,2097152,33554432,12.3136,cn401
+PASSED test
+kernel_transpose_multi4,2.726,4,2097152,33554432,12.309,cn401
+PASSED test
+kernel_transpose_multi4,2.735,4,2097152,33554432,12.2685,cn401
+PASSED test
+kernel_transpose_multi4,2.727,4,2097152,33554432,12.3045,cn401
+PASSED test
+kernel_transpose_multi4,2.732,4,2097152,33554432,12.282,cn401
+PASSED test
+kernel_transpose_multi4,5.453,4,4194304,67108864,12.3068,cn401
+PASSED test
+kernel_transpose_multi4,5.685,4,4194304,67108864,11.8046,cn401
+PASSED test
+kernel_transpose_multi4,5.429,4,4194304,67108864,12.3612,cn401
+PASSED test
+kernel_transpose_multi4,6.29,4,4194304,67108864,10.6691,cn401
+PASSED test
+kernel_transpose_multi4,5.415,4,4194304,67108864,12.3931,cn401
+PASSED test
+kernel_transpose_multi4,5.416,4,4194304,67108864,12.3909,cn401
+PASSED test
+kernel_transpose_multi4,6.26,4,4194304,67108864,10.7203,cn401
+PASSED test
+kernel_transpose_multi4,5.428,4,4194304,67108864,12.3635,cn401
+PASSED test
+kernel_transpose_multi4,5.854,4,4194304,67108864,11.4638,cn401
+PASSED test
+kernel_transpose_multi4,5.414,4,4194304,67108864,12.3954,cn401
+PASSED test
+kernel_transpose_multi4,10.82,4,8388608,134217728,12.4046,cn401
+PASSED test
+kernel_transpose_multi4,10.834,4,8388608,134217728,12.3886,cn401
+PASSED test
+kernel_transpose_multi4,11.426,4,8388608,134217728,11.7467,cn401
+PASSED test
+kernel_transpose_multi4,11.464,4,8388608,134217728,11.7078,cn401
+PASSED test
+kernel_transpose_multi4,11.661,4,8388608,134217728,11.51,cn401
+PASSED test
+kernel_transpose_multi4,11.819,4,8388608,134217728,11.3561,cn401
+PASSED test
+kernel_transpose_multi4,10.826,4,8388608,134217728,12.3977,cn401
+PASSED test
+kernel_transpose_multi4,10.825,4,8388608,134217728,12.3989,cn401
+PASSED test
+kernel_transpose_multi4,11.615,4,8388608,134217728,11.5556,cn401
+PASSED test
+kernel_transpose_multi4,10.825,4,8388608,134217728,12.3989,cn401
+PASSED test
+kernel_transpose_multi4,21.626,4,16777216,268435456,12.4126,cn401
+PASSED test
+kernel_transpose_multi4,21.619,4,16777216,268435456,12.4166,cn401
+PASSED test
+kernel_transpose_multi4,21.628,4,16777216,268435456,12.4115,cn401
+PASSED test
+kernel_transpose_multi4,22.121,4,16777216,268435456,12.1349,cn401
+PASSED test
+kernel_transpose_multi4,21.62,4,16777216,268435456,12.4161,cn401
+PASSED test
+kernel_transpose_multi4,22.226,4,16777216,268435456,12.0775,cn401
+PASSED test
+kernel_transpose_multi4,22.291,4,16777216,268435456,12.0423,cn401
+PASSED test
+kernel_transpose_multi4,21.704,4,16777216,268435456,12.368,cn401
+PASSED test
+kernel_transpose_multi4,21.677,4,16777216,268435456,12.3834,cn401
+PASSED test
+kernel_transpose_multi4,21.749,4,16777216,268435456,12.3424,cn401
+PASSED test
+kernel_transpose_multi4,43.205,4,33554432,536870912,12.4261,cn401
+PASSED test
+kernel_transpose_multi4,43.406,4,33554432,536870912,12.3686,cn401
+PASSED test
+kernel_transpose_multi4,43.202,4,33554432,536870912,12.427,cn401
+PASSED test
+kernel_transpose_multi4,43.426,4,33554432,536870912,12.3629,cn401
+PASSED test
+kernel_transpose_multi4,43.316,4,33554432,536870912,12.3943,cn401
+PASSED test
+kernel_transpose_multi4,43.826,4,33554432,536870912,12.2501,cn401
+PASSED test
+kernel_transpose_multi4,43.238,4,33554432,536870912,12.4166,cn401
+PASSED test
+kernel_transpose_multi4,43.259,4,33554432,536870912,12.4106,cn401
+PASSED test
+kernel_transpose_multi4,43.204,4,33554432,536870912,12.4264,cn401
+PASSED test
+kernel_transpose_multi4,43.558,4,33554432,536870912,12.3254,cn401
+PASSED test
+kernel_share_transpose_multi8,0.032,4,1024,16384,0.512,cn401
+PASSED test
+kernel_share_transpose_multi8,0.037,4,1024,16384,0.442811,cn401
+PASSED test
+kernel_share_transpose_multi8,0.035,4,1024,16384,0.468114,cn401
+PASSED test
+kernel_share_transpose_multi8,0.033,4,1024,16384,0.496485,cn401
+PASSED test
+kernel_share_transpose_multi8,0.035,4,1024,16384,0.468114,cn401
+PASSED test
+kernel_share_transpose_multi8,0.035,4,1024,16384,0.468114,cn401
+PASSED test
+kernel_share_transpose_multi8,0.035,4,1024,16384,0.468114,cn401
+PASSED test
+kernel_share_transpose_multi8,0.032,4,1024,16384,0.512,cn401
+PASSED test
+kernel_share_transpose_multi8,0.03,4,1024,16384,0.546133,cn401
+PASSED test
+kernel_share_transpose_multi8,0.032,4,1024,16384,0.512,cn401
+PASSED test
+kernel_share_transpose_multi8,0.036,4,2048,32768,0.910222,cn401
+PASSED test
+kernel_share_transpose_multi8,0.032,4,2048,32768,1.024,cn401
+PASSED test
+kernel_share_transpose_multi8,0.036,4,2048,32768,0.910222,cn401
+PASSED test
+kernel_share_transpose_multi8,0.031,4,2048,32768,1.05703,cn401
+PASSED test
+kernel_share_transpose_multi8,0.031,4,2048,32768,1.05703,cn401
+PASSED test
+kernel_share_transpose_multi8,0.036,4,2048,32768,0.910222,cn401
+PASSED test
+kernel_share_transpose_multi8,0.031,4,2048,32768,1.05703,cn401
+PASSED test
+kernel_share_transpose_multi8,0.035,4,2048,32768,0.936229,cn401
+PASSED test
+kernel_share_transpose_multi8,0.033,4,2048,32768,0.99297,cn401
+PASSED test
+kernel_share_transpose_multi8,0.036,4,2048,32768,0.910222,cn401
+PASSED test
+kernel_share_transpose_multi8,0.036,4,4096,65536,1.82044,cn401
+PASSED test
+kernel_share_transpose_multi8,0.035,4,4096,65536,1.87246,cn401
+PASSED test
+kernel_share_transpose_multi8,0.036,4,4096,65536,1.82044,cn401
+PASSED test
+kernel_share_transpose_multi8,0.037,4,4096,65536,1.77124,cn401
+PASSED test
+kernel_share_transpose_multi8,0.035,4,4096,65536,1.87246,cn401
+PASSED test
+kernel_share_transpose_multi8,0.035,4,4096,65536,1.87246,cn401
+PASSED test
+kernel_share_transpose_multi8,0.039,4,4096,65536,1.68041,cn401
+PASSED test
+kernel_share_transpose_multi8,0.039,4,4096,65536,1.68041,cn401
+PASSED test
+kernel_share_transpose_multi8,0.034,4,4096,65536,1.92753,cn401
+PASSED test
+kernel_share_transpose_multi8,0.039,4,4096,65536,1.68041,cn401
+PASSED test
+kernel_share_transpose_multi8,0.045,4,8192,131072,2.91271,cn401
+PASSED test
+kernel_share_transpose_multi8,0.046,4,8192,131072,2.84939,cn401
+PASSED test
+kernel_share_transpose_multi8,0.046,4,8192,131072,2.84939,cn401
+PASSED test
+kernel_share_transpose_multi8,0.047,4,8192,131072,2.78877,cn401
+PASSED test
+kernel_share_transpose_multi8,0.046,4,8192,131072,2.84939,cn401
+PASSED test
+kernel_share_transpose_multi8,0.045,4,8192,131072,2.91271,cn401
+PASSED test
+kernel_share_transpose_multi8,0.05,4,8192,131072,2.62144,cn401
+PASSED test
+kernel_share_transpose_multi8,0.05,4,8192,131072,2.62144,cn401
+PASSED test
+kernel_share_transpose_multi8,0.05,4,8192,131072,2.62144,cn401
+PASSED test
+kernel_share_transpose_multi8,0.044,4,8192,131072,2.97891,cn401
+PASSED test
+kernel_share_transpose_multi8,0.071,4,16384,262144,3.69217,cn401
+PASSED test
+kernel_share_transpose_multi8,0.068,4,16384,262144,3.85506,cn401
+PASSED test
+kernel_share_transpose_multi8,0.072,4,16384,262144,3.64089,cn401
+PASSED test
+kernel_share_transpose_multi8,0.068,4,16384,262144,3.85506,cn401
+PASSED test
+kernel_share_transpose_multi8,0.071,4,16384,262144,3.69217,cn401
+PASSED test
+kernel_share_transpose_multi8,0.071,4,16384,262144,3.69217,cn401
+PASSED test
+kernel_share_transpose_multi8,0.068,4,16384,262144,3.85506,cn401
+PASSED test
+kernel_share_transpose_multi8,0.066,4,16384,262144,3.97188,cn401
+PASSED test
+kernel_share_transpose_multi8,0.067,4,16384,262144,3.9126,cn401
+PASSED test
+kernel_share_transpose_multi8,0.069,4,16384,262144,3.79919,cn401
+PASSED test
+kernel_share_transpose_multi8,0.122,4,32768,524288,4.29744,cn401
+PASSED test
+kernel_share_transpose_multi8,0.115,4,32768,524288,4.55903,cn401
+PASSED test
+kernel_share_transpose_multi8,0.114,4,32768,524288,4.59902,cn401
+PASSED test
+kernel_share_transpose_multi8,0.118,4,32768,524288,4.44312,cn401
+PASSED test
+kernel_share_transpose_multi8,0.115,4,32768,524288,4.55903,cn401
+PASSED test
+kernel_share_transpose_multi8,0.115,4,32768,524288,4.55903,cn401
+PASSED test
+kernel_share_transpose_multi8,0.115,4,32768,524288,4.55903,cn401
+PASSED test
+kernel_share_transpose_multi8,0.116,4,32768,524288,4.51972,cn401
+PASSED test
+kernel_share_transpose_multi8,0.113,4,32768,524288,4.63972,cn401
+PASSED test
+kernel_share_transpose_multi8,0.119,4,32768,524288,4.40578,cn401
+PASSED test
+kernel_share_transpose_multi8,0.2,4,65536,1048576,5.24288,cn401
+PASSED test
+kernel_share_transpose_multi8,0.203,4,65536,1048576,5.1654,cn401
+PASSED test
+kernel_share_transpose_multi8,0.206,4,65536,1048576,5.09018,cn401
+PASSED test
+kernel_share_transpose_multi8,0.206,4,65536,1048576,5.09018,cn401
+PASSED test
+kernel_share_transpose_multi8,0.201,4,65536,1048576,5.2168,cn401
+PASSED test
+kernel_share_transpose_multi8,0.198,4,65536,1048576,5.29584,cn401
+PASSED test
+kernel_share_transpose_multi8,0.199,4,65536,1048576,5.26923,cn401
+PASSED test
+kernel_share_transpose_multi8,0.199,4,65536,1048576,5.26923,cn401
+PASSED test
+kernel_share_transpose_multi8,0.203,4,65536,1048576,5.1654,cn401
+PASSED test
+kernel_share_transpose_multi8,0.201,4,65536,1048576,5.2168,cn401
+PASSED test
+kernel_share_transpose_multi8,0.38,4,131072,2097152,5.51882,cn401
+PASSED test
+kernel_share_transpose_multi8,0.377,4,131072,2097152,5.56274,cn401
+PASSED test
+kernel_share_transpose_multi8,0.402,4,131072,2097152,5.2168,cn401
+PASSED test
+kernel_share_transpose_multi8,0.394,4,131072,2097152,5.32272,cn401
+PASSED test
+kernel_share_transpose_multi8,0.375,4,131072,2097152,5.59241,cn401
+PASSED test
+kernel_share_transpose_multi8,0.374,4,131072,2097152,5.60736,cn401
+PASSED test
+kernel_share_transpose_multi8,0.389,4,131072,2097152,5.39114,cn401
+PASSED test
+kernel_share_transpose_multi8,0.399,4,131072,2097152,5.25602,cn401
+PASSED test
+kernel_share_transpose_multi8,0.38,4,131072,2097152,5.51882,cn401
+PASSED test
+kernel_share_transpose_multi8,0.4,4,131072,2097152,5.24288,cn401
+PASSED test
+kernel_share_transpose_multi8,0.759,4,262144,4194304,5.52609,cn401
+PASSED test
+kernel_share_transpose_multi8,0.755,4,262144,4194304,5.55537,cn401
+PASSED test
+kernel_share_transpose_multi8,0.757,4,262144,4194304,5.54069,cn401
+PASSED test
+kernel_share_transpose_multi8,0.759,4,262144,4194304,5.52609,cn401
+PASSED test
+kernel_share_transpose_multi8,0.757,4,262144,4194304,5.54069,cn401
+PASSED test
+kernel_share_transpose_multi8,0.75,4,262144,4194304,5.59241,cn401
+PASSED test
+kernel_share_transpose_multi8,0.764,4,262144,4194304,5.48993,cn401
+PASSED test
+kernel_share_transpose_multi8,0.76,4,262144,4194304,5.51882,cn401
+PASSED test
+kernel_share_transpose_multi8,0.751,4,262144,4194304,5.58496,cn401
+PASSED test
+kernel_share_transpose_multi8,0.748,4,262144,4194304,5.60736,cn401
+PASSED test
+kernel_share_transpose_multi8,1.455,4,524288,8388608,5.76537,cn401
+PASSED test
+kernel_share_transpose_multi8,1.444,4,524288,8388608,5.80929,cn401
+PASSED test
+kernel_share_transpose_multi8,1.457,4,524288,8388608,5.75745,cn401
+PASSED test
+kernel_share_transpose_multi8,1.454,4,524288,8388608,5.76933,cn401
+PASSED test
+kernel_share_transpose_multi8,1.454,4,524288,8388608,5.76933,cn401
+PASSED test
+kernel_share_transpose_multi8,1.456,4,524288,8388608,5.76141,cn401
+PASSED test
+kernel_share_transpose_multi8,1.581,4,524288,8388608,5.30589,cn401
+PASSED test
+kernel_share_transpose_multi8,1.458,4,524288,8388608,5.7535,cn401
+PASSED test
+kernel_share_transpose_multi8,1.457,4,524288,8388608,5.75745,cn401
+PASSED test
+kernel_share_transpose_multi8,1.453,4,524288,8388608,5.7733,cn401
+PASSED test
+kernel_share_transpose_multi8,2.849,4,1048576,16777216,5.88881,cn401
+PASSED test
+kernel_share_transpose_multi8,2.827,4,1048576,16777216,5.93464,cn401
+PASSED test
+kernel_share_transpose_multi8,2.847,4,1048576,16777216,5.89295,cn401
+PASSED test
+kernel_share_transpose_multi8,2.838,4,1048576,16777216,5.91163,cn401
+PASSED test
+kernel_share_transpose_multi8,2.835,4,1048576,16777216,5.91789,cn401
+PASSED test
+kernel_share_transpose_multi8,2.835,4,1048576,16777216,5.91789,cn401
+PASSED test
+kernel_share_transpose_multi8,2.776,4,1048576,16777216,6.04367,cn401
+PASSED test
+kernel_share_transpose_multi8,2.771,4,1048576,16777216,6.05457,cn401
+PASSED test
+kernel_share_transpose_multi8,2.85,4,1048576,16777216,5.88674,cn401
+PASSED test
+kernel_share_transpose_multi8,2.848,4,1048576,16777216,5.89088,cn401
+PASSED test
+kernel_share_transpose_multi8,5.52,4,2097152,33554432,6.0787,cn401
+PASSED test
+kernel_share_transpose_multi8,5.522,4,2097152,33554432,6.0765,cn401
+PASSED test
+kernel_share_transpose_multi8,5.532,4,2097152,33554432,6.06552,cn401
+PASSED test
+kernel_share_transpose_multi8,5.52,4,2097152,33554432,6.0787,cn401
+PASSED test
+kernel_share_transpose_multi8,5.524,4,2097152,33554432,6.0743,cn401
+PASSED test
+kernel_share_transpose_multi8,5.52,4,2097152,33554432,6.0787,cn401
+PASSED test
+kernel_share_transpose_multi8,5.519,4,2097152,33554432,6.0798,cn401
+PASSED test
+kernel_share_transpose_multi8,5.522,4,2097152,33554432,6.0765,cn401
+PASSED test
+kernel_share_transpose_multi8,5.514,4,2097152,33554432,6.08532,cn401
+PASSED test
+kernel_share_transpose_multi8,5.509,4,2097152,33554432,6.09084,cn401
+PASSED test
+kernel_share_transpose_multi8,11.358,4,4194304,67108864,5.90851,cn401
+PASSED test
+kernel_share_transpose_multi8,11.814,4,4194304,67108864,5.68045,cn401
+PASSED test
+kernel_share_transpose_multi8,11.677,4,4194304,67108864,5.7471,cn401
+PASSED test
+kernel_share_transpose_multi8,11.223,4,4194304,67108864,5.97958,cn401
+PASSED test
+kernel_share_transpose_multi8,11.438,4,4194304,67108864,5.86719,cn401
+PASSED test
+kernel_share_transpose_multi8,11.135,4,4194304,67108864,6.02684,cn401
+PASSED test
+kernel_share_transpose_multi8,11.609,4,4194304,67108864,5.78076,cn401
+PASSED test
+kernel_share_transpose_multi8,11.076,4,4194304,67108864,6.05894,cn401
+PASSED test
+kernel_share_transpose_multi8,11.853,4,4194304,67108864,5.66176,cn401
+PASSED test
+kernel_share_transpose_multi8,11.021,4,4194304,67108864,6.08918,cn401
+PASSED test
+kernel_share_transpose_multi8,21.968,4,8388608,134217728,6.10969,cn401
+PASSED test
+kernel_share_transpose_multi8,22.683,4,8388608,134217728,5.91711,cn401
+PASSED test
+kernel_share_transpose_multi8,22.657,4,8388608,134217728,5.9239,cn401
+PASSED test
+kernel_share_transpose_multi8,21.979,4,8388608,134217728,6.10664,cn401
+PASSED test
+kernel_share_transpose_multi8,22.64,4,8388608,134217728,5.92835,cn401
+PASSED test
+kernel_share_transpose_multi8,22.689,4,8388608,134217728,5.91554,cn401
+PASSED test
+kernel_share_transpose_multi8,22.579,4,8388608,134217728,5.94436,cn401
+PASSED test
+kernel_share_transpose_multi8,22.711,4,8388608,134217728,5.90981,cn401
+PASSED test
+kernel_share_transpose_multi8,21.986,4,8388608,134217728,6.10469,cn401
+PASSED test
+kernel_share_transpose_multi8,21.983,4,8388608,134217728,6.10552,cn401
+PASSED test
+kernel_share_transpose_multi8,44.073,4,16777216,268435456,6.0907,cn401
+PASSED test
+kernel_share_transpose_multi8,44.038,4,16777216,268435456,6.09554,cn401
+PASSED test
+kernel_share_transpose_multi8,43.928,4,16777216,268435456,6.11081,cn401
+PASSED test
+kernel_share_transpose_multi8,43.915,4,16777216,268435456,6.11261,cn401
+PASSED test
+kernel_share_transpose_multi8,44.447,4,16777216,268435456,6.03945,cn401
+PASSED test
+kernel_share_transpose_multi8,44.162,4,16777216,268435456,6.07843,cn401
+PASSED test
+kernel_share_transpose_multi8,44.619,4,16777216,268435456,6.01617,cn401
+PASSED test
+kernel_share_transpose_multi8,43.991,4,16777216,268435456,6.10205,cn401
+PASSED test
+kernel_share_transpose_multi8,44.443,4,16777216,268435456,6.03999,cn401
+PASSED test
+kernel_share_transpose_multi8,43.962,4,16777216,268435456,6.10608,cn401
+PASSED test
+kernel_share_transpose_multi8,88.449,4,33554432,536870912,6.06984,cn401
+PASSED test
+kernel_share_transpose_multi8,87.771,4,33554432,536870912,6.11672,cn401
+PASSED test
+kernel_share_transpose_multi8,87.908,4,33554432,536870912,6.10719,cn401
+PASSED test
+kernel_share_transpose_multi8,87.806,4,33554432,536870912,6.11428,cn401
+PASSED test
+kernel_share_transpose_multi8,87.804,4,33554432,536870912,6.11442,cn401
+PASSED test
+kernel_share_transpose_multi8,87.976,4,33554432,536870912,6.10247,cn401
+PASSED test
+kernel_share_transpose_multi8,87.863,4,33554432,536870912,6.11032,cn401
+PASSED test
+kernel_share_transpose_multi8,87.915,4,33554432,536870912,6.1067,cn401
+PASSED test
+kernel_share_transpose_multi8,88.365,4,33554432,536870912,6.07561,cn401
+PASSED test
+kernel_share_transpose_multi8,88.257,4,33554432,536870912,6.08304,cn401
+PASSED test
+kernel_share_transpose_multi4,0.027,4,1024,16384,0.606815,cn401
+PASSED test
+kernel_share_transpose_multi4,0.028,4,1024,16384,0.585143,cn401
+PASSED test
+kernel_share_transpose_multi4,0.032,4,1024,16384,0.512,cn401
+PASSED test
+kernel_share_transpose_multi4,0.034,4,1024,16384,0.481882,cn401
+PASSED test
+kernel_share_transpose_multi4,0.027,4,1024,16384,0.606815,cn401
+PASSED test
+kernel_share_transpose_multi4,0.03,4,1024,16384,0.546133,cn401
+PASSED test
+kernel_share_transpose_multi4,0.035,4,1024,16384,0.468114,cn401
+PASSED test
+kernel_share_transpose_multi4,0.027,4,1024,16384,0.606815,cn401
+PASSED test
+kernel_share_transpose_multi4,0.028,4,1024,16384,0.585143,cn401
+PASSED test
+kernel_share_transpose_multi4,0.027,4,1024,16384,0.606815,cn401
+PASSED test
+kernel_share_transpose_multi4,0.031,4,2048,32768,1.05703,cn401
+PASSED test
+kernel_share_transpose_multi4,0.033,4,2048,32768,0.99297,cn401
+PASSED test
+kernel_share_transpose_multi4,0.031,4,2048,32768,1.05703,cn401
+PASSED test
+kernel_share_transpose_multi4,0.028,4,2048,32768,1.17029,cn401
+PASSED test
+kernel_share_transpose_multi4,0.031,4,2048,32768,1.05703,cn401
+PASSED test
+kernel_share_transpose_multi4,0.031,4,2048,32768,1.05703,cn401
+PASSED test
+kernel_share_transpose_multi4,0.027,4,2048,32768,1.21363,cn401
+PASSED test
+kernel_share_transpose_multi4,0.029,4,2048,32768,1.12993,cn401
+PASSED test
+kernel_share_transpose_multi4,0.034,4,2048,32768,0.963765,cn401
+PASSED test
+kernel_share_transpose_multi4,0.033,4,2048,32768,0.99297,cn401
+PASSED test
+kernel_share_transpose_multi4,0.031,4,4096,65536,2.11406,cn401
+PASSED test
+kernel_share_transpose_multi4,0.032,4,4096,65536,2.048,cn401
+PASSED test
+kernel_share_transpose_multi4,0.036,4,4096,65536,1.82044,cn401
+PASSED test
+kernel_share_transpose_multi4,0.03,4,4096,65536,2.18453,cn401
+PASSED test
+kernel_share_transpose_multi4,0.035,4,4096,65536,1.87246,cn401
+PASSED test
+kernel_share_transpose_multi4,0.032,4,4096,65536,2.048,cn401
+PASSED test
+kernel_share_transpose_multi4,0.035,4,4096,65536,1.87246,cn401
+PASSED test
+kernel_share_transpose_multi4,0.032,4,4096,65536,2.048,cn401
+PASSED test
+kernel_share_transpose_multi4,0.031,4,4096,65536,2.11406,cn401
+PASSED test
+kernel_share_transpose_multi4,0.035,4,4096,65536,1.87246,cn401
+PASSED test
+kernel_share_transpose_multi4,0.037,4,8192,131072,3.54249,cn401
+PASSED test
+kernel_share_transpose_multi4,0.041,4,8192,131072,3.19688,cn401
+PASSED test
+kernel_share_transpose_multi4,0.041,4,8192,131072,3.19688,cn401
+PASSED test
+kernel_share_transpose_multi4,0.037,4,8192,131072,3.54249,cn401
+PASSED test
+kernel_share_transpose_multi4,0.038,4,8192,131072,3.44926,cn401
+PASSED test
+kernel_share_transpose_multi4,0.045,4,8192,131072,2.91271,cn401
+PASSED test
+kernel_share_transpose_multi4,0.041,4,8192,131072,3.19688,cn401
+PASSED test
+kernel_share_transpose_multi4,0.038,4,8192,131072,3.44926,cn401
+PASSED test
+kernel_share_transpose_multi4,0.037,4,8192,131072,3.54249,cn401
+PASSED test
+kernel_share_transpose_multi4,0.048,4,8192,131072,2.73067,cn401
+PASSED test
+kernel_share_transpose_multi4,0.056,4,16384,262144,4.68114,cn401
+PASSED test
+kernel_share_transpose_multi4,0.05,4,16384,262144,5.24288,cn401
+PASSED test
+kernel_share_transpose_multi4,0.051,4,16384,262144,5.14008,cn401
+PASSED test
+kernel_share_transpose_multi4,0.048,4,16384,262144,5.46133,cn401
+PASSED test
+kernel_share_transpose_multi4,0.051,4,16384,262144,5.14008,cn401
+PASSED test
+kernel_share_transpose_multi4,0.058,4,16384,262144,4.51972,cn401
+PASSED test
+kernel_share_transpose_multi4,0.051,4,16384,262144,5.14008,cn401
+PASSED test
+kernel_share_transpose_multi4,0.052,4,16384,262144,5.04123,cn401
+PASSED test
+kernel_share_transpose_multi4,0.047,4,16384,262144,5.57753,cn401
+PASSED test
+kernel_share_transpose_multi4,0.049,4,16384,262144,5.34988,cn401
+PASSED test
+kernel_share_transpose_multi4,0.075,4,32768,524288,6.99051,cn401
+PASSED test
+kernel_share_transpose_multi4,0.075,4,32768,524288,6.99051,cn401
+PASSED test
+kernel_share_transpose_multi4,0.07,4,32768,524288,7.48983,cn401
+PASSED test
+kernel_share_transpose_multi4,0.069,4,32768,524288,7.59838,cn401
+PASSED test
+kernel_share_transpose_multi4,0.074,4,32768,524288,7.08497,cn401
+PASSED test
+kernel_share_transpose_multi4,0.072,4,32768,524288,7.28178,cn401
+PASSED test
+kernel_share_transpose_multi4,0.072,4,32768,524288,7.28178,cn401
+PASSED test
+kernel_share_transpose_multi4,0.073,4,32768,524288,7.18203,cn401
+PASSED test
+kernel_share_transpose_multi4,0.073,4,32768,524288,7.18203,cn401
+PASSED test
+kernel_share_transpose_multi4,0.068,4,32768,524288,7.71012,cn401
+PASSED test
+kernel_share_transpose_multi4,0.114,4,65536,1048576,9.19804,cn401
+PASSED test
+kernel_share_transpose_multi4,0.112,4,65536,1048576,9.36228,cn401
+PASSED test
+kernel_share_transpose_multi4,0.11,4,65536,1048576,9.53251,cn401
+PASSED test
+kernel_share_transpose_multi4,0.122,4,65536,1048576,8.59488,cn401
+PASSED test
+kernel_share_transpose_multi4,0.115,4,65536,1048576,9.11805,cn401
+PASSED test
+kernel_share_transpose_multi4,0.116,4,65536,1048576,9.03945,cn401
+PASSED test
+kernel_share_transpose_multi4,0.112,4,65536,1048576,9.36228,cn401
+PASSED test
+kernel_share_transpose_multi4,0.118,4,65536,1048576,8.88624,cn401
+PASSED test
+kernel_share_transpose_multi4,0.119,4,65536,1048576,8.81156,cn401
+PASSED test
+kernel_share_transpose_multi4,0.115,4,65536,1048576,9.11805,cn401
+PASSED test
+kernel_share_transpose_multi4,0.241,4,131072,2097152,8.70188,cn401
+PASSED test
+kernel_share_transpose_multi4,0.207,4,131072,2097152,10.1312,cn401
+PASSED test
+kernel_share_transpose_multi4,0.209,4,131072,2097152,10.0342,cn401
+PASSED test
+kernel_share_transpose_multi4,0.23,4,131072,2097152,9.11805,cn401
+PASSED test
+kernel_share_transpose_multi4,0.202,4,131072,2097152,10.3819,cn401
+PASSED test
+kernel_share_transpose_multi4,0.244,4,131072,2097152,8.59488,cn401
+PASSED test
+kernel_share_transpose_multi4,0.23,4,131072,2097152,9.11805,cn401
+PASSED test
+kernel_share_transpose_multi4,0.203,4,131072,2097152,10.3308,cn401
+PASSED test
+kernel_share_transpose_multi4,0.219,4,131072,2097152,9.57604,cn401
+PASSED test
+kernel_share_transpose_multi4,0.235,4,131072,2097152,8.92405,cn401
+PASSED test
+kernel_share_transpose_multi4,0.458,4,262144,4194304,9.15787,cn401
+PASSED test
+kernel_share_transpose_multi4,0.464,4,262144,4194304,9.03945,cn401
+PASSED test
+kernel_share_transpose_multi4,0.457,4,262144,4194304,9.17791,cn401
+PASSED test
+kernel_share_transpose_multi4,0.454,4,262144,4194304,9.23855,cn401
+PASSED test
+kernel_share_transpose_multi4,0.453,4,262144,4194304,9.25895,cn401
+PASSED test
+kernel_share_transpose_multi4,0.463,4,262144,4194304,9.05897,cn401
+PASSED test
+kernel_share_transpose_multi4,0.459,4,262144,4194304,9.13792,cn401
+PASSED test
+kernel_share_transpose_multi4,0.446,4,262144,4194304,9.40427,cn401
+PASSED test
+kernel_share_transpose_multi4,0.454,4,262144,4194304,9.23855,cn401
+PASSED test
+kernel_share_transpose_multi4,0.443,4,262144,4194304,9.46795,cn401
+PASSED test
+kernel_share_transpose_multi4,0.893,4,524288,8388608,9.39374,cn401
+PASSED test
+kernel_share_transpose_multi4,0.893,4,524288,8388608,9.39374,cn401
+PASSED test
+kernel_share_transpose_multi4,0.892,4,524288,8388608,9.40427,cn401
+PASSED test
+kernel_share_transpose_multi4,0.893,4,524288,8388608,9.39374,cn401
+PASSED test
+kernel_share_transpose_multi4,0.893,4,524288,8388608,9.39374,cn401
+PASSED test
+kernel_share_transpose_multi4,0.893,4,524288,8388608,9.39374,cn401
+PASSED test
+kernel_share_transpose_multi4,0.897,4,524288,8388608,9.35185,cn401
+PASSED test
+kernel_share_transpose_multi4,0.892,4,524288,8388608,9.40427,cn401
+PASSED test
+kernel_share_transpose_multi4,0.894,4,524288,8388608,9.38323,cn401
+PASSED test
+kernel_share_transpose_multi4,0.894,4,524288,8388608,9.38323,cn401
+PASSED test
+kernel_share_transpose_multi4,1.491,4,1048576,16777216,11.2523,cn401
+PASSED test
+kernel_share_transpose_multi4,1.707,4,1048576,16777216,9.82848,cn401
+PASSED test
+kernel_share_transpose_multi4,1.66,4,1048576,16777216,10.1068,cn401
+PASSED test
+kernel_share_transpose_multi4,1.769,4,1048576,16777216,9.48401,cn401
+PASSED test
+kernel_share_transpose_multi4,1.773,4,1048576,16777216,9.46262,cn401
+PASSED test
+kernel_share_transpose_multi4,1.767,4,1048576,16777216,9.49475,cn401
+PASSED test
+kernel_share_transpose_multi4,1.763,4,1048576,16777216,9.51629,cn401
+PASSED test
+kernel_share_transpose_multi4,1.775,4,1048576,16777216,9.45195,cn401
+PASSED test
+kernel_share_transpose_multi4,1.766,4,1048576,16777216,9.50012,cn401
+PASSED test
+kernel_share_transpose_multi4,1.777,4,1048576,16777216,9.44131,cn401
+PASSED test
+kernel_share_transpose_multi4,2.732,4,2097152,33554432,12.282,cn401
+PASSED test
+kernel_share_transpose_multi4,2.727,4,2097152,33554432,12.3045,cn401
+PASSED test
+kernel_share_transpose_multi4,2.725,4,2097152,33554432,12.3136,cn401
+PASSED test
+kernel_share_transpose_multi4,2.737,4,2097152,33554432,12.2596,cn401
+PASSED test
+kernel_share_transpose_multi4,2.734,4,2097152,33554432,12.273,cn401
+PASSED test
+kernel_share_transpose_multi4,2.732,4,2097152,33554432,12.282,cn401
+PASSED test
+kernel_share_transpose_multi4,2.733,4,2097152,33554432,12.2775,cn401
+PASSED test
+kernel_share_transpose_multi4,2.726,4,2097152,33554432,12.309,cn401
+PASSED test
+kernel_share_transpose_multi4,2.75,4,2097152,33554432,12.2016,cn401
+PASSED test
+kernel_share_transpose_multi4,2.734,4,2097152,33554432,12.273,cn401
+PASSED test
+kernel_share_transpose_multi4,5.424,4,4194304,67108864,12.3726,cn401
+PASSED test
+kernel_share_transpose_multi4,5.81,4,4194304,67108864,11.5506,cn401
+PASSED test
+kernel_share_transpose_multi4,6.195,4,4194304,67108864,10.8327,cn401
+PASSED test
+kernel_share_transpose_multi4,5.425,4,4194304,67108864,12.3703,cn401
+PASSED test
+kernel_share_transpose_multi4,5.752,4,4194304,67108864,11.667,cn401
+PASSED test
+kernel_share_transpose_multi4,5.42,4,4194304,67108864,12.3817,cn401
+PASSED test
+kernel_share_transpose_multi4,5.578,4,4194304,67108864,12.031,cn401
+PASSED test
+kernel_share_transpose_multi4,5.423,4,4194304,67108864,12.3749,cn401
+PASSED test
+kernel_share_transpose_multi4,5.422,4,4194304,67108864,12.3771,cn401
+PASSED test
+kernel_share_transpose_multi4,5.43,4,4194304,67108864,12.3589,cn401
+PASSED test
+kernel_share_transpose_multi4,11.522,4,8388608,134217728,11.6488,cn401
+PASSED test
+kernel_share_transpose_multi4,11.608,4,8388608,134217728,11.5625,cn401
+PASSED test
+kernel_share_transpose_multi4,11.651,4,8388608,134217728,11.5198,cn401
+PASSED test
+kernel_share_transpose_multi4,11.696,4,8388608,134217728,11.4755,cn401
+PASSED test
+kernel_share_transpose_multi4,10.833,4,8388608,134217728,12.3897,cn401
+PASSED test
+kernel_share_transpose_multi4,11.705,4,8388608,134217728,11.4667,cn401
+PASSED test
+kernel_share_transpose_multi4,10.834,4,8388608,134217728,12.3886,cn401
+PASSED test
+kernel_share_transpose_multi4,10.825,4,8388608,134217728,12.3989,cn401
+PASSED test
+kernel_share_transpose_multi4,10.825,4,8388608,134217728,12.3989,cn401
+PASSED test
+kernel_share_transpose_multi4,10.834,4,8388608,134217728,12.3886,cn401
+PASSED test
+kernel_share_transpose_multi4,22.104,4,16777216,268435456,12.1442,cn401
+PASSED test
+kernel_share_transpose_multi4,21.687,4,16777216,268435456,12.3777,cn401
+PASSED test
+kernel_share_transpose_multi4,21.623,4,16777216,268435456,12.4143,cn401
+PASSED test
+kernel_share_transpose_multi4,21.625,4,16777216,268435456,12.4132,cn401
+PASSED test
+kernel_share_transpose_multi4,21.784,4,16777216,268435456,12.3226,cn401
+PASSED test
+kernel_share_transpose_multi4,21.618,4,16777216,268435456,12.4172,cn401
+PASSED test
+kernel_share_transpose_multi4,21.643,4,16777216,268435456,12.4029,cn401
+PASSED test
+kernel_share_transpose_multi4,21.618,4,16777216,268435456,12.4172,cn401
+PASSED test
+kernel_share_transpose_multi4,21.625,4,16777216,268435456,12.4132,cn401
+PASSED test
+kernel_share_transpose_multi4,22.267,4,16777216,268435456,12.0553,cn401
+PASSED test
+kernel_share_transpose_multi4,43.641,4,33554432,536870912,12.302,cn401
+PASSED test
+kernel_share_transpose_multi4,43.487,4,33554432,536870912,12.3455,cn401
+PASSED test
+kernel_share_transpose_multi4,43.341,4,33554432,536870912,12.3871,cn401
+PASSED test
+kernel_share_transpose_multi4,43.835,4,33554432,536870912,12.2475,cn401
+PASSED test
+kernel_share_transpose_multi4,43.21,4,33554432,536870912,12.4247,cn401
+PASSED test
+kernel_share_transpose_multi4,43.696,4,33554432,536870912,12.2865,cn401
+PASSED test
+kernel_share_transpose_multi4,43.311,4,33554432,536870912,12.3957,cn401
+PASSED test
+kernel_share_transpose_multi4,43.27,4,33554432,536870912,12.4075,cn401
+PASSED test
+kernel_share_transpose_multi4,43.202,4,33554432,536870912,12.427,cn401
+PASSED test
+kernel_share_transpose_multi4,43.213,4,33554432,536870912,12.4238,cn401
+PASSED test
+kernel_share_transpose,0.029,4,1024,16384,0.564966,cn401
+PASSED test
+kernel_share_transpose,0.03,4,1024,16384,0.546133,cn401
+PASSED test
+kernel_share_transpose,0.037,4,1024,16384,0.442811,cn401
+PASSED test
+kernel_share_transpose,0.029,4,1024,16384,0.564966,cn401
+PASSED test
+kernel_share_transpose,0.028,4,1024,16384,0.585143,cn401
+PASSED test
+kernel_share_transpose,0.026,4,1024,16384,0.630154,cn401
+PASSED test
+kernel_share_transpose,0.029,4,1024,16384,0.564966,cn401
+PASSED test
+kernel_share_transpose,0.026,4,1024,16384,0.630154,cn401
+PASSED test
+kernel_share_transpose,0.025,4,1024,16384,0.65536,cn401
+PASSED test
+kernel_share_transpose,0.028,4,1024,16384,0.585143,cn401
+PASSED test
+kernel_share_transpose,0.03,4,2048,32768,1.09227,cn401
+PASSED test
+kernel_share_transpose,0.027,4,2048,32768,1.21363,cn401
+PASSED test
+kernel_share_transpose,0.027,4,2048,32768,1.21363,cn401
+PASSED test
+kernel_share_transpose,0.031,4,2048,32768,1.05703,cn401
+PASSED test
+kernel_share_transpose,0.037,4,2048,32768,0.885622,cn401
+PASSED test
+kernel_share_transpose,0.027,4,2048,32768,1.21363,cn401
+PASSED test
+kernel_share_transpose,0.03,4,2048,32768,1.09227,cn401
+PASSED test
+kernel_share_transpose,0.031,4,2048,32768,1.05703,cn401
+PASSED test
+kernel_share_transpose,0.027,4,2048,32768,1.21363,cn401
+PASSED test
+kernel_share_transpose,0.027,4,2048,32768,1.21363,cn401
+PASSED test
+kernel_share_transpose,0.031,4,4096,65536,2.11406,cn401
+PASSED test
+kernel_share_transpose,0.037,4,4096,65536,1.77124,cn401
+PASSED test
+kernel_share_transpose,0.032,4,4096,65536,2.048,cn401
+PASSED test
+kernel_share_transpose,0.036,4,4096,65536,1.82044,cn401
+PASSED test
+kernel_share_transpose,0.03,4,4096,65536,2.18453,cn401
+PASSED test
+kernel_share_transpose,0.034,4,4096,65536,1.92753,cn401
+PASSED test
+kernel_share_transpose,0.035,4,4096,65536,1.87246,cn401
+PASSED test
+kernel_share_transpose,0.031,4,4096,65536,2.11406,cn401
+PASSED test
+kernel_share_transpose,0.032,4,4096,65536,2.048,cn401
+PASSED test
+kernel_share_transpose,0.032,4,4096,65536,2.048,cn401
+PASSED test
+kernel_share_transpose,0.043,4,8192,131072,3.04819,cn401
+PASSED test
+kernel_share_transpose,0.039,4,8192,131072,3.36082,cn401
+PASSED test
+kernel_share_transpose,0.044,4,8192,131072,2.97891,cn401
+PASSED test
+kernel_share_transpose,0.042,4,8192,131072,3.12076,cn401
+PASSED test
+kernel_share_transpose,0.043,4,8192,131072,3.04819,cn401
+PASSED test
+kernel_share_transpose,0.04,4,8192,131072,3.2768,cn401
+PASSED test
+kernel_share_transpose,0.042,4,8192,131072,3.12076,cn401
+PASSED test
+kernel_share_transpose,0.041,4,8192,131072,3.19688,cn401
+PASSED test
+kernel_share_transpose,0.04,4,8192,131072,3.2768,cn401
+PASSED test
+kernel_share_transpose,0.046,4,8192,131072,2.84939,cn401
+PASSED test
+kernel_share_transpose,0.055,4,16384,262144,4.76625,cn401
+PASSED test
+kernel_share_transpose,0.055,4,16384,262144,4.76625,cn401
+PASSED test
+kernel_share_transpose,0.054,4,16384,262144,4.85452,cn401
+PASSED test
+kernel_share_transpose,0.055,4,16384,262144,4.76625,cn401
+PASSED test
+kernel_share_transpose,0.058,4,16384,262144,4.51972,cn401
+PASSED test
+kernel_share_transpose,0.056,4,16384,262144,4.68114,cn401
+PASSED test
+kernel_share_transpose,0.06,4,16384,262144,4.36907,cn401
+PASSED test
+kernel_share_transpose,0.054,4,16384,262144,4.85452,cn401
+PASSED test
+kernel_share_transpose,0.052,4,16384,262144,5.04123,cn401
+PASSED test
+kernel_share_transpose,0.06,4,16384,262144,4.36907,cn401
+PASSED test
+kernel_share_transpose,0.082,4,32768,524288,6.39376,cn401
+PASSED test
+kernel_share_transpose,0.076,4,32768,524288,6.89853,cn401
+PASSED test
+kernel_share_transpose,0.079,4,32768,524288,6.63656,cn401
+PASSED test
+kernel_share_transpose,0.076,4,32768,524288,6.89853,cn401
+PASSED test
+kernel_share_transpose,0.081,4,32768,524288,6.47269,cn401
+PASSED test
+kernel_share_transpose,0.082,4,32768,524288,6.39376,cn401
+PASSED test
+kernel_share_transpose,0.077,4,32768,524288,6.80894,cn401
+PASSED test
+kernel_share_transpose,0.085,4,32768,524288,6.16809,cn401
+PASSED test
+kernel_share_transpose,0.081,4,32768,524288,6.47269,cn401
+PASSED test
+kernel_share_transpose,0.077,4,32768,524288,6.80894,cn401
+PASSED test
+kernel_share_transpose,0.119,4,65536,1048576,8.81156,cn401
+PASSED test
+kernel_share_transpose,0.125,4,65536,1048576,8.38861,cn401
+PASSED test
+kernel_share_transpose,0.118,4,65536,1048576,8.88624,cn401
+PASSED test
+kernel_share_transpose,0.116,4,65536,1048576,9.03945,cn401
+PASSED test
+kernel_share_transpose,0.119,4,65536,1048576,8.81156,cn401
+PASSED test
+kernel_share_transpose,0.126,4,65536,1048576,8.32203,cn401
+PASSED test
+kernel_share_transpose,0.128,4,65536,1048576,8.192,cn401
+PASSED test
+kernel_share_transpose,0.12,4,65536,1048576,8.73813,cn401
+PASSED test
+kernel_share_transpose,0.118,4,65536,1048576,8.88624,cn401
+PASSED test
+kernel_share_transpose,0.118,4,65536,1048576,8.88624,cn401
+PASSED test
+kernel_share_transpose,0.21,4,131072,2097152,9.98644,cn401
+PASSED test
+kernel_share_transpose,0.246,4,131072,2097152,8.52501,cn401
+PASSED test
+kernel_share_transpose,0.218,4,131072,2097152,9.61996,cn401
+PASSED test
+kernel_share_transpose,0.207,4,131072,2097152,10.1312,cn401
+PASSED test
+kernel_share_transpose,0.236,4,131072,2097152,8.88624,cn401
+PASSED test
+kernel_share_transpose,0.21,4,131072,2097152,9.98644,cn401
+PASSED test
+kernel_share_transpose,0.243,4,131072,2097152,8.63025,cn401
+PASSED test
+kernel_share_transpose,0.219,4,131072,2097152,9.57604,cn401
+PASSED test
+kernel_share_transpose,0.246,4,131072,2097152,8.52501,cn401
+PASSED test
+kernel_share_transpose,0.211,4,131072,2097152,9.93911,cn401
+PASSED test
+kernel_share_transpose,0.454,4,262144,4194304,9.23855,cn401
+PASSED test
+kernel_share_transpose,0.475,4,262144,4194304,8.83011,cn401
+PASSED test
+kernel_share_transpose,0.463,4,262144,4194304,9.05897,cn401
+PASSED test
+kernel_share_transpose,0.478,4,262144,4194304,8.7747,cn401
+PASSED test
+kernel_share_transpose,0.419,4,262144,4194304,10.0103,cn401
+PASSED test
+kernel_share_transpose,0.468,4,262144,4194304,8.96219,cn401
+PASSED test
+kernel_share_transpose,0.462,4,262144,4194304,9.07858,cn401
+PASSED test
+kernel_share_transpose,0.463,4,262144,4194304,9.05897,cn401
+PASSED test
+kernel_share_transpose,0.468,4,262144,4194304,8.96219,cn401
+PASSED test
+kernel_share_transpose,0.467,4,262144,4194304,8.98138,cn401
+PASSED test
+kernel_share_transpose,0.896,4,524288,8388608,9.36228,cn401
+PASSED test
+kernel_share_transpose,0.889,4,524288,8388608,9.436,cn401
+PASSED test
+kernel_share_transpose,0.902,4,524288,8388608,9.30001,cn401
+PASSED test
+kernel_share_transpose,0.899,4,524288,8388608,9.33104,cn401
+PASSED test
+kernel_share_transpose,0.895,4,524288,8388608,9.37275,cn401
+PASSED test
+kernel_share_transpose,0.894,4,524288,8388608,9.38323,cn401
+PASSED test
+kernel_share_transpose,0.897,4,524288,8388608,9.35185,cn401
+PASSED test
+kernel_share_transpose,0.848,4,524288,8388608,9.89223,cn401
+PASSED test
+kernel_share_transpose,0.895,4,524288,8388608,9.37275,cn401
+PASSED test
+kernel_share_transpose,0.904,4,524288,8388608,9.27943,cn401
+PASSED test
+kernel_share_transpose,1.926,4,1048576,16777216,8.71091,cn401
+PASSED test
+kernel_share_transpose,1.777,4,1048576,16777216,9.44131,cn401
+PASSED test
+kernel_share_transpose,1.771,4,1048576,16777216,9.4733,cn401
+PASSED test
+kernel_share_transpose,1.805,4,1048576,16777216,9.29486,cn401
+PASSED test
+kernel_share_transpose,1.765,4,1048576,16777216,9.5055,cn401
+PASSED test
+kernel_share_transpose,1.758,4,1048576,16777216,9.54335,cn401
+PASSED test
+kernel_share_transpose,1.766,4,1048576,16777216,9.50012,cn401
+PASSED test
+kernel_share_transpose,1.761,4,1048576,16777216,9.5271,cn401
+PASSED test
+kernel_share_transpose,1.687,4,1048576,16777216,9.945,cn401
+PASSED test
+kernel_share_transpose,1.777,4,1048576,16777216,9.44131,cn401
+PASSED test
+kernel_share_transpose,2.753,4,2097152,33554432,12.1883,cn401
+PASSED test
+kernel_share_transpose,2.749,4,2097152,33554432,12.206,cn401
+PASSED test
+kernel_share_transpose,2.754,4,2097152,33554432,12.1839,cn401
+PASSED test
+kernel_share_transpose,2.736,4,2097152,33554432,12.264,cn401
+PASSED test
+kernel_share_transpose,2.738,4,2097152,33554432,12.2551,cn401
+PASSED test
+kernel_share_transpose,2.749,4,2097152,33554432,12.206,cn401
+PASSED test
+kernel_share_transpose,2.742,4,2097152,33554432,12.2372,cn401
+PASSED test
+kernel_share_transpose,2.739,4,2097152,33554432,12.2506,cn401
+PASSED test
+kernel_share_transpose,2.738,4,2097152,33554432,12.2551,cn401
+PASSED test
+kernel_share_transpose,2.744,4,2097152,33554432,12.2283,cn401
+PASSED test
+kernel_share_transpose,6.368,4,4194304,67108864,10.5385,cn401
+PASSED test
+kernel_share_transpose,5.72,4,4194304,67108864,11.7323,cn401
+PASSED test
+kernel_share_transpose,5.437,4,4194304,67108864,12.343,cn401
+PASSED test
+kernel_share_transpose,6.223,4,4194304,67108864,10.784,cn401
+PASSED test
+kernel_share_transpose,5.444,4,4194304,67108864,12.3271,cn401
+PASSED test
+kernel_share_transpose,6.434,4,4194304,67108864,10.4303,cn401
+PASSED test
+kernel_share_transpose,5.514,4,4194304,67108864,12.1706,cn401
+PASSED test
+kernel_share_transpose,5.496,4,4194304,67108864,12.2105,cn401
+PASSED test
+kernel_share_transpose,5.668,4,4194304,67108864,11.84,cn401
+PASSED test
+kernel_share_transpose,5.455,4,4194304,67108864,12.3023,cn401
+PASSED test
+kernel_share_transpose,11.76,4,8388608,134217728,11.4131,cn401
+PASSED test
+kernel_share_transpose,10.851,4,8388608,134217728,12.3692,cn401
+PASSED test
+kernel_share_transpose,11.392,4,8388608,134217728,11.7818,cn401
+PASSED test
+kernel_share_transpose,10.85,4,8388608,134217728,12.3703,cn401
+PASSED test
+kernel_share_transpose,10.86,4,8388608,134217728,12.3589,cn401
+PASSED test
+kernel_share_transpose,10.866,4,8388608,134217728,12.3521,cn401
+PASSED test
+kernel_share_transpose,11.739,4,8388608,134217728,11.4335,cn401
+PASSED test
+kernel_share_transpose,11.717,4,8388608,134217728,11.455,cn401
+PASSED test
+kernel_share_transpose,11.794,4,8388608,134217728,11.3802,cn401
+PASSED test
+kernel_share_transpose,10.851,4,8388608,134217728,12.3692,cn401
+PASSED test
+kernel_share_transpose,21.656,4,16777216,268435456,12.3954,cn401
+PASSED test
+kernel_share_transpose,22.079,4,16777216,268435456,12.158,cn401
+PASSED test
+kernel_share_transpose,21.664,4,16777216,268435456,12.3909,cn401
+PASSED test
+kernel_share_transpose,21.669,4,16777216,268435456,12.388,cn401
+PASSED test
+kernel_share_transpose,21.832,4,16777216,268435456,12.2955,cn401
+PASSED test
+kernel_share_transpose,21.763,4,16777216,268435456,12.3345,cn401
+PASSED test
+kernel_share_transpose,22.284,4,16777216,268435456,12.0461,cn401
+PASSED test
+kernel_share_transpose,21.672,4,16777216,268435456,12.3863,cn401
+PASSED test
+kernel_share_transpose,21.916,4,16777216,268435456,12.2484,cn401
+PASSED test
+kernel_share_transpose,21.695,4,16777216,268435456,12.3731,cn401
+PASSED test
+kernel_share_transpose,43.453,4,33554432,536870912,12.3552,cn401
+PASSED test
+kernel_share_transpose,43.802,4,33554432,536870912,12.2568,cn401
+PASSED test
+kernel_share_transpose,43.326,4,33554432,536870912,12.3914,cn401
+PASSED test
+kernel_share_transpose,43.325,4,33554432,536870912,12.3917,cn401
+PASSED test
+kernel_share_transpose,43.342,4,33554432,536870912,12.3869,cn401
+PASSED test
+kernel_share_transpose,43.265,4,33554432,536870912,12.4089,cn401
+PASSED test
+kernel_share_transpose,43.623,4,33554432,536870912,12.3071,cn401
+PASSED test
+kernel_share_transpose,43.303,4,33554432,536870912,12.398,cn401
+PASSED test
+kernel_share_transpose,43.273,4,33554432,536870912,12.4066,cn401
+PASSED test
+kernel_share_transpose,43.664,4,33554432,536870912,12.2955,cn401
+PASSED test
+memcpy_transpose1,0.091,4,1024,16384,0.180044,cn401
+PASSED test
+memcpy_transpose1,0.097,4,1024,16384,0.168907,cn401
+PASSED test
+memcpy_transpose1,0.096,4,1024,16384,0.170667,cn401
+PASSED test
+memcpy_transpose1,0.087,4,1024,16384,0.188322,cn401
+PASSED test
+memcpy_transpose1,0.091,4,1024,16384,0.180044,cn401
+PASSED test
+memcpy_transpose1,0.091,4,1024,16384,0.180044,cn401
+PASSED test
+memcpy_transpose1,0.089,4,1024,16384,0.18409,cn401
+PASSED test
+memcpy_transpose1,0.092,4,1024,16384,0.178087,cn401
+PASSED test
+memcpy_transpose1,0.096,4,1024,16384,0.170667,cn401
+PASSED test
+memcpy_transpose1,0.087,4,1024,16384,0.188322,cn401
+PASSED test
+memcpy_transpose1,0.158,4,2048,32768,0.207392,cn401
+PASSED test
+memcpy_transpose1,0.159,4,2048,32768,0.206088,cn401
+PASSED test
+memcpy_transpose1,0.155,4,2048,32768,0.211406,cn401
+PASSED test
+memcpy_transpose1,0.156,4,2048,32768,0.210051,cn401
+PASSED test
+memcpy_transpose1,0.154,4,2048,32768,0.212779,cn401
+PASSED test
+memcpy_transpose1,0.163,4,2048,32768,0.201031,cn401
+PASSED test
+memcpy_transpose1,0.156,4,2048,32768,0.210051,cn401
+PASSED test
+memcpy_transpose1,0.157,4,2048,32768,0.208713,cn401
+PASSED test
+memcpy_transpose1,0.159,4,2048,32768,0.206088,cn401
+PASSED test
+memcpy_transpose1,0.155,4,2048,32768,0.211406,cn401
+PASSED test
+memcpy_transpose1,0.286,4,4096,65536,0.229147,cn401
+PASSED test
+memcpy_transpose1,0.291,4,4096,65536,0.22521,cn401
+PASSED test
+memcpy_transpose1,0.289,4,4096,65536,0.226768,cn401
+PASSED test
+memcpy_transpose1,0.287,4,4096,65536,0.228348,cn401
+PASSED test
+memcpy_transpose1,0.286,4,4096,65536,0.229147,cn401
+PASSED test
+memcpy_transpose1,0.292,4,4096,65536,0.224438,cn401
+PASSED test
+memcpy_transpose1,0.29,4,4096,65536,0.225986,cn401
+PASSED test
+memcpy_transpose1,0.296,4,4096,65536,0.221405,cn401
+PASSED test
+memcpy_transpose1,0.295,4,4096,65536,0.222156,cn401
+PASSED test
+memcpy_transpose1,0.264,4,4096,65536,0.248242,cn401
+PASSED test
+memcpy_transpose1,0.542,4,8192,131072,0.24183,cn401
+PASSED test
+memcpy_transpose1,0.549,4,8192,131072,0.238747,cn401
+PASSED test
+memcpy_transpose1,0.548,4,8192,131072,0.239182,cn401
+PASSED test
+memcpy_transpose1,0.505,4,8192,131072,0.259549,cn401
+PASSED test
+memcpy_transpose1,0.564,4,8192,131072,0.232397,cn401
+PASSED test
+memcpy_transpose1,0.54,4,8192,131072,0.242726,cn401
+PASSED test
+memcpy_transpose1,0.552,4,8192,131072,0.237449,cn401
+PASSED test
+memcpy_transpose1,0.558,4,8192,131072,0.234896,cn401
+PASSED test
+memcpy_transpose1,0.558,4,8192,131072,0.234896,cn401
+PASSED test
+memcpy_transpose1,0.551,4,8192,131072,0.23788,cn401
+PASSED test
+memcpy_transpose1,1.064,4,16384,262144,0.246376,cn401
+PASSED test
+memcpy_transpose1,0.995,4,16384,262144,0.263461,cn401
+PASSED test
+memcpy_transpose1,1.027,4,16384,262144,0.255252,cn401
+PASSED test
+memcpy_transpose1,0.986,4,16384,262144,0.265866,cn401
+PASSED test
+memcpy_transpose1,1.047,4,16384,262144,0.250376,cn401
+PASSED test
+memcpy_transpose1,1.031,4,16384,262144,0.254262,cn401
+PASSED test
+memcpy_transpose1,0.982,4,16384,262144,0.266949,cn401
+PASSED test
+memcpy_transpose1,1.046,4,16384,262144,0.250616,cn401
+PASSED test
+memcpy_transpose1,1.027,4,16384,262144,0.255252,cn401
+PASSED test
+memcpy_transpose1,1.061,4,16384,262144,0.247073,cn401
+PASSED test
+memcpy_transpose1,1.948,4,32768,524288,0.269142,cn401
+PASSED test
+memcpy_transpose1,1.986,4,32768,524288,0.263992,cn401
+PASSED test
+memcpy_transpose1,1.99,4,32768,524288,0.263461,cn401
+PASSED test
+memcpy_transpose1,1.968,4,32768,524288,0.266407,cn401
+PASSED test
+memcpy_transpose1,1.967,4,32768,524288,0.266542,cn401
+PASSED test
+memcpy_transpose1,2.051,4,32768,524288,0.255626,cn401
+PASSED test
+memcpy_transpose1,2.034,4,32768,524288,0.257762,cn401
+PASSED test
+memcpy_transpose1,1.986,4,32768,524288,0.263992,cn401
+PASSED test
+memcpy_transpose1,1.936,4,32768,524288,0.27081,cn401
+PASSED test
+memcpy_transpose1,1.94,4,32768,524288,0.270252,cn401
+PASSED test
+memcpy_transpose1,3.893,4,65536,1048576,0.269349,cn401
+PASSED test
+memcpy_transpose1,3.87,4,65536,1048576,0.27095,cn401
+PASSED test
+memcpy_transpose1,3.876,4,65536,1048576,0.27053,cn401
+PASSED test
+memcpy_transpose1,3.93,4,65536,1048576,0.266813,cn401
+PASSED test
+memcpy_transpose1,3.952,4,65536,1048576,0.265328,cn401
+PASSED test
+memcpy_transpose1,3.907,4,65536,1048576,0.268384,cn401
+PASSED test
+memcpy_transpose1,3.87,4,65536,1048576,0.27095,cn401
+PASSED test
+memcpy_transpose1,3.866,4,65536,1048576,0.27123,cn401
+PASSED test
+memcpy_transpose1,3.913,4,65536,1048576,0.267972,cn401
+PASSED test
+memcpy_transpose1,3.904,4,65536,1048576,0.26859,cn401
+PASSED test
+memcpy_transpose1,7.781,4,131072,2097152,0.269522,cn401
+PASSED test
+memcpy_transpose1,7.695,4,131072,2097152,0.272534,cn401
+PASSED test
+memcpy_transpose1,7.71,4,131072,2097152,0.272004,cn401
+PASSED test
+memcpy_transpose1,7.857,4,131072,2097152,0.266915,cn401
+PASSED test
+memcpy_transpose1,7.83,4,131072,2097152,0.267835,cn401
+PASSED test
+memcpy_transpose1,7.736,4,131072,2097152,0.27109,cn401
+PASSED test
+memcpy_transpose1,7.856,4,131072,2097152,0.266949,cn401
+PASSED test
+memcpy_transpose1,7.834,4,131072,2097152,0.267699,cn401
+PASSED test
+memcpy_transpose1,7.811,4,131072,2097152,0.268487,cn401
+PASSED test
+memcpy_transpose1,7.861,4,131072,2097152,0.266779,cn401
+PASSED test
+memcpy_transpose1,15.401,4,262144,4194304,0.27234,cn401
+PASSED test
+memcpy_transpose1,16.035,4,262144,4194304,0.261572,cn401
+PASSED test
+memcpy_transpose1,15.801,4,262144,4194304,0.265445,cn401
+PASSED test
+memcpy_transpose1,15.767,4,262144,4194304,0.266018,cn401
+PASSED test
+memcpy_transpose1,15.427,4,262144,4194304,0.271881,cn401
+PASSED test
+memcpy_transpose1,15.674,4,262144,4194304,0.267596,cn401
+PASSED test
+memcpy_transpose1,15.415,4,262144,4194304,0.272092,cn401
+PASSED test
+memcpy_transpose1,15.585,4,262144,4194304,0.269124,cn401
+PASSED test
+memcpy_transpose1,15.732,4,262144,4194304,0.26661,cn401
+PASSED test
+memcpy_transpose1,15.727,4,262144,4194304,0.266694,cn401
+PASSED test
+memcpy_transpose1,31.517,4,524288,8388608,0.266161,cn401
+PASSED test
+memcpy_transpose1,31.949,4,524288,8388608,0.262562,cn401
+PASSED test
+memcpy_transpose1,32.085,4,524288,8388608,0.26145,cn401
+PASSED test
+memcpy_transpose1,31.237,4,524288,8388608,0.268547,cn401
+PASSED test
+memcpy_transpose1,31.428,4,524288,8388608,0.266915,cn401
+PASSED test
+memcpy_transpose1,31.858,4,524288,8388608,0.263312,cn401
+PASSED test
+memcpy_transpose1,31.783,4,524288,8388608,0.263934,cn401
+PASSED test
+memcpy_transpose1,32.322,4,524288,8388608,0.259532,cn401
+PASSED test
+memcpy_transpose1,31.8,4,524288,8388608,0.263793,cn401
+PASSED test
+memcpy_transpose1,31.384,4,524288,8388608,0.267289,cn401
+PASSED test
+memcpy_transpose1,63.285,4,1048576,16777216,0.265106,cn401
+PASSED test
+memcpy_transpose1,63.263,4,1048576,16777216,0.265198,cn401
+PASSED test
+memcpy_transpose1,62.924,4,1048576,16777216,0.266627,cn401
+PASSED test
+memcpy_transpose1,63.086,4,1048576,16777216,0.265942,cn401
+PASSED test
+memcpy_transpose1,63.067,4,1048576,16777216,0.266022,cn401
+PASSED test
+memcpy_transpose1,63.213,4,1048576,16777216,0.265408,cn401
+PASSED test
+memcpy_transpose1,62.969,4,1048576,16777216,0.266436,cn401
+PASSED test
+memcpy_transpose1,63.514,4,1048576,16777216,0.26415,cn401
+PASSED test
+memcpy_transpose1,63.004,4,1048576,16777216,0.266288,cn401
+PASSED test
+memcpy_transpose1,63.077,4,1048576,16777216,0.26598,cn401
+PASSED test
+memcpy_transpose1,121.535,4,2097152,33554432,0.276089,cn401
+PASSED test
+memcpy_transpose1,126.356,4,2097152,33554432,0.265555,cn401
+PASSED test
+memcpy_transpose1,125.171,4,2097152,33554432,0.268069,cn401
+PASSED test
+memcpy_transpose1,126.43,4,2097152,33554432,0.265399,cn401
+PASSED test
+memcpy_transpose1,123.812,4,2097152,33554432,0.271011,cn401
+PASSED test
+memcpy_transpose1,126.521,4,2097152,33554432,0.265208,cn401
+PASSED test
+memcpy_transpose1,122.338,4,2097152,33554432,0.274276,cn401
+PASSED test
+memcpy_transpose1,126.147,4,2097152,33554432,0.265995,cn401
+PASSED test
+memcpy_transpose1,125.202,4,2097152,33554432,0.268002,cn401
+PASSED test
+memcpy_transpose1,121.636,4,2097152,33554432,0.275859,cn401
+PASSED test
+memcpy_transpose1,244.417,4,4194304,67108864,0.274567,cn401
+PASSED test
+memcpy_transpose1,246.121,4,4194304,67108864,0.272666,cn401
+PASSED test
+memcpy_transpose1,251.381,4,4194304,67108864,0.266961,cn401
+PASSED test
+memcpy_transpose1,247.644,4,4194304,67108864,0.270989,cn401
+PASSED test
+memcpy_transpose1,245.787,4,4194304,67108864,0.273037,cn401
+PASSED test
+memcpy_transpose1,248.821,4,4194304,67108864,0.269707,cn401
+PASSED test
+memcpy_transpose1,251.532,4,4194304,67108864,0.2668,cn401
+PASSED test
+memcpy_transpose1,249.101,4,4194304,67108864,0.269404,cn401
+PASSED test
+memcpy_transpose1,242.76,4,4194304,67108864,0.276441,cn401
+PASSED test
+memcpy_transpose1,250.959,4,4194304,67108864,0.26741,cn401
+PASSED test
+memcpy_transpose1,486.319,4,8388608,134217728,0.275987,cn401
+PASSED test
+memcpy_transpose1,485.478,4,8388608,134217728,0.276465,cn401
+PASSED test
+memcpy_transpose1,488.582,4,8388608,134217728,0.274709,cn401
+PASSED test
+memcpy_transpose1,488.754,4,8388608,134217728,0.274612,cn401
+PASSED test
+memcpy_transpose1,486.251,4,8388608,134217728,0.276026,cn401
+PASSED test
+memcpy_transpose1,485.68,4,8388608,134217728,0.27635,cn401
+PASSED test
+memcpy_transpose1,485.483,4,8388608,134217728,0.276462,cn401
+PASSED test
+memcpy_transpose1,490.053,4,8388608,134217728,0.273884,cn401
+PASSED test
+memcpy_transpose1,487.411,4,8388608,134217728,0.275369,cn401
+PASSED test
+memcpy_transpose1,489.132,4,8388608,134217728,0.2744,cn401
+PASSED test
+memcpy_transpose1,971.213,4,16777216,268435456,0.276392,cn401
+PASSED test
+memcpy_transpose1,971.385,4,16777216,268435456,0.276343,cn401
+PASSED test
+memcpy_transpose1,973.202,4,16777216,268435456,0.275827,cn401
+PASSED test
+memcpy_transpose1,971.47,4,16777216,268435456,0.276319,cn401
+PASSED test
+memcpy_transpose1,971.318,4,16777216,268435456,0.276362,cn401
+PASSED test
+memcpy_transpose1,971.429,4,16777216,268435456,0.276331,cn401
+PASSED test
+memcpy_transpose1,971.437,4,16777216,268435456,0.276328,cn401
+PASSED test
+memcpy_transpose1,972.189,4,16777216,268435456,0.276114,cn401
+PASSED test
+memcpy_transpose1,974.751,4,16777216,268435456,0.275389,cn401
+PASSED test
+memcpy_transpose1,971.376,4,16777216,268435456,0.276346,cn401
+PASSED test
+memcpy_transpose1,1942.7,4,33554432,536870912,0.276354,cn401
+PASSED test
+memcpy_transpose1,1944.4,4,33554432,536870912,0.276111,cn401
+PASSED test
+memcpy_transpose1,1943,4,33554432,536870912,0.276311,cn401
+PASSED test
+memcpy_transpose1,1942.34,4,33554432,536870912,0.276404,cn401
+PASSED test
+memcpy_transpose1,1942.99,4,33554432,536870912,0.276311,cn401
+PASSED test
+memcpy_transpose1,1942.83,4,33554432,536870912,0.276334,cn401
+PASSED test
+memcpy_transpose1,1942.67,4,33554432,536870912,0.276358,cn401
+PASSED test
+memcpy_transpose1,1942.81,4,33554432,536870912,0.276337,cn401
+PASSED test
+memcpy_transpose1,1942.81,4,33554432,536870912,0.276337,cn401
+PASSED test
+memcpy_transpose1,1942.78,4,33554432,536870912,0.276342,cn401
+PASSED test
+memcpy_no_transpose,0.026,4,1024,16384,0.630154,cn401
+PASSED test
+memcpy_no_transpose,0.027,4,1024,16384,0.606815,cn401
+PASSED test
+memcpy_no_transpose,0.023,4,1024,16384,0.712348,cn401
+PASSED test
+memcpy_no_transpose,0.026,4,1024,16384,0.630154,cn401
+PASSED test
+memcpy_no_transpose,0.026,4,1024,16384,0.630154,cn401
+PASSED test
+memcpy_no_transpose,0.024,4,1024,16384,0.682667,cn401
+PASSED test
+memcpy_no_transpose,0.022,4,1024,16384,0.744727,cn401
+PASSED test
+memcpy_no_transpose,0.026,4,1024,16384,0.630154,cn401
+PASSED test
+memcpy_no_transpose,0.022,4,1024,16384,0.744727,cn401
+PASSED test
+memcpy_no_transpose,0.026,4,1024,16384,0.630154,cn401
+PASSED test
+memcpy_no_transpose,0.023,4,2048,32768,1.4247,cn401
+PASSED test
+memcpy_no_transpose,0.027,4,2048,32768,1.21363,cn401
+PASSED test
+memcpy_no_transpose,0.027,4,2048,32768,1.21363,cn401
+PASSED test
+memcpy_no_transpose,0.024,4,2048,32768,1.36533,cn401
+PASSED test
+memcpy_no_transpose,0.027,4,2048,32768,1.21363,cn401
+PASSED test
+memcpy_no_transpose,0.027,4,2048,32768,1.21363,cn401
+PASSED test
+memcpy_no_transpose,0.027,4,2048,32768,1.21363,cn401
+PASSED test
+memcpy_no_transpose,0.027,4,2048,32768,1.21363,cn401
+PASSED test
+memcpy_no_transpose,0.027,4,2048,32768,1.21363,cn401
+PASSED test
+memcpy_no_transpose,0.024,4,2048,32768,1.36533,cn401
+PASSED test
+memcpy_no_transpose,0.03,4,4096,65536,2.18453,cn401
+PASSED test
+memcpy_no_transpose,0.03,4,4096,65536,2.18453,cn401
+PASSED test
+memcpy_no_transpose,0.03,4,4096,65536,2.18453,cn401
+PASSED test
+memcpy_no_transpose,0.031,4,4096,65536,2.11406,cn401
+PASSED test
+memcpy_no_transpose,0.03,4,4096,65536,2.18453,cn401
+PASSED test
+memcpy_no_transpose,0.027,4,4096,65536,2.42726,cn401
+PASSED test
+memcpy_no_transpose,0.03,4,4096,65536,2.18453,cn401
+PASSED test
+memcpy_no_transpose,0.027,4,4096,65536,2.42726,cn401
+PASSED test
+memcpy_no_transpose,0.031,4,4096,65536,2.11406,cn401
+PASSED test
+memcpy_no_transpose,0.027,4,4096,65536,2.42726,cn401
+PASSED test
+memcpy_no_transpose,0.036,4,8192,131072,3.64089,cn401
+PASSED test
+memcpy_no_transpose,0.033,4,8192,131072,3.97188,cn401
+PASSED test
+memcpy_no_transpose,0.035,4,8192,131072,3.74491,cn401
+PASSED test
+memcpy_no_transpose,0.032,4,8192,131072,4.096,cn401
+PASSED test
+memcpy_no_transpose,0.036,4,8192,131072,3.64089,cn401
+PASSED test
+memcpy_no_transpose,0.032,4,8192,131072,4.096,cn401
+PASSED test
+memcpy_no_transpose,0.033,4,8192,131072,3.97188,cn401
+PASSED test
+memcpy_no_transpose,0.033,4,8192,131072,3.97188,cn401
+PASSED test
+memcpy_no_transpose,0.033,4,8192,131072,3.97188,cn401
+PASSED test
+memcpy_no_transpose,0.032,4,8192,131072,4.096,cn401
+PASSED test
+memcpy_no_transpose,0.048,4,16384,262144,5.46133,cn401
+PASSED test
+memcpy_no_transpose,0.044,4,16384,262144,5.95782,cn401
+PASSED test
+memcpy_no_transpose,0.043,4,16384,262144,6.09637,cn401
+PASSED test
+memcpy_no_transpose,0.044,4,16384,262144,5.95782,cn401
+PASSED test
+memcpy_no_transpose,0.046,4,16384,262144,5.69878,cn401
+PASSED test
+memcpy_no_transpose,0.047,4,16384,262144,5.57753,cn401
+PASSED test
+memcpy_no_transpose,0.049,4,16384,262144,5.34988,cn401
+PASSED test
+memcpy_no_transpose,0.046,4,16384,262144,5.69878,cn401
+PASSED test
+memcpy_no_transpose,0.048,4,16384,262144,5.46133,cn401
+PASSED test
+memcpy_no_transpose,0.047,4,16384,262144,5.57753,cn401
+PASSED test
+memcpy_no_transpose,0.071,4,32768,524288,7.38434,cn401
+PASSED test
+memcpy_no_transpose,0.065,4,32768,524288,8.06597,cn401
+PASSED test
+memcpy_no_transpose,0.063,4,32768,524288,8.32203,cn401
+PASSED test
+memcpy_no_transpose,0.064,4,32768,524288,8.192,cn401
+PASSED test
+memcpy_no_transpose,0.068,4,32768,524288,7.71012,cn401
+PASSED test
+memcpy_no_transpose,0.067,4,32768,524288,7.82519,cn401
+PASSED test
+memcpy_no_transpose,0.065,4,32768,524288,8.06597,cn401
+PASSED test
+memcpy_no_transpose,0.066,4,32768,524288,7.94376,cn401
+PASSED test
+memcpy_no_transpose,0.069,4,32768,524288,7.59838,cn401
+PASSED test
+memcpy_no_transpose,0.07,4,32768,524288,7.48983,cn401
+PASSED test
+memcpy_no_transpose,0.109,4,65536,1048576,9.61996,cn401
+PASSED test
+memcpy_no_transpose,0.108,4,65536,1048576,9.70904,cn401
+PASSED test
+memcpy_no_transpose,0.109,4,65536,1048576,9.61996,cn401
+PASSED test
+memcpy_no_transpose,0.113,4,65536,1048576,9.27943,cn401
+PASSED test
+memcpy_no_transpose,0.109,4,65536,1048576,9.61996,cn401
+PASSED test
+memcpy_no_transpose,0.109,4,65536,1048576,9.61996,cn401
+PASSED test
+memcpy_no_transpose,0.109,4,65536,1048576,9.61996,cn401
+PASSED test
+memcpy_no_transpose,0.108,4,65536,1048576,9.70904,cn401
+PASSED test
+memcpy_no_transpose,0.106,4,65536,1048576,9.89223,cn401
+PASSED test
+memcpy_no_transpose,0.108,4,65536,1048576,9.70904,cn401
+PASSED test
+memcpy_no_transpose,0.215,4,131072,2097152,9.7542,cn401
+PASSED test
+memcpy_no_transpose,0.198,4,131072,2097152,10.5917,cn401
+PASSED test
+memcpy_no_transpose,0.201,4,131072,2097152,10.4336,cn401
+PASSED test
+memcpy_no_transpose,0.201,4,131072,2097152,10.4336,cn401
+PASSED test
+memcpy_no_transpose,0.2,4,131072,2097152,10.4858,cn401
+PASSED test
+memcpy_no_transpose,0.203,4,131072,2097152,10.3308,cn401
+PASSED test
+memcpy_no_transpose,0.199,4,131072,2097152,10.5385,cn401
+PASSED test
+memcpy_no_transpose,0.219,4,131072,2097152,9.57604,cn401
+PASSED test
+memcpy_no_transpose,0.221,4,131072,2097152,9.48938,cn401
+PASSED test
+memcpy_no_transpose,0.207,4,131072,2097152,10.1312,cn401
+PASSED test
+memcpy_no_transpose,0.388,4,262144,4194304,10.8101,cn401
+PASSED test
+memcpy_no_transpose,0.423,4,262144,4194304,9.91561,cn401
+PASSED test
+memcpy_no_transpose,0.42,4,262144,4194304,9.98644,cn401
+PASSED test
+memcpy_no_transpose,0.429,4,262144,4194304,9.77693,cn401
+PASSED test
+memcpy_no_transpose,0.415,4,262144,4194304,10.1068,cn401
+PASSED test
+memcpy_no_transpose,0.43,4,262144,4194304,9.7542,cn401
+PASSED test
+memcpy_no_transpose,0.37,4,262144,4194304,11.336,cn401
+PASSED test
+memcpy_no_transpose,0.426,4,262144,4194304,9.84578,cn401
+PASSED test
+memcpy_no_transpose,0.427,4,262144,4194304,9.82273,cn401
+PASSED test
+memcpy_no_transpose,0.431,4,262144,4194304,9.73156,cn401
+PASSED test
+memcpy_no_transpose,0.829,4,524288,8388608,10.1189,cn401
+PASSED test
+memcpy_no_transpose,0.823,4,524288,8388608,10.1927,cn401
+PASSED test
+memcpy_no_transpose,0.827,4,524288,8388608,10.1434,cn401
+PASSED test
+memcpy_no_transpose,0.827,4,524288,8388608,10.1434,cn401
+PASSED test
+memcpy_no_transpose,0.825,4,524288,8388608,10.168,cn401
+PASSED test
+memcpy_no_transpose,0.83,4,524288,8388608,10.1068,cn401
+PASSED test
+memcpy_no_transpose,0.826,4,524288,8388608,10.1557,cn401
+PASSED test
+memcpy_no_transpose,0.83,4,524288,8388608,10.1068,cn401
+PASSED test
+memcpy_no_transpose,0.831,4,524288,8388608,10.0946,cn401
+PASSED test
+memcpy_no_transpose,0.831,4,524288,8388608,10.0946,cn401
+PASSED test
+memcpy_no_transpose,2.113,4,1048576,16777216,7.94,cn401
+PASSED test
+memcpy_no_transpose,1.393,4,1048576,16777216,12.0439,cn401
+PASSED test
+memcpy_no_transpose,1.375,4,1048576,16777216,12.2016,cn401
+PASSED test
+memcpy_no_transpose,1.375,4,1048576,16777216,12.2016,cn401
+PASSED test
+memcpy_no_transpose,2.982,4,1048576,16777216,5.62616,cn401
+PASSED test
+memcpy_no_transpose,1.389,4,1048576,16777216,12.0786,cn401
+PASSED test
+memcpy_no_transpose,1.387,4,1048576,16777216,12.096,cn401
+PASSED test
+memcpy_no_transpose,1.372,4,1048576,16777216,12.2283,cn401
+PASSED test
+memcpy_no_transpose,1.38,4,1048576,16777216,12.1574,cn401
+PASSED test
+memcpy_no_transpose,1.378,4,1048576,16777216,12.175,cn401
+PASSED test
+memcpy_no_transpose,2.723,4,2097152,33554432,12.3226,cn401
+PASSED test
+memcpy_no_transpose,2.738,4,2097152,33554432,12.2551,cn401
+PASSED test
+memcpy_no_transpose,2.736,4,2097152,33554432,12.264,cn401
+PASSED test
+memcpy_no_transpose,2.721,4,2097152,33554432,12.3317,cn401
+PASSED test
+memcpy_no_transpose,2.738,4,2097152,33554432,12.2551,cn401
+PASSED test
+memcpy_no_transpose,2.732,4,2097152,33554432,12.282,cn401
+PASSED test
+memcpy_no_transpose,2.733,4,2097152,33554432,12.2775,cn401
+PASSED test
+memcpy_no_transpose,2.724,4,2097152,33554432,12.3181,cn401
+PASSED test
+memcpy_no_transpose,2.734,4,2097152,33554432,12.273,cn401
+PASSED test
+memcpy_no_transpose,2.736,4,2097152,33554432,12.264,cn401
+PASSED test
+memcpy_no_transpose,5.422,4,4194304,67108864,12.3771,cn401
+PASSED test
+memcpy_no_transpose,5.414,4,4194304,67108864,12.3954,cn401
+PASSED test
+memcpy_no_transpose,5.924,4,4194304,67108864,11.3283,cn401
+PASSED test
+memcpy_no_transpose,5.798,4,4194304,67108864,11.5745,cn401
+PASSED test
+memcpy_no_transpose,5.413,4,4194304,67108864,12.3977,cn401
+PASSED test
+memcpy_no_transpose,5.481,4,4194304,67108864,12.2439,cn401
+PASSED test
+memcpy_no_transpose,7.443,4,4194304,67108864,9.01637,cn401
+PASSED test
+memcpy_no_transpose,7.565,4,4194304,67108864,8.87097,cn401
+PASSED test
+memcpy_no_transpose,5.969,4,4194304,67108864,11.2429,cn401
+PASSED test
+memcpy_no_transpose,5.435,4,4194304,67108864,12.3475,cn401
+PASSED test
+memcpy_no_transpose,10.864,4,8388608,134217728,12.3544,cn401
+PASSED test
+memcpy_no_transpose,10.803,4,8388608,134217728,12.4241,cn401
+PASSED test
+memcpy_no_transpose,11.905,4,8388608,134217728,11.2741,cn401
+PASSED test
+memcpy_no_transpose,11.09,4,8388608,134217728,12.1026,cn401
+PASSED test
+memcpy_no_transpose,11.034,4,8388608,134217728,12.164,cn401
+PASSED test
+memcpy_no_transpose,10.817,4,8388608,134217728,12.408,cn401
+PASSED test
+memcpy_no_transpose,12.762,4,8388608,134217728,10.517,cn401
+PASSED test
+memcpy_no_transpose,11.228,4,8388608,134217728,11.9538,cn401
+PASSED test
+memcpy_no_transpose,10.89,4,8388608,134217728,12.3249,cn401
+PASSED test
+memcpy_no_transpose,10.931,4,8388608,134217728,12.2786,cn401
+PASSED test
+memcpy_no_transpose,21.562,4,16777216,268435456,12.4495,cn401
+PASSED test
+memcpy_no_transpose,21.897,4,16777216,268435456,12.259,cn401
+PASSED test
+memcpy_no_transpose,22.456,4,16777216,268435456,11.9538,cn401
+PASSED test
+memcpy_no_transpose,22.195,4,16777216,268435456,12.0944,cn401
+PASSED test
+memcpy_no_transpose,21.558,4,16777216,268435456,12.4518,cn401
+PASSED test
+memcpy_no_transpose,21.7,4,16777216,268435456,12.3703,cn401
+PASSED test
+memcpy_no_transpose,22.487,4,16777216,268435456,11.9374,cn401
+PASSED test
+memcpy_no_transpose,21.831,4,16777216,268435456,12.2961,cn401
+PASSED test
+memcpy_no_transpose,21.777,4,16777216,268435456,12.3266,cn401
+PASSED test
+memcpy_no_transpose,21.571,4,16777216,268435456,12.4443,cn401
+PASSED test
+memcpy_no_transpose,43.066,4,33554432,536870912,12.4662,cn401
+PASSED test
+memcpy_no_transpose,43.064,4,33554432,536870912,12.4668,cn401
+PASSED test
+memcpy_no_transpose,43.781,4,33554432,536870912,12.2626,cn401
+PASSED test
+memcpy_no_transpose,43.057,4,33554432,536870912,12.4688,cn401
+PASSED test
+memcpy_no_transpose,43.062,4,33554432,536870912,12.4674,cn401
+PASSED test
+memcpy_no_transpose,43.061,4,33554432,536870912,12.4677,cn401
+PASSED test
+memcpy_no_transpose,43.064,4,33554432,536870912,12.4668,cn401
+PASSED test
+memcpy_no_transpose,43.075,4,33554432,536870912,12.4636,cn401
+PASSED test
+memcpy_no_transpose,43.057,4,33554432,536870912,12.4688,cn401
+PASSED test
+memcpy_no_transpose,43.077,4,33554432,536870912,12.4631,cn401
