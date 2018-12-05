@@ -19,260 +19,154 @@
 #endif
 */
 
+/*
+   Copies c_sz (4 or 8) elements without writing through shared memory, writes to d_dst should be coalesced. 
+ */
 template <int block_size, typename size_type, int c_sz>
-__device__ void copykernelAoSnewmulti(float *h_src_A, float *h_src_B, float *d_dst, size_type elem_size, 
+__device__ void copykernelAoS_trans_multi(float *h_src_A, float *h_src_B, float *d_dst, size_type elem_size, 
         size_type elem_count, int fid_count) {
-    // Block index
-  size_type bx = blockIdx.x;
-  size_type by = blockIdx.y;
-
-  // Thread index
-  size_type tx = threadIdx.x;
-  size_type ty = threadIdx.y;
-
-    size_type bdx = blockDim.x;
-    size_type bdy = blockDim.y;
-
-    size_type t_id = ((bx + by*gridDim.x) * (bdx*bdy) + (ty*bdx) + tx);
-  
-    size_type dst_base = t_id*c_sz;
     
-    for (size_type i = 0; i < c_sz; ++i){
-      d_dst[dst_base + i] = h_src_A[elem_count*(i%fid_count) + (c_sz/fid_count)*t_id + i/fid_count];
-    }
+  size_type t_id = ((blockIdx.x + blockIdx.y*gridDim.x) * (blockDim.x*blockDim.y) + (threadIdx.y*blockDim.x) + threadIdx.x);
+  
+  size_type dst_base = t_id*c_sz;
+   
+#pragma unroll 
+  for (size_type i = 0; i < c_sz; ++i){
+    d_dst[dst_base + i] = h_src_A[elem_count*(i%fid_count) + (c_sz/fid_count)*t_id + i/fid_count];
+  }
 }
+
+/*
+   Copies c_sz (4 or 8) elements through shared memory, writes to d_dst should be coalesced. 
+ */
 template <int block_size, typename size_type, int c_sz>
 __device__ void copykernelAoSsharedmulti(float *h_src_A, float *h_src_B, float *d_dst, size_type elem_size, 
         size_type elem_count, int fid_count) {
-    // Block index
-  size_type bx = blockIdx.x;
-  size_type by = blockIdx.y;
 
-  // Thread index
-  size_type tx = threadIdx.x;
-  size_type ty = threadIdx.y;
+  size_type t_id = ((blockIdx.x + blockIdx.y*gridDim.x) * (blockDim.x*blockDim.y) + (threadIdx.y*blockDim.x) + threadIdx.x);
 
-    size_type bdx = blockDim.x;
-    size_type bdy = blockDim.y;
+  __shared__ float tmp_d_dst[block_size*c_sz];
 
-    // want ptr to start of each field id. 
-
-    __shared__ float tmp_d_dst[block_size*c_sz];
-  //  tmp_d_dst[0] = 22.3;
-
-    size_type t_id = ((bx + by*gridDim.x) * (bdx*bdy) + (ty*bdx) + tx);
-
-  
-    // size_type c_sz = fid_count;
-    size_type tmp_base = t_id%block_size*c_sz; 
-    size_type dst_base = t_id*c_sz;
-    
-    for (size_type i = 0; i < c_sz; ++i){
-      tmp_d_dst[tmp_base + i] = h_src_A[elem_count*(i%fid_count) + (c_sz/fid_count)*t_id + i/fid_count];
-      //d_dst[dst_base + i] = tmp_d_dst[tmp_base + i];  
-    }
-    
-    for (size_type i = 0; i < c_sz; ++i){
-      //tmp_d_dst[tmp_base + i] = h_src_A[elem_count*(i%fid_count) + (c_sz/fid_count)*t_id + i/fid_count];
-      d_dst[dst_base + i] = tmp_d_dst[tmp_base + i];  
-    }
-}
-template <int block_size, typename size_type>
-__device__ void copykernelAoSshared(float *h_src_A, float *h_src_B, float *d_dst, size_type elem_size, 
-        size_type elem_count, size_type fid_count) {
-    // Block index
-  size_type bx = blockIdx.x;
-  size_type by = blockIdx.y;
-
-  // Thread index
-  size_type tx = threadIdx.x;
-  size_type ty = threadIdx.y;
-
-    size_type bdx = blockDim.x;
-    size_type bdy = blockDim.y;
-
-    // want ptr to start of each field id. 
-
-    __shared__ float tmp_d_dst[block_size];
-  //  tmp_d_dst[0] = 22.3;
-
-    size_type dst_idx = (bx + by*gridDim.x) * (bdx*bdy) + (ty*bdx) + tx; 
-    size_t t_idx = dst_idx % block_size;
-    //size_type dst_idx = bx*bdx + tx; 
-
-
-    //getting same perf for one elem per thread and for 2 elem per thread,
-   //but 8 elem per thread slows it down a lot. 
-
-    tmp_d_dst[t_idx] = h_src_A[(dst_idx/fid_count) + (dst_idx%fid_count)*elem_count];
-
-
-/*
-    if (dst_idx % 2 == 0){
-        //d_dst[dst_idx] = h_src_A[dst_idx/2];
-        // May be worth seeing if accessing host memory differently will improve performance
-        tmp_d_dst[t_idx] = h_src_A[dst_idx/2];
-    }
-    else{
-        //d_dst[dst_idx] = h_src_B[dst_idx/2];
-        tmp_d_dst[t_idx] = h_src_B[dst_idx/2];
-    }
-*/
-    __syncthreads();
-
-    d_dst[dst_idx] = tmp_d_dst[t_idx];
-}
-
-template <int block_size, typename size_type>
-__device__ void copykernelAoS(float *h_src_A, float *h_src_B, float *d_dst, size_type elem_size, 
-        size_type elem_count, size_type fid_count) {
-    // Block index
-  size_type bx = blockIdx.x;
-  size_type by = blockIdx.y;
-
-  // Thread index
-  size_type tx = threadIdx.x;
-  size_type ty = threadIdx.y;
-
-    size_type bdx = blockDim.x;
-    size_type bdy = blockDim.y;
-
-    // want ptr to start of each field id. 
-
-    //__shared__ float tmp_d_dst[ELEM_SIZE];
-
-  //  tmp_d_dst[0] = 22.3;
-
-    size_type dst_idx = (bx + by*gridDim.x) * (bdx*bdy) + (ty*bdx) + tx; 
-    //size_type dst_idx = bx*bdx + tx; 
-
-
-    //getting same perf for one elem per thread and for 2 elem per thread,
-   //but 8 elem per thread slows it down a lot. 
+  size_type tmp_base = t_id%block_size*c_sz; 
+  size_type dst_base = t_id*c_sz;
    
-
-    d_dst[dst_idx] = h_src_A[(dst_idx/fid_count) + (dst_idx%fid_count)*elem_count];
-
-   /* 
-    if (dst_idx % 2 == 0){
-        d_dst[dst_idx] = h_src_A[dst_idx/2];
-        // May be worth seeing if accessing host memory differently will improve performance
-    }
-    else{
-        d_dst[dst_idx] = h_src_B[dst_idx/2];
-    }
-    */
-}
-
-template <int block_size, typename size_type>
-__device__ void copykernelAoS2(float *h_src_A, float *d_dst, size_type elem_count, size_type fid_count) {
-    // Block index
-  size_type bx = blockIdx.x;
-  size_type by = blockIdx.y;
-
-  // Thread index
-  size_type tx = threadIdx.x;
-  size_type ty = threadIdx.y;
-
-    size_type bdx = blockDim.x;
-    size_type bdy = blockDim.y;
-
-    // want ptr to start of each field id. 
-
-    //__shared__ float tmp_d_dst[ELEM_SIZE];
-
-  //  tmp_d_dst[0] = 22.3;
-
-    size_type dst_idx = (bx + by*gridDim.x) * (bdx*bdy) + (ty*bdx) + tx; 
-    
-    d_dst[dst_idx] = h_src_A[(dst_idx/fid_count) + (dst_idx%fid_count)*elem_count];
-    //size_type dst_idx = bx*bdx + tx; 
+#pragma unroll
+  for (size_type i = 0; i < c_sz; ++i){
+    tmp_d_dst[tmp_base + i] = h_src_A[elem_count*(i%fid_count) + (c_sz/fid_count)*t_id + i/fid_count];
+    d_dst[dst_base + i] = tmp_d_dst[tmp_base + i];  
+  }
+  
+  // This approach gave very bad performance wrt bandwidth. 
+  // Probably because wiritng to dev mem was not coalesced. 
 /*
-    if (dst_idx < elem_count){
-        d_dst[2*dst_idx] = h_src_A[dst_idx];
+    size_type tmp_base = t_id%block_size*c_sz; 
+    size_type src_base = t_id*c_sz;
+  
+    for (size_type i = 0; i < c_sz; ++i){
+      tmp_d_dst[tmp_base + i] = h_src_A[src_base + i];
     }
-    else{
-        d_dst[2*(dst_idx-elem_count) + 1] = h_src_A[dst_idx];
+    for (size_type i = 0; i < c_sz; ++i){
+      
+      size_type s_idx = src_base + i;
+      size_type offset = s_idx/elem_count;
+      size_type d_idx = (s_idx - ((offset)*elem_count))*fid_count + offset;
+      d_dst[d_idx] = tmp_d_dst[tmp_base + i];  
     }
 */
-    //getting same perf for one elem per thread and for 2 elem per thread,
-   //but 8 elem per thread slows it down a lot. 
+
 }
 
+/*
+   Copies one element per thread through shared memory, writes to d_dst should be coalesced. 
+ */
 template <int block_size, typename size_type>
-__device__ void copykernelAoSbasic(float *h_src_A, float *d_dst) {
-    // Block index
-  size_type bx = blockIdx.x;
-  size_type by = blockIdx.y;
+__device__ void copykernelAoS_shared(float *h_src_A, float *h_src_B, float *d_dst, size_type elem_size, 
+        size_type elem_count, size_type fid_count) {
 
-  // Thread index
-  size_type tx = threadIdx.x;
-  size_type ty = threadIdx.y;
+  size_type t_id = ((blockIdx.x + blockIdx.y*gridDim.x) * (blockDim.x*blockDim.y) + (threadIdx.y*blockDim.x) + threadIdx.x);
 
-    size_type bdx = blockDim.x;
-    size_type bdy = blockDim.y;
+  __shared__ float tmp_d_dst[block_size];
 
-    // want ptr to start of each field id. 
+  size_t t_idx = t_id % block_size;
 
-    //__shared__ float tmp_d_dst[ELEM_SIZE];
+  tmp_d_dst[t_idx] = h_src_A[(t_id/fid_count) + (t_id%fid_count)*elem_count];
 
-  //  tmp_d_dst[0] = 22.3;
+  d_dst[t_id] = tmp_d_dst[t_idx];
+}
 
-    size_type dst_idx = (bx + by*gridDim.x) * (bdx*bdy) + (ty*bdx) + tx; 
+/*
+   Copies one element per thread, writes to d_dst may or may not be coalesced. 
+ */
+template <int block_size, typename size_type>
+__device__ void copykernelAoS_trans1(float *h_src_A, float *h_src_B, float *d_dst, size_type elem_size, 
+        size_type elem_count, size_type fid_count) {
+
+  size_type t_id = ((blockIdx.x + blockIdx.y*gridDim.x) * (blockDim.x*blockDim.y) + (threadIdx.y*blockDim.x) + threadIdx.x);
+
+  d_dst[(t_id - (t_id/elem_count*elem_count))*fid_count + t_id/elem_count] = h_src_A[t_id];
+    
+}
+
+/*
+   Copies one element per thread, writes to d_dst should be coalesced. 
+ */
+template <int block_size, typename size_type>
+__device__ void copykernelAoS_trans2(float *h_src_A, float *d_dst, size_type elem_count, size_type fid_count) {
+    
+  size_type t_id = ((blockIdx.x + blockIdx.y*gridDim.x) * (blockDim.x*blockDim.y) + (threadIdx.y*blockDim.x) + threadIdx.x);
+    
+  d_dst[t_id] = h_src_A[(t_id/fid_count) + (t_id%fid_count)*elem_count];
+}
+
+/*
+   Simply copy each element over without changing the data layout.
+ */
+template <int block_size, typename size_type>
+__device__ void copykernelAoS_no_trans(float *h_src_A, float *d_dst) {
+  
+    size_type t_id = ((blockIdx.x + blockIdx.y*gridDim.x) * (blockDim.x*blockDim.y) + (threadIdx.y*blockDim.x) + threadIdx.x);
+
+    size_type dst_idx = t_id; 
     //size_type dst_idx = bx*bdx + tx; 
 
     d_dst[dst_idx] = h_src_A[dst_idx];
 
 }
-// This seems to be broken for large inputs. 
-template <int block_size, typename size_type>
-__device__ void copykernelAoSmulti(float *h_src_A, float *h_src_B, float *d_dst, size_type elem_size, size_type elem_count) {
-    // Block index
-  size_type bx = blockIdx.x;
-  size_type by = blockIdx.y;
 
-  // Thread index
-  size_type tx = threadIdx.x;
-  size_type ty = threadIdx.y;
+/*
+   To compare with one thread per element.
+ */
+template <int block_size, typename size_type, int c_sz>
+__device__ void copykernelAoS_no_trans_multi(float *h_src_A, float *h_src_B, float *d_dst, size_type elem_size, size_type elem_count) {
 
-    size_type bdx = blockDim.x;
-    size_type bdy = blockDim.y;
-
-    // want ptr to start of each field id. 
-
-    //__shared__ float tmp_d_dst[ELEM_SIZE];
-
-  //  tmp_d_dst[0] = 22.3;
-    size_type tid = (bx + by*gridDim.x) * (bdx*bdy) + (ty*bdx) + tx; 
+    size_type t_id = ((blockIdx.x + blockIdx.y*gridDim.x) * (blockDim.x*blockDim.y) + (threadIdx.y*blockDim.x) + threadIdx.x);
     
-    //size_type dst_idx = tid*8;
-    size_type dst_idx = tid*2;
+    for (size_type i = 0; i < c_sz; ++i){
+      d_dst[t_id + i] = h_src_A[t_id + i];
+    }
    
-    //size_type dst_idx = bx*bdx + tx; 
-    d_dst[dst_idx] = h_src_A[dst_idx/2];
-    d_dst[dst_idx + 1] = h_src_B[dst_idx/2];
-
 }
 
 // C wrappers around our template kernel
-extern "C" __global__ void copykernelAoSbasic32_32bit(float *h_src_A, float *d_dst) {
-  copykernelAoSbasic<32, int>(h_src_A, d_dst);
-}
-extern "C" __global__ void copykernelAoS232_32bit(float *h_src_A, float *d_dst,
-                                                int e_count, int fid_count) {
-  copykernelAoS2<32, int>(h_src_A, d_dst, e_count, fid_count);
-}
-extern "C" __global__ void copykernelAoSmulti32_32bit(float *h_src_A, float *h_src_B, float *d_dst,
-                                                int e_size, int e_count) {
-  copykernelAoSmulti<32, int>(h_src_A, h_src_B, d_dst, e_size, e_count);
-}
-extern "C" __global__ void copykernelAoSnewmulti32_32bit_8(float *h_src_A, float *h_src_B, float *d_dst,
+extern "C" __global__ void copykernelAoS_no_trans32_32bit(float *h_src_A, float *h_src_B, float *d_dst,
                                                 int e_size, int e_count, int fid_count) {
-  copykernelAoSnewmulti<32, int, 8/*copy_size*/>(h_src_A, h_src_B, d_dst, e_size, e_count, fid_count);
+  copykernelAoS_no_trans<32, int>(h_src_A, d_dst);
 }
-extern "C" __global__ void copykernelAoSnewmulti32_32bit_4(float *h_src_A, float *h_src_B, float *d_dst,
+extern "C" __global__ void copykernelAoS_trans232_32bit(float *h_src_A, float *h_src_B, float *d_dst,
                                                 int e_size, int e_count, int fid_count) {
-  copykernelAoSnewmulti<32, int, 4/*copy_size*/>(h_src_A, h_src_B, d_dst, e_size, e_count, fid_count);
+  copykernelAoS_trans2<32, int>(h_src_A, d_dst, e_count, fid_count);
+}
+extern "C" __global__ void copykernelAoS_no_trans_multi32_32bit(float *h_src_A, float *h_src_B, float *d_dst,
+                                                int e_size, int e_count, int fid_count) {
+  copykernelAoS_no_trans_multi<32, int, 8>(h_src_A, h_src_B, d_dst, e_size, e_count);
+}
+extern "C" __global__ void copykernelAoS_trans_multi32_32bit_8(float *h_src_A, float *h_src_B, float *d_dst,
+                                                int e_size, int e_count, int fid_count) {
+  copykernelAoS_trans_multi<32, int, 8/*copy_size*/>(h_src_A, h_src_B, d_dst, e_size, e_count, fid_count);
+}
+extern "C" __global__ void copykernelAoS_trans_multi32_32bit_4(float *h_src_A, float *h_src_B, float *d_dst,
+                                                int e_size, int e_count, int fid_count) {
+  copykernelAoS_trans_multi<32, int, 4/*copy_size*/>(h_src_A, h_src_B, d_dst, e_size, e_count, fid_count);
 }
 extern "C" __global__ void copykernelAoSsharedmulti32_32bit_8(float *h_src_A, float *h_src_B, float *d_dst,
                                                 int e_size, int e_count, int fid_count) {
@@ -282,12 +176,12 @@ extern "C" __global__ void copykernelAoSsharedmulti32_32bit_4(float *h_src_A, fl
                                                 int e_size, int e_count, int fid_count) {
   copykernelAoSsharedmulti<32, int, 4/*copy_size*/>(h_src_A, h_src_B, d_dst, e_size, e_count, fid_count);
 }
-extern "C" __global__ void copykernelAoSshared32_32bit(float *h_src_A, float *h_src_B, float *d_dst,
+extern "C" __global__ void copykernelAoS_shared32_32bit(float *h_src_A, float *h_src_B, float *d_dst,
                                                 int e_size, int e_count, int fid_count) {
-  copykernelAoSshared<32, int>(h_src_A, h_src_B, d_dst, e_size, e_count, fid_count);
+  copykernelAoS_shared<32, int>(h_src_A, h_src_B, d_dst, e_size, e_count, fid_count);
 }
-extern "C" __global__ void copykernelAoS32_32bit(float *h_src_A, float *h_src_B, float *d_dst,
+extern "C" __global__ void copykernelAoS_trans132_32bit(float *h_src_A, float *h_src_B, float *d_dst,
                                                 int e_size, int e_count, int fid_count) {
-  copykernelAoS<32, int>(h_src_A, h_src_B, d_dst, e_size, e_count, fid_count);
+  copykernelAoS_trans1<32, int>(h_src_A, h_src_B, d_dst, e_size, e_count, fid_count);
 }
 #endif  // #ifndef _COPY_KERNEL_H_

@@ -39,12 +39,26 @@
 
 using namespace Realm;
 
+enum T_method {
+  TRANS1,
+  TRANS2,
+  NO_TRANS,
+  TRANS_MULTI8,
+  TRANS_MULTI4,
+  SHARE_TRANS_MULTI8,
+  SHARE_TRANS_MULTI4,
+  SHARE_POST_TRANS_MULTI8,
+  SHARE_POST_TRANS_MULTI4,
+  SHARE_TRANS,
+  MEMCPY_TRANS1,
+  MEMCPY_NO_TRANS
+};
+
+T_method method = NO_TRANS;
+
 int num_elems = 0;
 
-////////////////////////////////////////////////////////////////////////////////
-// declaration, forward
 void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem);
-
 
 static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos);
 
@@ -57,9 +71,6 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos);
 #define CUBIN_FILE "kernel_transpose_gpu32.cubin"
 #endif
 
-////////////////////////////////////////////////////////////////////////////////
-// Globals
-////////////////////////////////////////////////////////////////////////////////
 CUdevice cuDevice;
 CUcontext cuContext;
 CUmodule cuModule;
@@ -88,20 +99,13 @@ enum FieldIDs {
 std::set<Processor::Kind> supported_proc_kinds;
 
 void top_level_task(const void *args, size_t arglen, 
-		    const void *userdata, size_t userlen, Processor p)
-{
- // log_app.print() << "Copy/transpose test";
+		    const void *userdata, size_t userlen, Processor p){
 
-  // just sysmem for now
   Machine machine = Machine::get_machine();
   Memory m = Machine::MemoryQuery(machine).only_kind(Memory::SYSTEM_MEM).first();
   assert(m.exists());
 
   typedef int FT;
-  //do_single_dim<1, FT>(m, m, log2_buffer_size, p);
-  // do_single_dim<2, FT>(m, m, log2_buffer_size, p);
-  // do_single_dim<3, FT>(m, m, log2_buffer_size, p);
-
 
   char *arg_v = NULL;
   new_runSoAtoAoSTest(0, &arg_v, m);
@@ -112,6 +116,8 @@ void memcpy_method(CUdeviceptr d_C, float *h_A, unsigned int mem_size_A, unsigne
 
   float *h_C;
   checkCudaErrors(cuMemHostAlloc((void**)&h_C, mem_size_A, 0));
+  
+  std::string trans_method = "memcpy";
 
   // create and start timer
   StopWatchInterface *timer = NULL;
@@ -122,20 +128,21 @@ void memcpy_method(CUdeviceptr d_C, float *h_A, unsigned int mem_size_A, unsigne
  
     int elem_count = size_A/fid_count;
 
-#ifdef NO_TRANSPOSE
-  checkCudaErrors(cuMemcpyHtoD(d_C, h_A, mem_size_A));
-  checkCudaErrors(cuCtxSynchronize());
-#elif TRANSPOSE1
+  
+  if (method == MEMCPY_NO_TRANS){  
+    trans_method += "_no_transpose";
+    checkCudaErrors(cuMemcpyHtoD(d_C, h_A, mem_size_A));
+    checkCudaErrors(cuCtxSynchronize());
+  }
+  else{
+    trans_method += "_transpose1";
+    for (size_t i = 0; i < size_A; ++i){
+      h_C[i] = h_A[i/fid_count + (i%fid_count)*elem_count];
+    } 
 
-   for (size_t i = 0; i < size_A; ++i){
-        h_C[i] = h_A[i/fid_count + (i%fid_count)*elem_count];
-   } 
-
-  checkCudaErrors(cuMemcpyHtoD(d_C, h_C, mem_size_A));
-  checkCudaErrors(cuCtxSynchronize());
-
-
-#endif
+    checkCudaErrors(cuMemcpyHtoD(d_C, h_C, mem_size_A));
+    checkCudaErrors(cuCtxSynchronize());
+  }
 
   // stop and destroy timer
   sdkStopTimer(&timer);
@@ -150,18 +157,23 @@ void memcpy_method(CUdeviceptr d_C, float *h_A, unsigned int mem_size_A, unsigne
   checkCudaErrors(cuCtxSynchronize());
 
   bool correct = true;
-  for (size_t i = 0; i < size_A; ++i){
-#ifdef NO_TRANSPOSE
-    if (h_Ccheck[i] - h_A[i] > 1e-5){
-        correct = false;
-        std::cout << "h_Ccheck[" << i << "] " << h_Ccheck[i] << " h_A : " << h_A[i] << std::endl; 
+
+  if (method == MEMCPY_NO_TRANS){
+    for (size_t i = 0; i < size_A; ++i){
+      if (fabs(h_Ccheck[i] - h_A[i]) > 1e-5){
+          correct = false;
+          std::cout << "h_Ccheck[" << i << "] " << h_Ccheck[i] << " h_A : " << h_A[i] << std::endl; 
+      }
     }
-#elif TRANSPOSE1
-    if (fabs(h_Ccheck[i] - h_C[i]) > 1e-5){
-        correct = false;
+  }
+  else{
+    for (size_t i = 0; i < size_A; ++i){
+      if (fabs(h_Ccheck[i] - h_C[i]) > 1e-5){
+          correct = false;
+          std::cout << "h_Ccheck[" << i << "] " << h_Ccheck[i] << " h_A : " << h_A[i] << std::endl; 
+      }
     }
-#endif
-  }  
+  }
 
   if (!correct){
       std::cout << "failed test" << std::endl;
@@ -177,17 +189,8 @@ void memcpy_method(CUdeviceptr d_C, float *h_A, unsigned int mem_size_A, unsigne
 
   checkCudaErrors(cuMemFree(d_C));
   checkCudaErrors(cuMemFreeHost(h_A));
- 
-  std::string method = "memcpy";
 
-#ifdef NO_TRANSPOSE
-  method += "_no_transpose";
-#elif TRANSPOSE1
-  method += "_transpose1";
-#endif
-
-
-  std::cout << method << "," << memcpy_time  << "," << fid_count << "," << num_elems << "," << mem_size_A << "," << mem_size_A/memcpy_time/1000000 << std::endl;
+  std::cout << trans_method << "," << memcpy_time  << "," << fid_count << "," << num_elems << "," << mem_size_A << "," << mem_size_A/memcpy_time/1000000 << std::endl;
 
 }
 
@@ -275,48 +278,47 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
            getCudaDrvErrorString(error_id));
     exit(EXIT_FAILURE);
   }
-      size_t fid_count = field_sizes.size(); 
+  size_t fid_count = field_sizes.size(); 
 
-
-    // 2 fid's 
   unsigned int size_A = num_elems * fid_count;
   unsigned int mem_size_A = sizeof(float) * size_A;
   
-    float* tst_ptr = new float[size_A];
+  float* tst_ptr = new float[size_A];
     
-    //MemoryImpl *src_memory = get_runtime()->get_memory_impl(src_insts[0]); 
-    //float *src_base =  reinterpret_cast<float *>(src_memory->get_direct_ptr(0, mem_size_A)); 
-    //std::cout << "test " << src_base[0] << std::endl;
+  //MemoryImpl *src_memory = get_runtime()->get_memory_impl(src_insts[0]); 
+  //float *src_base =  reinterpret_cast<float *>(src_memory->get_direct_ptr(0, mem_size_A)); 
+  //std::cout << "test " << src_base[0] << std::endl;
 
 
-    //void *src_base = LocalCPUMemory(src_insts[0].get_location()).get_direct_ptr(0, mem_size_A);
-// necessary to read this again???
+  //void *src_base = LocalCPUMemory(src_insts[0].get_location()).get_direct_ptr(0, mem_size_A);
+  // necessary to read this again???
     
     src_insts[0].read_untyped(0, tst_ptr, mem_size_A);
     
-    //src_insts[0].read_untyped(0, h_A, mem_size_A);
-/*
+  //src_insts[0].read_untyped(0, h_A, mem_size_A);
+  /*
     log_app.print() << V" og s_inst";
 
     for (int i = 0; i < 20; ++i){
       log_app.print() <<  tst_ptr[i];
     }
-*/
+  */
 
   float *h_A;
   checkCudaErrors(cuMemHostAlloc((void**)&h_A, mem_size_A, 0));
 
 
 
-    for (size_t i = 0; i < size_A; ++i){
-        h_A[i] = tst_ptr[i];
-        //std::cout << "test " << src_base[i] << std::endl;
-        //h_A[i] = *((float*)(src_base[i]));
-    }
+  for (size_t i = 0; i < size_A; ++i){
+    h_A[i] = tst_ptr[i];
+    //std::cout << "test " << src_base[i] << std::endl;
+    //h_A[i] = *((float*)(src_base[i]));
+  }
 
   // I think offset should be 0 here but not always
-  // read_untyped does not work with the cumemhostalloc'd h_A
-  //src_insts[0].read_untyped(0, h_A, mem_size_A);
+  
+  // Seems that read_untyped does not work with the cumemhostalloc'd h_A
+  // src_insts[0].read_untyped(0, h_A, mem_size_A);
 
     float *h_B;
   h_B = &(h_A[num_elems]);
@@ -327,10 +329,11 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   checkCudaErrors(cuMemAlloc(&d_C, mem_size_A));
   
  
-#ifdef MEMCPY
+  if (method == MEMCPY_TRANS1 || method == MEMCPY_NO_TRANS){
     memcpy_method(d_C, h_A, mem_size_A, size_A, fid_count);
-#elif KERNEL
-    std::string method = "kernel";
+  }
+  else{
+    std::string trans_method = "kernel";
     // create and start timer
   StopWatchInterface *timer = NULL;
   sdkCreateTimer(&timer);
@@ -338,46 +341,54 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   // start the timer
   sdkStartTimer(&timer);
   
-
-////// kernel timing
   dim3 block(block_size, 1, 1);
- // 2 is number of FID's, this var not used in kernel
-      size_t num_elems2 = (size_t)(size_A / fid_count);
-      size_t elem_size = sizeof(float);
-      // new CUDA 4.0 Driver API Kernel launch call
+  size_t num_elems2 = (size_t)(size_A / fid_count);
+  size_t elem_size = sizeof(float);
       
-      // size_t shared_size = block_size * sizeof(float);
-      size_t shared_size = block_size * sizeof(float);
-#ifdef TRANSPOSE1
-  dim3 grid((size_A)/block_size, 1, 1); // Copies 1 elem per thread
-      void *args[6] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2, &fid_count};
-#elif TRANSPOSE2
-  dim3 grid((size_A)/block_size, 1, 1); // Copies 1 elem per thread
-      void *args[4] = {&h_A, &d_C, &num_elems2, &fid_count};
-#elif NO_TRANSPOSE
-  dim3 grid((size_A)/block_size, 1, 1); // Copies 1 elem per thread
-      void *args[2] = {&h_A, &d_C};
-#elif SHARE_TRANSPOSE
-  dim3 grid((size_A)/block_size, 1, 1); // Copies 1 elem per thread
-      void *args[6] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2, &fid_count};
-#elif TRANSPOSE_MULTI8
-      //dim3 grid((size_A)/block_size/8, 1, 1);// 2 is number of FID's
-      dim3 grid((size_A)/block_size/8, 1, 1); // Copies 8 elems per thread
-      void *args[6] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2, &fid_count};
-#elif TRANSPOSE_MULTI4
-      dim3 grid((size_A)/block_size/4, 1, 1); // Copies 4 elems per thread
-      void *args[6] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2, &fid_count};
-#elif SHARE_TRANSPOSE_MULTI8
-      //dim3 grid((size_A)/block_size/8, 1, 1);// 2 is number of FID's
-      dim3 grid((size_A)/block_size/8, 1, 1); // Copies 8 elems per thread
-      void *args[6] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2, &fid_count};
-#elif SHARE_TRANSPOSE_MULTI4
-      dim3 grid((size_A)/block_size/4, 1, 1); // Copies 4 elems per thread
-      void *args[6] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2, &fid_count};
-#endif
-      checkCudaErrors(cuLaunchKernel( // TODO: double check the culaunch kernel api 
-          copy_func, grid.x, grid.y, grid.z, block.x, block.y, block.z,
-          shared_size, NULL, args, NULL));
+  size_t ne_per_t = 1;
+  void *args[6] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2, &fid_count};
+  
+  switch(method){
+    case TRANS1 :
+      trans_method += "_transpose1";
+      break;
+    case TRANS2 :
+      trans_method += "_transpose2";
+      break;
+    case NO_TRANS :
+      trans_method += "_no_transpose";
+      break;
+    case TRANS_MULTI8 :
+      ne_per_t = 8;
+      trans_method += "_transpose_multi8";
+      break;
+    case TRANS_MULTI4 :
+      ne_per_t = 4;
+      trans_method += "_transpose_multi4";
+      break;
+    case SHARE_TRANS_MULTI8 :
+      ne_per_t = 8;
+      trans_method += "_share_transpose_multi8";
+      break;
+    case SHARE_TRANS_MULTI4 :
+      ne_per_t = 4;
+      trans_method += "_share_transpose_multi4";
+      break;
+    case SHARE_TRANS :
+      trans_method += "_share_transpose";
+      break;
+    default: 
+      trans_method += "_no_transpose";
+      break;
+  }
+
+  size_t shared_size = block_size * sizeof(float) * ne_per_t;
+
+  dim3 grid((size_A)/block_size/ne_per_t, 1, 1); // Copies 1 elem per thread
+    
+  checkCudaErrors(cuLaunchKernel( // TODO: double check the culaunch kernel api 
+      copy_func, grid.x, grid.y, grid.z, block.x, block.y, block.z,
+      shared_size, NULL, args, NULL));
 
 
   checkCudaErrors(cuCtxSynchronize());
@@ -385,12 +396,9 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   // stop and destroy timer
   sdkStopTimer(&timer);
   
-    float kernel_time = sdkGetTimerValue(&timer);
+  float kernel_time = sdkGetTimerValue(&timer);
 
-  //printf("Copy time for kernel: %f (ms)\n", sdkGetTimerValue(&timer));
-  //printf("Copy time for cumemcpyhtod: %f (ms)\n", sdkGetTimerValue(&timer));
   sdkDeleteTimer(&timer);
-  ///// end kernel timing 
  
 #ifdef CHECK_COPY
   float *h_Ccheck = reinterpret_cast<float *>(malloc(mem_size_A));
@@ -399,23 +407,21 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
 
   bool correct = true;
 
-  for (int i = 0; i < size_A; i++) {
-    //printf("A_h[%05d]=%.8f, h_C=%.8f \n", i, h_A[i], h_Ccheck[i]);
-   // h_C[0] should be the first element in the original, 
-   // h_C[1] should be the num_elem'th element in the original.
-#ifndef NO_TRANSPOSE
-        //std::cout << "h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
-  
-      if (fabs(h_Ccheck[i] - h_A[i/fid_count + (i%fid_count)*num_elems]) > 1e-5) {
-//        std::cout << "h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
-     correct = false;
-    }
-#else
-    if (fabs(h_Ccheck[i] - h_A[i]) > 1e-5){
-        std::cout << "h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
+  if (method == NO_TRANS){
+    for (int i = 0; i < size_A; i++) {
+      if (fabs(h_Ccheck[i] - h_A[i]) > 1e-5){
+        //std::cout << "no transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
         correct = false;
+      }
     }
-#endif
+  }
+  else{
+    for (int i = 0; i < size_A; i++) {
+      if (fabs(h_Ccheck[i] - h_A[i/fid_count + (i%fid_count)*num_elems]) > 1e-5) {
+        //std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
+        correct = false;
+      }
+    }
   }
 
   if (!correct){
@@ -424,38 +430,17 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   else{
       std::cout << "PASSED test" << std::endl;
   }
-  
+
   free(h_Ccheck);
-#endif
-  
-#ifdef TRANSPOSE1
-  method += "_transpose1";
-#elif TRANSPOSE2
-  method += "_transpose2";
-#elif NO_TRANSPOSE
-  method += "_no_transpose";
-#elif TRANSPOSE_MULTI8
-  method += "_transpose_multi8";
-#elif TRANSPOSE_MULTI4
-  method += "_transpose_multi4";
-#elif SHARE_TRANSPOSE_MULTI8
-  method += "_share_transpose_multi8";
-#elif SHARE_TRANSPOSE_MULTI4
-  method += "_share_transpose_multi4";
-#elif SHARE_TRANSPOSE
-  method += "_share_transpose";
+
 #endif
 
   checkCudaErrors(cuMemFreeHost(h_A));
   checkCudaErrors(cuMemFree(d_C));
   checkCudaErrors(cuCtxDestroy(cuContext));
 
-  std::cout << method << "," << kernel_time  << "," << fid_count << "," << num_elems << "," << mem_size_A << "," << mem_size_A/kernel_time/1000000 << std::endl;
-
-#endif
- 
- 
- 
+  std::cout << trans_method << "," << kernel_time  << "," << fid_count << "," << num_elems << "," << mem_size_A << "," << mem_size_A/kernel_time/1000000 << std::endl;
+  } 
 
 }
 
@@ -505,14 +490,14 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
   cuDevice = findCudaDeviceDRV(argc, (const char **)argv);
 
   // get compute capabilities and the devicename
-  checkCudaErrors(cuDeviceGetAttribute(
-      &major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, cuDevice));
-  checkCudaErrors(cuDeviceGetAttribute(
-      &minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, cuDevice));
-  checkCudaErrors(cuDeviceGetName(deviceName, 256, cuDevice));
+  //checkCudaErrors(cuDeviceGetAttribute(
+  //    &major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, cuDevice));
+  //checkCudaErrors(cuDeviceGetAttribute(
+  //    &minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, cuDevice));
+  //checkCudaErrors(cuDeviceGetName(deviceName, 256, cuDevice));
   //printf("> GPU Device has SM %d.%d compute capability\n", major, minor);
 
-  checkCudaErrors(cuDeviceTotalMem(&totalGlobalMem, cuDevice));
+  //checkCudaErrors(cuDeviceTotalMem(&totalGlobalMem, cuDevice));
   //printf("  Total amount of global memory:     %llu bytes\n",
   //       (long long unsigned int)totalGlobalMem);
   //printf("  64-bit Memory Address:             %s\n",
@@ -569,23 +554,37 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
   if (CUDA_SUCCESS != status) {
     goto Error;
   }
-#ifdef TRANSPOSE1
-    status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS32_32bit");
-#elif TRANSPOSE2
-    status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS232_32bit");
-#elif NO_TRANSPOSE
-    status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSbasic32_32bit");
-#elif TRANSPOSE_MULTI8
-    status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSnewmulti32_32bit_8");
-#elif TRANSPOSE_MULTI4
-    status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSnewmulti32_32bit_4");
-#elif SHARE_TRANSPOSE_MULTI8
-    status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSsharedmulti32_32bit_8");
-#elif SHARE_TRANSPOSE_MULTI4
-    status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSsharedmulti32_32bit_4");
-#elif SHARE_TRANSPOSE
-    status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSshared32_32bit");
-#endif
+  
+  switch(method){
+    case TRANS1 :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans132_32bit");
+      break;
+    case TRANS2 :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans232_32bit");
+      break;
+    case NO_TRANS :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_no_trans32_32bit");
+      break;
+    case TRANS_MULTI8 :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans_multi32_32bit_8");
+      break;
+    case TRANS_MULTI4 :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans_multi32_32bit_4");
+      break;
+    case SHARE_TRANS_MULTI8 :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSsharedmulti32_32bit_8");
+      break;
+    case SHARE_TRANS_MULTI4 :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSsharedmulti32_32bit_4");
+      break;
+    case SHARE_TRANS :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_shared32_32bit");
+      break;
+    default: 
+      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_no_trans32_32bit");
+      break;
+      
+  }
 
   if (CUDA_SUCCESS != status) {
     goto Error;
@@ -616,8 +615,36 @@ int main(int argc, char **argv)
       num_elems = std::stoi(argv[++i]);
       continue;
     }
-
+    if(!strcmp(argv[i], "-method")) {
+     // std::string meth = std::string(argv[++i]); 
+      const char *meth = argv[++i];
+      if (!strcmp(meth, "trans1"))
+        method = TRANS1;
+      else if (!strcmp(meth, "trans2")) 
+        method = TRANS2;
+      else if (!strcmp(meth, "trans_multi8")) 
+        method = TRANS_MULTI8;
+      else if (!strcmp(meth, "trans_multi4")) 
+        method = TRANS_MULTI4;
+      else if (!strcmp(meth, "share_trans_multi4")) 
+        method = SHARE_TRANS_MULTI4;
+      else if (!strcmp(meth, "share_trans_multi8")) 
+        method = SHARE_TRANS_MULTI8;
+      else if (!strcmp(meth, "share_post_trans_multi4")) 
+        method = SHARE_POST_TRANS_MULTI4;
+      else if (!strcmp(meth, "share_post_trans_multi8")) 
+        method = SHARE_POST_TRANS_MULTI8;
+      else if (!strcmp(meth, "share_trans")) 
+        method = SHARE_TRANS;
+      else if (!strcmp(meth, "memcpy_trans1")) 
+        method = MEMCPY_TRANS1;
+      else if (!strcmp(meth, "memcpy_no_trans")) 
+        method = MEMCPY_NO_TRANS;
+      
+      continue;
+    }
   }
+  //std::cout << "method " << method  << "\n";
 
   rt.register_task(TOP_LEVEL_TASK, top_level_task);
 
