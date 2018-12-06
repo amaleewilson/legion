@@ -1,0 +1,24 @@
+On Darwin: 
+
+module load cuda
+module switch gcc/8.2.0 gcc/6.4.0 
+export CUDA=/projects/opt/centos7/cuda/9.1
+export USE_CUDA=1
+
+export CUDA_PATH=/projects/opt/centos7/cuda/9.1
+export CUDA_DEBUGGER_SOFTWARE_PREEMPTION=1
+
+export GPU_ARCH=maxwell
+
+make -j8
+
+make clean; make -j40; make kernel_transpose
+
+run with specific numbers of elements and methods
+./kernel_transpose -ne <number of elements -method <desired method>
+
+or 
+
+run all with 
+./run.sh kernel_transpose 
+
