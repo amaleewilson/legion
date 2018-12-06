@@ -28,9 +28,10 @@ methods=(
     "share_trans_multi8"
     "share_trans_multi4"
     "share_trans"
-    "memcpy_trans1"
     "memcpy_no_trans"
   )
+  # this one is so bad, no reason to test it. 
+  #"memcpy_trans1"
 
 # $1 is kernel_transpose
 # $2 is machine

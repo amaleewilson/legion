@@ -51,7 +51,7 @@ override CC_FLAGS := $(filter-out -DBOUNDS_CHECKS, \
                      $(filter-out -DPRIVILEGE_CHECKS, \
                      $(filter-out -DLEGION_SPY, \
                        $(CC_FLAGS))))
-TESTS := transpose3
+TESTS := kernel_transpose
 
 ifeq ($(strip $(USE_GASNET)),1)
   ifdef NODECOUNT
@@ -84,7 +84,16 @@ vpath %.S .:$(RUNTIME_VPATH)
 
 REALM_LIB := librealm.a
 
-run_all : $(TESTS:%=run_%)
+# run_all : $(TESTS:%=run_%)
+run_all : $(REALM_LIB) $(REALM_OBJS)
+
+# This should definitely be improved
+kernel_transpose : kernel_transpose.cc
+	/projects/opt/centos7/cuda/9.1/bin/nvcc -ccbin g++ -I../../Common  -m64    -gencode arch=compute_30,code=compute_30 -o $@_gpu64.ptx -ptx $@_gpu.cu
+	/projects/opt/centos7/cuda/9.1/bin/nvcc -ccbin g++ -I./Common  -I/home/amaleewilson/legion/runtime -I/home/amaleewilson/legion/runtime/mappers -I/projects/opt/centos7/cuda/9.1/include -I/home/amaleewilson/legion/runtime/realm/transfer  -m64    -gencode arch=compute_30,code=compute_30 $(FLAGS) -o $@.o -c $@.cc
+	/projects/opt/centos7/cuda/9.1/bin/nvcc -ccbin g++   -m64      -gencode arch=compute_30,code=compute_30 -o $@ $@.o  -L/projects/opt/centos7/cuda/9.1/lib64/stubs -lcuda -L. -lrealm  -I/home/amaleewilson/legion/runtime -I/home/amaleewilson/legion/runtime/mappers -I/home/amaleewilson/legion/runtime/realm/transfer $(FLAGS) -DUSE_DISK -DUSE_LIBDL -DUSE_CUDA -DUSE_ZLIB -DDEBUG_REALM -DDEBUG_LEGION -DCOMPILE_TIME_MIN_LEVEL=LEVEL_DEBUG  -lrt -lpthread
+
+	
 
 run_% : %
 	@# this echos exactly once, even if -s was specified
@@ -96,8 +105,8 @@ build : $(TESTS)
 clean :
 	rm -f $(REALM_LIB) $(REALM_OBJS) $(TESTS)
 
-$(TESTS) : % : %.cc librealm.a
-	$(CXX) -o $@ $< $(EXTRAOBJS_$*) -L. -lrealm $(INC_FLAGS) $(CC_FLAGS) $(LEGION_LD_FLAGS)
+#$(TESTS) : % : %.cc librealm.a
+#	$(CXX) -o $@ $< $(EXTRAOBJS_$*) -L. -lrealm $(INC_FLAGS) $(CC_FLAGS) $(LEGION_LD_FLAGS)
 
 
 $(REALM_LIB) : $(REALM_OBJS)
