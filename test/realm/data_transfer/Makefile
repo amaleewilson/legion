@@ -89,9 +89,11 @@ run_all : $(REALM_LIB) $(REALM_OBJS)
 
 # This should definitely be improved
 kernel_transpose : kernel_transpose.cc
-	/projects/opt/centos7/cuda/9.1/bin/nvcc -ccbin g++ -I../../Common  -m64    -gencode arch=compute_30,code=compute_30 -o $@_gpu64.ptx -ptx $@_gpu.cu
-	/projects/opt/centos7/cuda/9.1/bin/nvcc -ccbin g++ -I./Common  -I/home/amaleewilson/legion/runtime -I/home/amaleewilson/legion/runtime/mappers -I/projects/opt/centos7/cuda/9.1/include -I/home/amaleewilson/legion/runtime/realm/transfer  -m64    -gencode arch=compute_30,code=compute_30 $(FLAGS) -o $@.o -c $@.cc
-	/projects/opt/centos7/cuda/9.1/bin/nvcc -ccbin g++   -m64      -gencode arch=compute_30,code=compute_30 -o $@ $@.o  -L/projects/opt/centos7/cuda/9.1/lib64/stubs -lcuda -L. -lrealm  -I/home/amaleewilson/legion/runtime -I/home/amaleewilson/legion/runtime/mappers -I/home/amaleewilson/legion/runtime/realm/transfer $(FLAGS) -DUSE_DISK -DUSE_LIBDL -DUSE_CUDA -DUSE_ZLIB -DDEBUG_REALM -DDEBUG_LEGION -DCOMPILE_TIME_MIN_LEVEL=LEVEL_DEBUG  -lrt -lpthread
+	$(NVCC) -ccbin g++ -I../../Common  -m64    -gencode arch=compute_30,code=compute_30 -o $@_gpu64.ptx -ptx $@_gpu.cu
+	$(NVCC) -ccbin g++ -I./Common  -I$(LG_RT_DIR) -I$(LG_RT_DIR)/mappers -I$(CUDA)/include -I$(LG_RT_DIR)/realm/transfer -m64  -gencode arch=compute_30,code=compute_30 -o $@.o -c $@.cc
+	$(NVCC) -ccbin g++   -m64      -gencode arch=compute_30,code=compute_30 -o $@ $@.o  -L$(CUDA)/lib64/stubs -lcuda -L. -lrealm $(INC_FLAGS) $(NVCC_FLAGS)
+	
+#-DUSE_DISK -DUSE_LIBDL -DUSE_CUDA -DUSE_ZLIB -DDEBUG_REALM -DDEBUG_LEGION -DCOMPILE_TIME_MIN_LEVEL=LEVEL_DEBUG  -lrt -lpthread
 
 	
 
