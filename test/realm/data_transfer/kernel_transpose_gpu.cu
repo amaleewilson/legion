@@ -23,6 +23,27 @@
    Copies c_sz (4 or 8) elements without writing through shared memory, writes to d_dst should be coalesced. 
  */
 template <int block_size, typename size_type, int c_sz>
+__device__ void copykernelAoS_trans_multi_batch(float *h_src_A, float *h_src_B, float *d_dst, size_type elem_size, 
+        size_type elem_count, int fid_count) {
+  
+  
+  size_type real_tid = ((blockIdx.x + blockIdx.y*gridDim.x) * (blockDim.x*blockDim.y) + (threadIdx.y*blockDim.x) + threadIdx.x);
+  size_type dst_base = 0;
+  for (size_type t_id = real_tid; t_id < elem_count*fid_count/c_sz; t_id += gridDim.x*gridDim.y*blockDim.x*blockDim.y){
+
+    dst_base = t_id*c_sz;
+   
+    #pragma unroll 
+    for (size_type i = 0; i < c_sz; ++i){
+      d_dst[dst_base + i] = h_src_A[elem_count*(i%fid_count) + (c_sz/fid_count)*t_id + i/fid_count];
+    }
+  }
+}
+
+/*
+   Copies c_sz (4 or 8) elements without writing through shared memory, writes to d_dst should be coalesced. 
+ */
+template <int block_size, typename size_type, int c_sz>
 __device__ void copykernelAoS_trans_multi(float *h_src_A, float *h_src_B, float *d_dst, size_type elem_size, 
         size_type elem_count, int fid_count) {
     
@@ -95,6 +116,24 @@ __device__ void copykernelAoS_shared(float *h_src_A, float *h_src_B, float *d_ds
 }
 
 /*
+   Launches fewer threads than original trans1.
+ */
+template <int block_size, typename size_type>
+__device__ void copykernelAoS_trans1_batch(float *h_src_A, float *h_src_B, float *d_dst, size_type elem_size, 
+        size_type elem_count, size_type fid_count) {
+
+  size_type real_tid = ((blockIdx.x + blockIdx.y*gridDim.x) * (blockDim.x*blockDim.y) + (threadIdx.y*blockDim.x) + threadIdx.x);
+
+  for (size_type t_id = real_tid; t_id < elem_count*fid_count; t_id += gridDim.x*gridDim.y*blockDim.x*blockDim.y){
+
+      //d_dst[t_id] = real_tid;
+      d_dst[(t_id - (t_id/elem_count*elem_count))*fid_count + t_id/elem_count] = h_src_A[t_id];
+  
+  }
+    
+}
+
+/*
    Copies one element per thread, writes to d_dst may or may not be coalesced. 
  */
 template <int block_size, typename size_type>
@@ -160,6 +199,14 @@ extern "C" __global__ void copykernelAoS_no_trans_multi32_32bit(float *h_src_A, 
                                                 int e_size, int e_count, int fid_count) {
   copykernelAoS_no_trans_multi<32, int, 8>(h_src_A, h_src_B, d_dst, e_size, e_count);
 }
+extern "C" __global__ void copykernelAoS_trans_multi_batch32_32bit_8(float *h_src_A, float *h_src_B, float *d_dst,
+                                                int e_size, int e_count, int fid_count) {
+  copykernelAoS_trans_multi_batch<32, int, 8/*copy_size*/>(h_src_A, h_src_B, d_dst, e_size, e_count, fid_count);
+}
+extern "C" __global__ void copykernelAoS_trans_multi_batch32_32bit_4(float *h_src_A, float *h_src_B, float *d_dst,
+                                                int e_size, int e_count, int fid_count) {
+  copykernelAoS_trans_multi_batch<32, int, 4/*copy_size*/>(h_src_A, h_src_B, d_dst, e_size, e_count, fid_count);
+}
 extern "C" __global__ void copykernelAoS_trans_multi32_32bit_8(float *h_src_A, float *h_src_B, float *d_dst,
                                                 int e_size, int e_count, int fid_count) {
   copykernelAoS_trans_multi<32, int, 8/*copy_size*/>(h_src_A, h_src_B, d_dst, e_size, e_count, fid_count);
@@ -179,6 +226,10 @@ extern "C" __global__ void copykernelAoSsharedmulti32_32bit_4(float *h_src_A, fl
 extern "C" __global__ void copykernelAoS_shared32_32bit(float *h_src_A, float *h_src_B, float *d_dst,
                                                 int e_size, int e_count, int fid_count) {
   copykernelAoS_shared<32, int>(h_src_A, h_src_B, d_dst, e_size, e_count, fid_count);
+}
+extern "C" __global__ void copykernelAoS_trans1_batch32_32bit(float *h_src_A, float *h_src_B, float *d_dst,
+                                                int e_size, int e_count, int fid_count) {
+  copykernelAoS_trans1_batch<32, int>(h_src_A, h_src_B, d_dst, e_size, e_count, fid_count);
 }
 extern "C" __global__ void copykernelAoS_trans132_32bit(float *h_src_A, float *h_src_B, float *d_dst,
                                                 int e_size, int e_count, int fid_count) {

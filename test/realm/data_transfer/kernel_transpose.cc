@@ -45,11 +45,12 @@ enum T_method {
   NO_TRANS,
   TRANS_MULTI8,
   TRANS_MULTI4,
+  TRANS_MULTI_BATCH8,
+  TRANS_MULTI_BATCH4,
   SHARE_TRANS_MULTI8,
   SHARE_TRANS_MULTI4,
-  SHARE_POST_TRANS_MULTI8,
-  SHARE_POST_TRANS_MULTI4,
   SHARE_TRANS,
+  TRANS1_BATCH,
   MEMCPY_TRANS1,
   MEMCPY_NO_TRANS
 };
@@ -57,6 +58,9 @@ enum T_method {
 T_method method = NO_TRANS;
 
 int num_elems = 0;
+size_t grid_count = 1;
+size_t block_count = 1;
+size_t thread_count = 1;
 
 void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem);
 
@@ -119,15 +123,14 @@ void memcpy_method(CUdeviceptr d_C, float *h_A, unsigned int mem_size_A, unsigne
   
   std::string trans_method = "memcpy";
 
+  int elem_count = size_A/fid_count;
+
   // create and start timer
   StopWatchInterface *timer = NULL;
   sdkCreateTimer(&timer);
 
   // start the timer
   sdkStartTimer(&timer);
- 
-    int elem_count = size_A/fid_count;
-
   
   if (method == MEMCPY_NO_TRANS){  
     trans_method += "_no_transpose";
@@ -190,7 +193,9 @@ void memcpy_method(CUdeviceptr d_C, float *h_A, unsigned int mem_size_A, unsigne
   checkCudaErrors(cuMemFree(d_C));
   checkCudaErrors(cuMemFreeHost(h_A));
 
-  std::cout << trans_method << "," << memcpy_time  << "," << fid_count << "," << num_elems << "," << mem_size_A << "," << mem_size_A/memcpy_time/1000000 << std::endl;
+  int mem_ops = 2;
+  int total_bytes = mem_size_A * mem_ops;
+  std::cout << trans_method << "," << memcpy_time  << "," << fid_count << "," << num_elems << "," << total_bytes << "," << total_bytes/memcpy_time/1000000 << std::endl;
 
 }
 
@@ -338,16 +343,14 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   StopWatchInterface *timer = NULL;
   sdkCreateTimer(&timer);
 
-  // start the timer
-  sdkStartTimer(&timer);
-  
-  dim3 block(block_size, 1, 1);
+  size_t ne_per_t = 1;
   size_t num_elems2 = (size_t)(size_A / fid_count);
   size_t elem_size = sizeof(float);
-      
-  size_t ne_per_t = 1;
+ 
   void *args[6] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2, &fid_count};
-  
+ 
+  size_t grid_size = size_A/block_size;
+
   switch(method){
     case TRANS1 :
       trans_method += "_transpose1";
@@ -366,6 +369,16 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
       ne_per_t = 4;
       trans_method += "_transpose_multi4";
       break;
+    case TRANS_MULTI_BATCH8 :
+      ne_per_t = 8;
+      grid_size = thread_count / block_size * ne_per_t; 
+      trans_method += "_transpose_multii_batch8";
+      break;
+    case TRANS_MULTI_BATCH4 :
+      ne_per_t = 4;
+      grid_size = thread_count / block_size * ne_per_t; 
+      trans_method += "_transpose_multi_batch4";
+      break;
     case SHARE_TRANS_MULTI8 :
       ne_per_t = 8;
       trans_method += "_share_transpose_multi8";
@@ -374,6 +387,11 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
       ne_per_t = 4;
       trans_method += "_share_transpose_multi4";
       break;
+    case TRANS1_BATCH :
+      ne_per_t = 1;
+      grid_size = thread_count / block_size * ne_per_t; 
+      trans_method += "_trans1_batch";
+      break;
     case SHARE_TRANS :
       trans_method += "_share_transpose";
       break;
@@ -381,10 +399,26 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
       trans_method += "_no_transpose";
       break;
   }
+  
+  size_t shared_size = block_size * ne_per_t * sizeof(float); 
+  grid_size = grid_size/ne_per_t;
+  
 
-  size_t shared_size = block_size * sizeof(float) * ne_per_t;
+  //std::cout << "blocks per grid : " <<  grid_size << "\n";//(size_A)/block_size/ne_per_t << "\n";
+  //std::cout << "threads per block : " <<  block_size << "\n";//(size_A)/block_size/ne_per_t << "\n";
 
-  dim3 grid((size_A)/block_size/ne_per_t, 1, 1); // Copies 1 elem per thread
+  // start the timer
+  sdkStartTimer(&timer);
+ 
+  dim3 block(block_size, 1, 1);
+  dim3 grid(grid_size, 1, 1); 
+  
+  size_t threads_per_block = block.x * block.y * block.z;
+  size_t blocks_per_grid = grid.x * grid.y * grid.z;
+
+  std::cout << "grid count : " <<  grid_count << "\n";//(size_A)/block_size/ne_per_t << "\n";
+  std::cout << "blocks per grid : " <<  blocks_per_grid << "\n";//(size_A)/block_size/ne_per_t << "\n";
+  std::cout << "threads per block : " <<  threads_per_block << "\n";//(size_A)/block_size/ne_per_t << "\n";
     
   checkCudaErrors(cuLaunchKernel( // TODO: double check the culaunch kernel api 
       copy_func, grid.x, grid.y, grid.z, block.x, block.y, block.z,
@@ -417,6 +451,8 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   }
   else{
     for (int i = 0; i < size_A; i++) {
+     //std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
+  
       if (fabs(h_Ccheck[i] - h_A[i/fid_count + (i%fid_count)*num_elems]) > 1e-5) {
         //std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
         correct = false;
@@ -435,11 +471,14 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
 
 #endif
 
+
   checkCudaErrors(cuMemFreeHost(h_A));
   checkCudaErrors(cuMemFree(d_C));
   checkCudaErrors(cuCtxDestroy(cuContext));
 
-  std::cout << trans_method << "," << kernel_time  << "," << fid_count << "," << num_elems << "," << mem_size_A << "," << mem_size_A/kernel_time/1000000 << std::endl;
+  int mem_ops = 2;
+  int total_bytes = mem_size_A * mem_ops;
+  std::cout << trans_method << "," << kernel_time  << "," << fid_count << "," << num_elems << "," << total_bytes << "," << total_bytes/kernel_time/1000000 << "," << grid_size << "," << block_size << std::endl;
   } 
 
 }
@@ -571,6 +610,12 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
     case TRANS_MULTI4 :
       status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans_multi32_32bit_4");
       break;
+    case TRANS_MULTI_BATCH8 :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans_multi_batch32_32bit_8");
+      break;
+    case TRANS_MULTI_BATCH4 :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans_multi_batch32_32bit_4");
+      break;
     case SHARE_TRANS_MULTI8 :
       status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSsharedmulti32_32bit_8");
       break;
@@ -579,6 +624,9 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
       break;
     case SHARE_TRANS :
       status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_shared32_32bit");
+      break;
+    case TRANS1_BATCH :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans1_batch32_32bit");
       break;
     default: 
       status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_no_trans32_32bit");
@@ -611,6 +659,18 @@ int main(int argc, char **argv)
 
 
   for(int i = 1; i < argc; i++) {
+    if(!strcmp(argv[i], "-grid_count")) {
+      grid_count = std::stoi(argv[++i]);
+      continue;
+    }
+    if(!strcmp(argv[i], "-block_count")) {
+      grid_count = std::stoi(argv[++i]);
+      continue;
+    }
+    if(!strcmp(argv[i], "-thread_count")) {
+      thread_count = std::stoi(argv[++i]);
+      continue;
+    }
     if(!strcmp(argv[i], "-ne")) {
       num_elems = std::stoi(argv[++i]);
       continue;
@@ -626,16 +686,18 @@ int main(int argc, char **argv)
         method = TRANS_MULTI8;
       else if (!strcmp(meth, "trans_multi4")) 
         method = TRANS_MULTI4;
+      else if (!strcmp(meth, "trans_multi_batch8")) 
+        method = TRANS_MULTI_BATCH8;
+      else if (!strcmp(meth, "trans_multi_batch4")) 
+        method = TRANS_MULTI_BATCH4;
       else if (!strcmp(meth, "share_trans_multi4")) 
         method = SHARE_TRANS_MULTI4;
       else if (!strcmp(meth, "share_trans_multi8")) 
         method = SHARE_TRANS_MULTI8;
-      else if (!strcmp(meth, "share_post_trans_multi4")) 
-        method = SHARE_POST_TRANS_MULTI4;
-      else if (!strcmp(meth, "share_post_trans_multi8")) 
-        method = SHARE_POST_TRANS_MULTI8;
       else if (!strcmp(meth, "share_trans")) 
         method = SHARE_TRANS;
+      else if (!strcmp(meth, "trans1_batch")) 
+        method = TRANS1_BATCH;
       else if (!strcmp(meth, "memcpy_trans1")) 
         method = MEMCPY_TRANS1;
       else if (!strcmp(meth, "memcpy_no_trans")) 
