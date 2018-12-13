@@ -63,16 +63,19 @@ __device__ void copykernelAoS_trans2_multi_batch(float *h_src_A, float *h_src_B,
   size_type real_tid = ((blockIdx.x + blockIdx.y*gridDim.x) * (blockDim.x*blockDim.y) + (threadIdx.y*blockDim.x) + threadIdx.x);
   
   size_type dst_base = 0;
+  size_type src_base = 0;
   size_type loop_term = (elem_count*fid_count)/c_sz;
   size_type inc = gridDim.x*gridDim.y*blockDim.x*blockDim.y;
  
   for (size_type t_id = real_tid; t_id < loop_term; t_id += inc){
   
+    src_base = t_id*c_sz;
     dst_base = t_id*c_sz;
 
     #pragma unroll 
     for (size_type i = 0; i < c_sz; ++i){
-      d_dst[dst_base + i] = h_src_A[elem_count*(i%fid_count) + (c_sz/fid_count)*t_id + i/fid_count];
+      //d_dst[dst_base + i] = h_src_A[elem_count*(i%fid_count) + (c_sz/fid_count)*(t_id*c_sz) + i/fid_count];
+      d_dst[dst_base + i] = h_src_A[((src_base+i)/fid_count) + ((src_base + i)%fid_count)*elem_count];
     }
   }
 }
