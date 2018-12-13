@@ -45,12 +45,13 @@ enum T_method {
   NO_TRANS,
   TRANS_MULTI8,
   TRANS_MULTI4,
-  TRANS_MULTI_BATCH8,
-  TRANS_MULTI_BATCH4,
+  TRANS_MULTI_BATCH,
+  TRANS2_MULTI_BATCH,
   SHARE_TRANS_MULTI8,
   SHARE_TRANS_MULTI4,
   SHARE_TRANS,
   TRANS1_BATCH,
+  TRANS2_BATCH,
   MEMCPY_TRANS1,
   MEMCPY_NO_TRANS
 };
@@ -58,9 +59,9 @@ enum T_method {
 T_method method = NO_TRANS;
 
 int num_elems = 0;
-size_t grid_count = 1;
 size_t block_count = 1;
 size_t thread_count = 1;
+int c_sz = 1;
 
 void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem);
 
@@ -114,7 +115,6 @@ void top_level_task(const void *args, size_t arglen,
   char *arg_v = NULL;
   new_runSoAtoAoSTest(0, &arg_v, m);
 }
-
 
 void memcpy_method(CUdeviceptr d_C, float *h_A, unsigned int mem_size_A, unsigned int size_A, size_t fid_count){
 
@@ -343,66 +343,85 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   StopWatchInterface *timer = NULL;
   sdkCreateTimer(&timer);
 
-  size_t ne_per_t = 1;
+  size_t ne_per_t = c_sz;
   size_t num_elems2 = (size_t)(size_A / fid_count);
   size_t elem_size = sizeof(float);
  
   void *args[6] = {&h_A, &h_B, &d_C, &elem_size, &num_elems2, &fid_count};
+  std::vector<void*> vector_args;
+  vector_args.push_back(&h_A);
+  vector_args.push_back(&h_B);
+  vector_args.push_back(&d_C);
+  vector_args.push_back(&elem_size);
+  vector_args.push_back(&num_elems2);
+  vector_args.push_back(&fid_count);
  
   size_t grid_size = size_A/block_size;
 
   switch(method){
     case TRANS1 :
+      block_count = size_A/block_size; 
       trans_method += "_transpose1";
       break;
     case TRANS2 :
+      block_count = size_A/block_size; 
       trans_method += "_transpose2";
       break;
     case NO_TRANS :
+      block_count = size_A/block_size; 
       trans_method += "_no_transpose";
       break;
     case TRANS_MULTI8 :
       ne_per_t = 8;
+      block_count = size_A/block_size/ne_per_t; 
       trans_method += "_transpose_multi8";
       break;
     case TRANS_MULTI4 :
       ne_per_t = 4;
+      block_count = size_A/block_size/ne_per_t; 
       trans_method += "_transpose_multi4";
       break;
-    case TRANS_MULTI_BATCH8 :
-      ne_per_t = 8;
-      grid_size = thread_count / block_size * ne_per_t; 
-      trans_method += "_transpose_multii_batch8";
+    case TRANS_MULTI_BATCH :
+      vector_args.push_back(&c_sz);
+      //grid_size = thread_count / block_size * ne_per_t; 
+      trans_method += "_transpose_multi_batch";
       break;
-    case TRANS_MULTI_BATCH4 :
-      ne_per_t = 4;
-      grid_size = thread_count / block_size * ne_per_t; 
-      trans_method += "_transpose_multi_batch4";
+    case TRANS2_MULTI_BATCH :
+      vector_args.push_back(&c_sz);
+      //grid_size = thread_count / block_size * ne_per_t; 
+      trans_method += "_trans2_multi_batch";
       break;
     case SHARE_TRANS_MULTI8 :
       ne_per_t = 8;
+      block_count = size_A/block_size/ne_per_t; 
       trans_method += "_share_transpose_multi8";
       break;
     case SHARE_TRANS_MULTI4 :
       ne_per_t = 4;
+      block_count = size_A/block_size/ne_per_t; 
       trans_method += "_share_transpose_multi4";
       break;
     case TRANS1_BATCH :
-      ne_per_t = 1;
-      grid_size = thread_count / block_size * ne_per_t; 
+      //grid_size = thread_count / block_size * ne_per_t; 
       trans_method += "_trans1_batch";
       break;
+    case TRANS2_BATCH :
+      //grid_size = thread_count / block_size * ne_per_t; 
+      trans_method += "_trans2_batch";
+      break;
     case SHARE_TRANS :
+      block_count = size_A/block_size; 
       trans_method += "_share_transpose";
       break;
     default: 
+      block_count = size_A/block_size; 
       trans_method += "_no_transpose";
       break;
   }
   
   size_t shared_size = block_size * ne_per_t * sizeof(float); 
-  grid_size = grid_size/ne_per_t;
-  
+  //grid_size = grid_size/ne_per_t;
+  grid_size = block_count;
 
   //std::cout << "blocks per grid : " <<  grid_size << "\n";//(size_A)/block_size/ne_per_t << "\n";
   //std::cout << "threads per block : " <<  block_size << "\n";//(size_A)/block_size/ne_per_t << "\n";
@@ -416,13 +435,12 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   size_t threads_per_block = block.x * block.y * block.z;
   size_t blocks_per_grid = grid.x * grid.y * grid.z;
 
-  std::cout << "grid count : " <<  grid_count << "\n";//(size_A)/block_size/ne_per_t << "\n";
-  std::cout << "blocks per grid : " <<  blocks_per_grid << "\n";//(size_A)/block_size/ne_per_t << "\n";
-  std::cout << "threads per block : " <<  threads_per_block << "\n";//(size_A)/block_size/ne_per_t << "\n";
+  //std::cout << "blocks per grid : " <<  blocks_per_grid << "\n";//(size_A)/block_size/ne_per_t << "\n";
+  //std::cout << "threads per block : " <<  threads_per_block << "\n";//(size_A)/block_size/ne_per_t << "\n";
     
   checkCudaErrors(cuLaunchKernel( // TODO: double check the culaunch kernel api 
       copy_func, grid.x, grid.y, grid.z, block.x, block.y, block.z,
-      shared_size, NULL, args, NULL));
+      shared_size, NULL, &vector_args[0]/*args*/ , NULL));
 
 
   checkCudaErrors(cuCtxSynchronize());
@@ -451,7 +469,7 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   }
   else{
     for (int i = 0; i < size_A; i++) {
-     //std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
+    // std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
   
       if (fabs(h_Ccheck[i] - h_A[i/fid_count + (i%fid_count)*num_elems]) > 1e-5) {
         //std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
@@ -478,7 +496,7 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
 
   int mem_ops = 2;
   int total_bytes = mem_size_A * mem_ops;
-  std::cout << trans_method << "," << kernel_time  << "," << fid_count << "," << num_elems << "," << total_bytes << "," << total_bytes/kernel_time/1000000 << "," << grid_size << "," << block_size << std::endl;
+  std::cout << trans_method << "," << kernel_time  << "," << fid_count << "," << num_elems << "," << total_bytes << "," << total_bytes/kernel_time/1000000 << "," << block_count << "," << block_size << "," << c_sz << std::endl;
   } 
 
 }
@@ -610,11 +628,11 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
     case TRANS_MULTI4 :
       status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans_multi32_32bit_4");
       break;
-    case TRANS_MULTI_BATCH8 :
-      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans_multi_batch32_32bit_8");
+    case TRANS_MULTI_BATCH :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans_multi_batch32_32bit");
       break;
-    case TRANS_MULTI_BATCH4 :
-      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans_multi_batch32_32bit_4");
+    case TRANS2_MULTI_BATCH :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans2_multi_batch32_32bit");
       break;
     case SHARE_TRANS_MULTI8 :
       status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSsharedmulti32_32bit_8");
@@ -627,6 +645,9 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
       break;
     case TRANS1_BATCH :
       status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans1_batch32_32bit");
+      break;
+    case TRANS2_BATCH :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans2_batch32_32bit");
       break;
     default: 
       status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_no_trans32_32bit");
@@ -651,7 +672,6 @@ Error:
 
 int main(int argc, char **argv)
 {
-//num_elems = std::stoi(argv[1]);
 
   Runtime rt;
 
@@ -659,12 +679,8 @@ int main(int argc, char **argv)
 
 
   for(int i = 1; i < argc; i++) {
-    if(!strcmp(argv[i], "-grid_count")) {
-      grid_count = std::stoi(argv[++i]);
-      continue;
-    }
     if(!strcmp(argv[i], "-block_count")) {
-      grid_count = std::stoi(argv[++i]);
+      block_count = std::stoi(argv[++i]);
       continue;
     }
     if(!strcmp(argv[i], "-thread_count")) {
@@ -675,8 +691,11 @@ int main(int argc, char **argv)
       num_elems = std::stoi(argv[++i]);
       continue;
     }
+    if(!strcmp(argv[i], "-copy_count")) {
+      c_sz = std::stoi(argv[++i]);
+      continue;
+    }
     if(!strcmp(argv[i], "-method")) {
-     // std::string meth = std::string(argv[++i]); 
       const char *meth = argv[++i];
       if (!strcmp(meth, "trans1"))
         method = TRANS1;
@@ -686,10 +705,10 @@ int main(int argc, char **argv)
         method = TRANS_MULTI8;
       else if (!strcmp(meth, "trans_multi4")) 
         method = TRANS_MULTI4;
-      else if (!strcmp(meth, "trans_multi_batch8")) 
-        method = TRANS_MULTI_BATCH8;
-      else if (!strcmp(meth, "trans_multi_batch4")) 
-        method = TRANS_MULTI_BATCH4;
+      else if (!strcmp(meth, "trans_multi_batch")) 
+        method = TRANS_MULTI_BATCH;
+      else if (!strcmp(meth, "trans2_multi_batch")) 
+        method = TRANS2_MULTI_BATCH;
       else if (!strcmp(meth, "share_trans_multi4")) 
         method = SHARE_TRANS_MULTI4;
       else if (!strcmp(meth, "share_trans_multi8")) 
@@ -698,6 +717,8 @@ int main(int argc, char **argv)
         method = SHARE_TRANS;
       else if (!strcmp(meth, "trans1_batch")) 
         method = TRANS1_BATCH;
+      else if (!strcmp(meth, "trans2_batch")) 
+        method = TRANS2_BATCH;
       else if (!strcmp(meth, "memcpy_trans1")) 
         method = MEMCPY_TRANS1;
       else if (!strcmp(meth, "memcpy_no_trans")) 
