@@ -40,6 +40,7 @@
 using namespace Realm;
 
 enum T_method {
+  BP_COPY,
   TRANS1,
   TRANS2,
   NO_TRANS,
@@ -327,6 +328,10 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
 
     float *h_B;
   h_B = &(h_A[num_elems]);
+    float *h_C;
+  h_C = &(h_A[num_elems*2]);
+    float *h_D;
+  h_D = &(h_A[num_elems*3]);
 
   //std::cout << "h_A[0] " << h_A[0] << "\n";
 
@@ -359,6 +364,20 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   size_t grid_size = size_A/block_size;
 
   switch(method){
+    case BP_COPY :
+      //TODO
+      vector_args = {};
+      vector_args.push_back(&h_A);
+      vector_args.push_back(&h_B);
+      vector_args.push_back(&h_C);
+      vector_args.push_back(&h_D);
+      vector_args.push_back(&d_C);
+      vector_args.push_back(&elem_size);
+      vector_args.push_back(&num_elems2);
+      vector_args.push_back(&fid_count);
+      vector_args.push_back(&c_sz);
+      trans_method += "_bp_copy";
+      break;
     case TRANS1 :
       block_count = size_A/block_size; 
       trans_method += "_transpose1";
@@ -613,6 +632,9 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
   }
   
   switch(method){
+    case BP_COPY :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "bp_copy_32");
+      break;
     case TRANS1 :
       status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans132_32bit");
       break;
@@ -697,6 +719,8 @@ int main(int argc, char **argv)
     }
     if(!strcmp(argv[i], "-method")) {
       const char *meth = argv[++i];
+      if (!strcmp(meth, "bp_copy"))
+        method = BP_COPY;
       if (!strcmp(meth, "trans1"))
         method = TRANS1;
       else if (!strcmp(meth, "trans2")) 
