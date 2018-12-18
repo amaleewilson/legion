@@ -40,24 +40,13 @@
 using namespace Realm;
 
 enum T_method {
-  BP_COPY,
-  TRANS1,
-  TRANS2,
-  NO_TRANS,
-  TRANS_MULTI8,
-  TRANS_MULTI4,
-  TRANS_MULTI_BATCH,
-  TRANS2_MULTI_BATCH,
-  SHARE_TRANS_MULTI8,
-  SHARE_TRANS_MULTI4,
-  SHARE_TRANS,
-  TRANS1_BATCH,
-  TRANS2_BATCH,
-  MEMCPY_TRANS1,
-  MEMCPY_NO_TRANS
+  BP_SOA_TO_AOS,
+  BP_AOS_TO_SOA,
+  CPU_AOS_TO_SOA,
+  CPU_SOA_TO_AOS
 };
 
-T_method method = NO_TRANS;
+T_method method = BP_SOA_TO_AOS;
 
 int num_elems = 0;
 size_t block_count = 1;
@@ -117,12 +106,12 @@ void top_level_task(const void *args, size_t arglen,
   new_runSoAtoAoSTest(0, &arg_v, m);
 }
 
-void memcpy_method(CUdeviceptr d_C, float *h_A, unsigned int mem_size_A, unsigned int size_A, size_t fid_count){
+void cpu_tranpose_soa_to_aos(float *h_A, unsigned int mem_size_A, unsigned int size_A, size_t fid_count){
 
   float *h_C;
   checkCudaErrors(cuMemHostAlloc((void**)&h_C, mem_size_A, 0));
   
-  std::string trans_method = "memcpy";
+  std::string trans_method = "cpu";
 
   int elem_count = size_A/fid_count;
 
@@ -133,20 +122,10 @@ void memcpy_method(CUdeviceptr d_C, float *h_A, unsigned int mem_size_A, unsigne
   // start the timer
   sdkStartTimer(&timer);
   
-  if (method == MEMCPY_NO_TRANS){  
-    trans_method += "_no_transpose";
-    checkCudaErrors(cuMemcpyHtoD(d_C, h_A, mem_size_A));
-    checkCudaErrors(cuCtxSynchronize());
-  }
-  else{
-    trans_method += "_transpose1";
+    trans_method += "_aos_to_soa";
     for (size_t i = 0; i < size_A; ++i){
       h_C[i] = h_A[i/fid_count + (i%fid_count)*elem_count];
     } 
-
-    checkCudaErrors(cuMemcpyHtoD(d_C, h_C, mem_size_A));
-    checkCudaErrors(cuCtxSynchronize());
-  }
 
   // stop and destroy timer
   sdkStopTimer(&timer);
@@ -156,44 +135,11 @@ void memcpy_method(CUdeviceptr d_C, float *h_A, unsigned int mem_size_A, unsigne
 
 
 #ifdef CHECK_COPY
-  float *h_Ccheck = reinterpret_cast<float *>(malloc(mem_size_A));
-  checkCudaErrors(cuMemcpyDtoH(reinterpret_cast<void *>(h_Ccheck), d_C, mem_size_A)); 
-  checkCudaErrors(cuCtxSynchronize());
-
-  bool correct = true;
-
-  if (method == MEMCPY_NO_TRANS){
-    for (size_t i = 0; i < size_A; ++i){
-      if (fabs(h_Ccheck[i] - h_A[i]) > 1e-5){
-          correct = false;
-          std::cout << "h_Ccheck[" << i << "] " << h_Ccheck[i] << " h_A : " << h_A[i] << std::endl; 
-      }
-    }
-  }
-  else{
-    for (size_t i = 0; i < size_A; ++i){
-      if (fabs(h_Ccheck[i] - h_C[i]) > 1e-5){
-          correct = false;
-          std::cout << "h_Ccheck[" << i << "] " << h_Ccheck[i] << " h_A : " << h_A[i] << std::endl; 
-      }
-    }
-  }
-
-  if (!correct){
-      std::cout << "failed test" << std::endl;
-  }
-  else{
-      std::cout << "PASSED test" << std::endl;
-  }
-  free(h_Ccheck);
-
+  // TODO
 #endif
     
 
-
-  checkCudaErrors(cuMemFree(d_C));
-  checkCudaErrors(cuMemFreeHost(h_A));
-
+  // should the mem ops be 2??
   int mem_ops = 2;
   int total_bytes = mem_size_A * mem_ops;
   std::cout << trans_method << "," << memcpy_time  << "," << fid_count << "," << num_elems << "," << total_bytes << "," << total_bytes/memcpy_time/1000000 << std::endl;
@@ -339,10 +285,6 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   checkCudaErrors(cuMemAlloc(&d_C, mem_size_A));
   
  
-  if (method == MEMCPY_TRANS1 || method == MEMCPY_NO_TRANS){
-    memcpy_method(d_C, h_A, mem_size_A, size_A, fid_count);
-  }
-  else{
     std::string trans_method = "kernel";
     // create and start timer
   StopWatchInterface *timer = NULL;
@@ -364,7 +306,7 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   size_t grid_size = size_A/block_size;
 
   switch(method){
-    case BP_COPY :
+    case BP_SOA_TO_AOS :
       //TODO
       vector_args = {};
       vector_args.push_back(&h_A);
@@ -376,65 +318,20 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
       vector_args.push_back(&num_elems2);
       vector_args.push_back(&fid_count);
       vector_args.push_back(&c_sz);
-      trans_method += "_bp_copy";
-      break;
-    case TRANS1 :
-      block_count = size_A/block_size; 
-      trans_method += "_transpose1";
-      break;
-    case TRANS2 :
-      block_count = size_A/block_size; 
-      trans_method += "_transpose2";
-      break;
-    case NO_TRANS :
-      block_count = size_A/block_size; 
-      trans_method += "_no_transpose";
-      break;
-    case TRANS_MULTI8 :
-      ne_per_t = 8;
-      block_count = size_A/block_size/ne_per_t; 
-      trans_method += "_transpose_multi8";
-      break;
-    case TRANS_MULTI4 :
-      ne_per_t = 4;
-      block_count = size_A/block_size/ne_per_t; 
-      trans_method += "_transpose_multi4";
-      break;
-    case TRANS_MULTI_BATCH :
-      vector_args.push_back(&c_sz);
-      //grid_size = thread_count / block_size * ne_per_t; 
-      trans_method += "_transpose_multi_batch";
-      break;
-    case TRANS2_MULTI_BATCH :
-      vector_args.push_back(&c_sz);
-      //grid_size = thread_count / block_size * ne_per_t; 
-      trans_method += "_trans2_multi_batch";
-      break;
-    case SHARE_TRANS_MULTI8 :
-      ne_per_t = 8;
-      block_count = size_A/block_size/ne_per_t; 
-      trans_method += "_share_transpose_multi8";
-      break;
-    case SHARE_TRANS_MULTI4 :
-      ne_per_t = 4;
-      block_count = size_A/block_size/ne_per_t; 
-      trans_method += "_share_transpose_multi4";
-      break;
-    case TRANS1_BATCH :
-      //grid_size = thread_count / block_size * ne_per_t; 
-      trans_method += "_trans1_batch";
-      break;
-    case TRANS2_BATCH :
-      //grid_size = thread_count / block_size * ne_per_t; 
-      trans_method += "_trans2_batch";
-      break;
-    case SHARE_TRANS :
-      block_count = size_A/block_size; 
-      trans_method += "_share_transpose";
+      trans_method += "_bp_soa_to_aos";
       break;
     default: 
-      block_count = size_A/block_size; 
-      trans_method += "_no_transpose";
+      vector_args = {};
+      vector_args.push_back(&h_A);
+      vector_args.push_back(&h_B);
+      vector_args.push_back(&h_C);
+      vector_args.push_back(&h_D);
+      vector_args.push_back(&d_C);
+      vector_args.push_back(&elem_size);
+      vector_args.push_back(&num_elems2);
+      vector_args.push_back(&fid_count);
+      vector_args.push_back(&c_sz);
+      trans_method += "_bp_soa_to_aos";
       break;
   }
   
@@ -477,25 +374,16 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   checkCudaErrors(cuCtxSynchronize());
 
   bool correct = true;
-
-  if (method == NO_TRANS){
+  
     for (int i = 0; i < size_A; i++) {
-      if (fabs(h_Ccheck[i] - h_A[i]) > 1e-5){
-        //std::cout << "no transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
-        correct = false;
-      }
-    }
-  }
-  else{
-    for (int i = 0; i < size_A; i++) {
-    // std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
+   //  std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
   
       if (fabs(h_Ccheck[i] - h_A[i/fid_count + (i%fid_count)*num_elems]) > 1e-5) {
         //std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
         correct = false;
       }
     }
-  }
+  
 
   if (!correct){
       std::cout << "failed test" << std::endl;
@@ -516,7 +404,6 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   int mem_ops = 2;
   int total_bytes = mem_size_A * mem_ops;
   std::cout << trans_method << "," << kernel_time  << "," << fid_count << "," << num_elems << "," << total_bytes << "," << total_bytes/kernel_time/1000000 << "," << block_count << "," << block_size << "," << c_sz << std::endl;
-  } 
 
 }
 
@@ -632,47 +519,11 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
   }
   
   switch(method){
-    case BP_COPY :
-      status = cuModuleGetFunction(&cuFunction, cuModule, "bp_copy_32");
-      break;
-    case TRANS1 :
-      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans132_32bit");
-      break;
-    case TRANS2 :
-      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans232_32bit");
-      break;
-    case NO_TRANS :
-      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_no_trans32_32bit");
-      break;
-    case TRANS_MULTI8 :
-      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans_multi32_32bit_8");
-      break;
-    case TRANS_MULTI4 :
-      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans_multi32_32bit_4");
-      break;
-    case TRANS_MULTI_BATCH :
-      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans_multi_batch32_32bit");
-      break;
-    case TRANS2_MULTI_BATCH :
-      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans2_multi_batch32_32bit");
-      break;
-    case SHARE_TRANS_MULTI8 :
-      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSsharedmulti32_32bit_8");
-      break;
-    case SHARE_TRANS_MULTI4 :
-      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoSsharedmulti32_32bit_4");
-      break;
-    case SHARE_TRANS :
-      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_shared32_32bit");
-      break;
-    case TRANS1_BATCH :
-      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans1_batch32_32bit");
-      break;
-    case TRANS2_BATCH :
-      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_trans2_batch32_32bit");
+    case BP_SOA_TO_AOS :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "bp_soa_to_aos");
       break;
     default: 
-      status = cuModuleGetFunction(&cuFunction, cuModule, "copykernelAoS_no_trans32_32bit");
+      status = cuModuleGetFunction(&cuFunction, cuModule, "bp_soa_to_aos");
       break;
       
   }
@@ -719,34 +570,14 @@ int main(int argc, char **argv)
     }
     if(!strcmp(argv[i], "-method")) {
       const char *meth = argv[++i];
-      if (!strcmp(meth, "bp_copy"))
-        method = BP_COPY;
-      if (!strcmp(meth, "trans1"))
-        method = TRANS1;
-      else if (!strcmp(meth, "trans2")) 
-        method = TRANS2;
-      else if (!strcmp(meth, "trans_multi8")) 
-        method = TRANS_MULTI8;
-      else if (!strcmp(meth, "trans_multi4")) 
-        method = TRANS_MULTI4;
-      else if (!strcmp(meth, "trans_multi_batch")) 
-        method = TRANS_MULTI_BATCH;
-      else if (!strcmp(meth, "trans2_multi_batch")) 
-        method = TRANS2_MULTI_BATCH;
-      else if (!strcmp(meth, "share_trans_multi4")) 
-        method = SHARE_TRANS_MULTI4;
-      else if (!strcmp(meth, "share_trans_multi8")) 
-        method = SHARE_TRANS_MULTI8;
-      else if (!strcmp(meth, "share_trans")) 
-        method = SHARE_TRANS;
-      else if (!strcmp(meth, "trans1_batch")) 
-        method = TRANS1_BATCH;
-      else if (!strcmp(meth, "trans2_batch")) 
-        method = TRANS2_BATCH;
-      else if (!strcmp(meth, "memcpy_trans1")) 
-        method = MEMCPY_TRANS1;
-      else if (!strcmp(meth, "memcpy_no_trans")) 
-        method = MEMCPY_NO_TRANS;
+      if (!strcmp(meth, "bp_soa_to_aos"))
+        method = BP_SOA_TO_AOS;
+      else if (!strcmp(meth, "bp_aos_to_soa"))
+        method = BP_AOS_TO_SOA;
+      else if (!strcmp(meth, "cpu_soa_to_aos")) 
+        method = CPU_SOA_TO_AOS;
+      else if (!strcmp(meth, "cpu_aos_to_soa")) 
+        method = CPU_AOS_TO_SOA;
       
       continue;
     }
