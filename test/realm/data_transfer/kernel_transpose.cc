@@ -171,7 +171,13 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
 
     // src mem
     {
-      InstanceLayoutGeneric *ilg = InstanceLayoutGeneric::choose_instance_layout(is_pad, soa_ilc, dim_order);
+      InstanceLayoutGeneric *ilg; 
+      if (method == BP_AOS_TO_SOA){
+        ilg = InstanceLayoutGeneric::choose_instance_layout(is_pad, aos_ilc, dim_order);
+      }
+      else{
+        ilg = InstanceLayoutGeneric::choose_instance_layout(is_pad, soa_ilc, dim_order);
+      }
       RegionInstance s_inst;
 
       Event e = RegionInstance::create_instance(s_inst, src_mem, ilg, ProfilingRequestSet());
@@ -320,6 +326,20 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
       vector_args.push_back(&c_sz);
       trans_method += "_bp_soa_to_aos";
       break;
+    case BP_AOS_TO_SOA :
+      //TODO
+      vector_args = {};
+      vector_args.push_back(&h_A);
+      vector_args.push_back(&h_B);
+      vector_args.push_back(&h_C);
+      vector_args.push_back(&h_D);
+      vector_args.push_back(&d_C);
+      vector_args.push_back(&elem_size);
+      vector_args.push_back(&num_elems2);
+      vector_args.push_back(&fid_count);
+      vector_args.push_back(&c_sz);
+      trans_method += "_bp_aos_to_soa";
+      break;
     default: 
       vector_args = {};
       vector_args.push_back(&h_A);
@@ -374,16 +394,29 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   checkCudaErrors(cuCtxSynchronize());
 
   bool correct = true;
-  
+ 
+ if (method == BP_SOA_TO_AOS){ 
     for (int i = 0; i < size_A; i++) {
-   //  std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
+   // std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] <<  " h_A : " << h_A[i] << std::endl;
   
       if (fabs(h_Ccheck[i] - h_A[i/fid_count + (i%fid_count)*num_elems]) > 1e-5) {
         //std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
         correct = false;
       }
     }
+ }
+ else{
   
+    for (int i = 0; i < size_A; i++) {
+   // std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << " h_A : " << h_A[i] << std::endl;
+  
+      if (fabs(h_Ccheck[i/fid_count + (i%fid_count)*num_elems] - h_A[i]) > 1e-5) {
+        //std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i/fid_count + (i%fid_count)*num_elems] << " h_A : " << h_A[i] << std::endl;
+        correct = false;
+      }
+    }
+
+ }
 
   if (!correct){
       std::cout << "failed test" << std::endl;
@@ -521,6 +554,9 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
   switch(method){
     case BP_SOA_TO_AOS :
       status = cuModuleGetFunction(&cuFunction, cuModule, "bp_soa_to_aos");
+      break;
+    case BP_AOS_TO_SOA :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "bp_aos_to_soa");
       break;
     default: 
       status = cuModuleGetFunction(&cuFunction, cuModule, "bp_soa_to_aos");

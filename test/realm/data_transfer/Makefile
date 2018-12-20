@@ -32,7 +32,7 @@ GEN_SRC		:= 				# .cc files
 GEN_GPU_SRC	=	copy_kernels.cu			# .cu files
 
 # You can modify these variables, some will be appended to by the runtime makefile
-INC_FLAGS	:= #-DCHECK_COPY
+INC_FLAGS	:= -DCHECK_COPY
 CC_FLAGS	?=
 NVCC_FLAGS	:=
 GASNET_FLAGS	:=
@@ -87,6 +87,12 @@ REALM_LIB := librealm.a
 # run_all : $(TESTS:%=run_%)
 run_all : $(REALM_LIB) $(REALM_OBJS)
 
+# This should definitely be improved
+AoS_to_SoA_transpose : AoS_to_SoA_transpose.cc
+	$(NVCC) -ccbin g++ -I../../Common  -m64    -gencode arch=compute_30,code=compute_30 -o $@_gpu64.ptx -ptx $@_gpu.cu
+	$(NVCC) -ccbin g++ -I./Common $(INC_FLAGS) -I$(CUDA)/include  -m64  -gencode arch=compute_30,code=compute_30 -o $@.o -c $@.cc
+	$(NVCC) -ccbin g++   -m64      -gencode arch=compute_30,code=compute_30 -o $@ $@.o  -L$(CUDA)/lib64/stubs -lcuda -L. -lrealm $(INC_FLAGS) $(NVCC_FLAGS)
+	
 # This should definitely be improved
 kernel_transpose : kernel_transpose.cc
 	$(NVCC) -ccbin g++ -I../../Common  -m64    -gencode arch=compute_30,code=compute_30 -o $@_gpu64.ptx -ptx $@_gpu.cu
