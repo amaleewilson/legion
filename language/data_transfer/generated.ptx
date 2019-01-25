@@ -1,0 +1,23 @@
+.version 6.1
+.target sm_70
+.address_size 64
+
+  // .globl bar
+
+.visible .entry bar(
+  .param .u64 bar_param_0
+)
+{
+  .reg .b32   %r<3>;
+  .reg .b64   %rd<2>;
+
+
+  ld.param.u64  %rd1, [bar_param_0];
+  mov.u32   %r2, %tid.x;
+  add.s32   %r1, %r2, 5;
+  // inline asm
+  red.global.max.u32 [%rd1], %r1;
+  // inline asm
+  ret;
+}
+
