@@ -103,7 +103,7 @@ function transfer_language:expression(lex)
   return function(environment_function)
       -- local env = environment_function()
       local kernel = codegen.gen_kernel(info)
-      kernel:printpretty()
+--      kernel:printpretty()
       return kernel
   end
 
