@@ -59,6 +59,12 @@ std::string s = "\n\
       in[i] = i;
       out[i] = 0;
     }
+ 
+  printf("input data\n"); 
+   for (int i = 0; i < 64; ++i){
+    printf("in %f\n", in[i]);
+
+  }
 
     float *d_in, *d_out;
 
@@ -103,6 +109,7 @@ std::string s = "\n\
 
   cudaMemcpy(out, d_out, sizeof(float)*64, cudaMemcpyDeviceToHost);
 
+  printf("\n\noutput data\n"); 
   
    for (int i = 0; i < 64; ++i){
     printf("out %f\n", out[i]);
