@@ -32,13 +32,18 @@ GEN_SRC		:= 				# .cc files
 GEN_GPU_SRC	=	copy_kernels.cu			# .cu files
 
 # You can modify these variables, some will be appended to by the runtime makefile
-INC_FLAGS	:= -DCHECK_COPY
+INC_FLAGS	:= -DCHECK_COPY 
 CC_FLAGS	?=
 NVCC_FLAGS	:=
 GASNET_FLAGS	:=
 LD_FLAGS	:=
 
 CXX ?= g++
+
+I_TERRA = -Xcompiler="-I../../../language/terra/release/include/terra -pthread" 
+L_TERRA = -L../../../language/terra/release/lib -lterra -ldl
+
+TERRA_STUFF = -Xcompiler="-L/projects/opt/centos7/cuda/9.1/lib64 -lcuda -lcudart"
 
 # we're going to include runtime.mk to get variable settings, but then
 #  do our own build steps
@@ -88,16 +93,29 @@ REALM_LIB := librealm.a
 run_all : $(REALM_LIB) $(REALM_OBJS)
 
 # This should definitely be improved
-AoS_to_SoA_transpose : AoS_to_SoA_transpose.cc
-	$(NVCC) -ccbin g++ -I../../Common  -m64    -gencode arch=compute_30,code=compute_30 -o $@_gpu64.ptx -ptx $@_gpu.cu
-	$(NVCC) -ccbin g++ -I./Common $(INC_FLAGS) -I$(CUDA)/include  -m64  -gencode arch=compute_30,code=compute_30 -o $@.o -c $@.cc
-	$(NVCC) -ccbin g++   -m64      -gencode arch=compute_30,code=compute_30 -o $@ $@.o  -L$(CUDA)/lib64/stubs -lcuda -L. -lrealm $(INC_FLAGS) $(NVCC_FLAGS)
+multi_kernel_transpose : multi_kernel_transpose.cc
+	$(NVCC) -ccbin g++ -I../../Common -o $@_gpu64.ptx -ptx $@_gpu.cu
+	$(NVCC) -ccbin g++ -I./Common $(INC_FLAGS) -I$(CUDA)/include -o $@.o -c $@.cc
+	$(NVCC) -ccbin g++ -o $@ $@.o  -L$(CUDA)/lib64/stubs -lcuda -L. -lrealm $(INC_FLAGS) $(NVCC_FLAGS)
+	
+# This should definitely be improved
+generated : kernel_transpose.cc
+	$(NVCC) -ccbin g++ -I./Common $(INC_FLAGS) -I$(CUDA)/include -o $@.o -c $@.cc
+	$(NVCC) -ccbin g++ -o $@ $@.o  -L$(CUDA)/lib64/stubs -lcuda -L. -lrealm $(INC_FLAGS) $(NVCC_FLAGS)
 	
 # This should definitely be improved
 kernel_transpose : kernel_transpose.cc
-	$(NVCC) -ccbin g++ -I../../Common  -m64    -gencode arch=compute_30,code=compute_30 -o $@_gpu64.ptx -ptx $@_gpu.cu
-	$(NVCC) -ccbin g++ -I./Common $(INC_FLAGS) -I$(CUDA)/include  -m64  -gencode arch=compute_30,code=compute_30 -o $@.o -c $@.cc
-	$(NVCC) -ccbin g++   -m64      -gencode arch=compute_30,code=compute_30 -o $@ $@.o  -L$(CUDA)/lib64/stubs -lcuda -L. -lrealm $(INC_FLAGS) $(NVCC_FLAGS)
+	$(NVCC) -ccbin g++ -I../../Common  -o $@_gpu64.ptx -ptx $@_gpu.cu
+	$(NVCC) -ccbin g++ -I./Common $(INC_FLAGS) -I$(CUDA)/include -o $@.o -c $@.cc
+	$(NVCC) -ccbin g++   -o $@ $@.o  -L$(CUDA)/lib64/stubs -lcuda -L. -lrealm $(INC_FLAGS) $(NVCC_FLAGS)
+	
+dsl_ptx_kernel_transpose : dsl_ptx_kernel_transpose.cc
+	$(NVCC) -ccbin g++ $(I_TERRA) -I./Common  $(INC_FLAGS) -I$(CUDA)/include  -o $@.o -c $@.cc
+	$(NVCC) -ccbin g++  $(L_TERRA) -o $@ $@.o  -L$(CUDA)/lib64/stubs -lcuda -L. -lrealm $(INC_FLAGS) $(NVCC_FLAGS)
+	
+dsl_kernel_transpose : dsl_kernel_transpose.cc
+	$(NVCC) -ccbin g++ -I./Common $(INC_FLAGS) -I$(CUDA)/include  -o $@.o -c $@.cc
+	$(NVCC) -ccbin g++  -o $@ $@.o  -L$(CUDA)/lib64/stubs -lcuda -L. -lrealm $(INC_FLAGS) $(NVCC_FLAGS)
 	
 #-DUSE_DISK -DUSE_LIBDL -DUSE_CUDA -DUSE_ZLIB -DDEBUG_REALM -DDEBUG_LEGION -DCOMPILE_TIME_MIN_LEVEL=LEVEL_DEBUG  -lrt -lpthread
 
