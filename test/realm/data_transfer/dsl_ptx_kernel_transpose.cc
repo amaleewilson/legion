@@ -37,6 +37,10 @@
 #include <unistd.h>
 
 
+
+#include "terra.h"
+
+
 using namespace Realm;
 
 enum T_method {
@@ -64,7 +68,8 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos);
 
 // define input ptx file for different platforms
 #if defined(_WIN64) || defined(__LP64__)
-#define PTX_FILE "kernel_transpose_gpu64.ptx"
+//#define PTX_FILE "kernel_transpose_gpu64.ptx"
+#define PTX_FILE "test_ptx_output.ptx"
 #define CUBIN_FILE "kernel_transpose_gpu64.cubin"
 #else
 #define PTX_FILE "kernel_transpose_gpu32.ptx"
@@ -232,10 +237,63 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
 
 
 
+
   CUfunction copy_func = NULL;
   
   int block_size = 32;
   //int block_size = 64; // This cut bw in half 
+
+
+
+
+  size_t fid_count = field_sizes.size(); 
+
+
+
+
+
+    lua_State * Lu = luaL_newstate(); //create a plain lua state
+    luaL_openlibs(Lu);                //initialize its libraries
+    //initialize the terra state in lua
+    terra_init(Lu);
+
+
+    std::string s = "\n\
+   local C = terralib.includecstring [[\n\
+   #include \"cuda_runtime.h\"\n\
+   #include <stdlib.h>\n\
+   #include <stdio.h>\n\
+   ]]\n\
+   \n\
+   import \"transfer_lang\"\n\
+   local kf_test = layout_transform_copy src aos, dst soa, size 16, copy_size_per_thread 2, fid_count " + std::to_string(fid_count) + " done\n\
+   local R,L = terralib.cudacompile({ kf_test = kf_test },true,nil,false)\n\
+   \n\
+   terra run_main(A : &float, B : &float)\n\
+     -- I do not understand what this L is doing, but it seems necessary.\n\
+     if L(nil,nil,nil,0) ~= 0 then\n\
+         C.printf(\"WHAT\\n\")\n\
+     end\n\
+     var N = 16\n\
+    	var launch = terralib.CUDAParams { 1,1,1, N,1,1, 0, nil }\n\
+ 	  R.kf_test(&launch, A, B)\n\
+   end\n\
+   \n\
+   local path = \"/lib64\"\n\
+   path = terralib.cudahome..path\n\
+   local args = {\"-L\"..path, \"-Wl,-rpath,\"..path, \"-lcuda\", \"-lcudart\"}\n\
+   terralib.saveobj(\"cudaoldc.so\",{  run_main = run_main },args)";
+
+    const char *st = s.c_str();
+
+    if (terra_dostring(Lu, st)){
+        printf("error\n"); 
+    }
+  
+
+
+  std::cout << "terra called before initCUDA\n";
+
 
   CUresult error_id = initCUDA(argc, argv, &copy_func);
   if (error_id != CUDA_SUCCESS) {
@@ -243,7 +301,6 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
            getCudaDrvErrorString(error_id));
     exit(EXIT_FAILURE);
   }
-  size_t fid_count = field_sizes.size(); 
 
   unsigned int size_A = num_elems * fid_count;
   unsigned int mem_size_A = sizeof(float) * size_A;
@@ -280,7 +337,7 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
     //h_A[i] = *((float*)(src_base[i]));
   }
 
-
+/*
   //DEBUGGING THING
   for (size_t i = 0; i < 12; ++i){
     h_A[i] = i * 2 + 1;
@@ -294,7 +351,7 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   for (size_t i = 0; i < 48; ++i){
     h_A[i] = i * 7 + 1;
   }
-
+*/
   
   // Seems that read_untyped does not work with the cumemhostalloc'd h_A
   // src_insts[0].read_untyped(0, h_A, mem_size_A);
@@ -445,10 +502,10 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
  
  if (method == BP_SOA_TO_AOS || method == BP_SOA_TO_AOS_SINGLE){ 
     for (int i = 0; i < size_A; i++) {
-  //  std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] <<  " h_A : " << h_A[i] << std::endl;
+    std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] <<  " h_A : " << h_A[i] << std::endl;
   
       if (fabs(h_Ccheck[i] - h_A[i/fid_count + (i%fid_count)*num_elems]) > 1e-5) {
-        //std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
+ //       std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
         correct = false;
       }
     }
@@ -456,10 +513,10 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
  else if (method == BP_AOS_TO_SOA || method == BP_AOS_TO_SOA_SINGLE){
   
     for (int i = 0; i < size_A; i++) {
-    // std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << " h_A : " << h_A[i] << std::endl;
+    std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << " h_A : " << h_A[i] << std::endl;
   
       if (fabs(h_Ccheck[i/fid_count + (i%fid_count)*num_elems] - h_A[i]) > 1e-5) {
-        //std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i/fid_count + (i%fid_count)*num_elems] << " h_A : " << h_A[i] << std::endl;
+//        std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i/fid_count + (i%fid_count)*num_elems] << " h_A : " << h_A[i] << std::endl;
         correct = false;
       }
     }
@@ -504,7 +561,8 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
 
 bool inline findModulePath(const char *module_file, std::string &module_path,
                            char **argv, std::string &ptx_source) {
-  char *actual_path = sdkFindFilePath(module_file, argv[0]);
+  char *actual_path = sdkFindFilePath(module_file, "/home/amaleewilson/forked_legion/legion/language/src/test_ptx_output");
+  std::cout << "actual_path" << "\n"; 
 
   if (actual_path) {
     module_path = actual_path;
@@ -577,6 +635,8 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
     //printf("> initCUDA loading module: <%s>\n", module_path.c_str());
   }
 
+  std::cout << "module path " << module_path << "\n";
+
   if (module_path.rfind("ptx") != std::string::npos) {
     // in this branch we use compilation with parameters
     const unsigned int jitNumOptions = 3;
@@ -610,7 +670,11 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
   if (CUDA_SUCCESS != status) {
     goto Error;
   }
-  
+
+
+
+  status = cuModuleGetFunction(&cuFunction, cuModule, "kf_test"); 
+/*  
   switch(method){
     case BP_SOA_TO_AOS :
       status = cuModuleGetFunction(&cuFunction, cuModule, "bp_soa_to_aos");
@@ -635,7 +699,7 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
       break;
       
   }
-
+*/
   if (CUDA_SUCCESS != status) {
     goto Error;
   }
