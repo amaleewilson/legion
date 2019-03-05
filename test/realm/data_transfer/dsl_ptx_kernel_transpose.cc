@@ -249,6 +249,23 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   size_t fid_count = field_sizes.size(); 
 
 
+  std::string src;
+  std::string dst;
+
+  switch(method){
+    case BP_SOA_TO_AOS :
+      src = "soa";
+      dst = "aos"; 
+      break;
+    case BP_AOS_TO_SOA :
+      src = "aos";
+      dst = "soa"; 
+      break;
+    default: 
+      src = "soa";
+      dst = "aos"; 
+      break;
+  }
 
 
 
@@ -266,8 +283,10 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
    ]]\n\
    \n\
    import \"transfer_lang\"\n\
-   local kf_test = layout_transform_copy src aos, dst soa, size 16, copy_size_per_thread 2, fid_count " + std::to_string(fid_count) + " done\n\
-   local R,L = terralib.cudacompile({ kf_test = kf_test },true,nil,false)\n\
+   local kf_test = layout_transform_copy src " + src +", dst " + dst + ", size " + std::to_string(num_elems) +", copy_size_per_thread " + std::to_string(c_sz / fid_count) + ", fid_count " + std::to_string(fid_count) + " done\n\
+   local R,L = terralib.cudacompile({ kf_test = kf_test },true,nil,false)\n";  
+   
+   //\
    \n\
    terra run_main(A : &float, B : &float)\n\
      -- I do not understand what this L is doing, but it seems necessary.\n\
@@ -369,41 +388,6 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   checkCudaErrors(cuCtxSynchronize());    
   
  
-    if (method == CPU_SOA_TO_AOS){
-      // float *h_A, unsigned int mem_size_A, unsigned int size_A, size_t fid_count
-      cpu_tranpose_soa_to_aos(h_A, mem_size_A, size_A, fid_count);
-    }
-    else if (method == MEMCPY_ONLY){
-      std::string trans_method = "memcpy_only";
-      // create and start timer
-      StopWatchInterface *timer = NULL;
-      sdkCreateTimer(&timer);
-      // start the timer
-      sdkStartTimer(&timer);
- 
-      checkCudaErrors(cuMemcpyHtoD(d_B, h_A, mem_size_A));
-      checkCudaErrors(cuCtxSynchronize());    
-      
-      // stop and destroy timer
-      sdkStopTimer(&timer);
-  
-      float kernel_time = sdkGetTimerValue(&timer);
-
-      sdkDeleteTimer(&timer);
-     
-     
-      checkCudaErrors(cuMemFreeHost(h_A));
-      checkCudaErrors(cuMemFree(d_B));
-      checkCudaErrors(cuCtxDestroy(cuContext));
-
-      int mem_ops = 1;
-      int total_bytes = mem_size_A * mem_ops;
-      std::cout << trans_method << "," << kernel_time  << "," << fid_count << "," << num_elems << "," << total_bytes << "," << total_bytes/kernel_time/1000000 << "," << block_count << "," << block_size << "," << c_sz << std::endl;
-    
-    }
-    else{
-
-
     std::string trans_method = "kernel";
     // create and start timer
   StopWatchInterface *timer = NULL;
@@ -413,13 +397,10 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   size_t num_elems2 = (size_t)(size_A / fid_count);
   size_t elem_size = sizeof(float);
  
-  void *args[6] = {&d_A, &d_B, &elem_size, &num_elems2, &fid_count};
+  void *args[6] = {&d_A, &d_B};
   std::vector<void*> vector_args;
   vector_args.push_back(&d_A);
   vector_args.push_back(&d_B);
-  vector_args.push_back(&elem_size);
-  vector_args.push_back(&num_elems2);
-  vector_args.push_back(&fid_count);
  
   size_t grid_size = size_A/block_size;
 
@@ -429,10 +410,6 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
       vector_args = {};
       vector_args.push_back(&d_A);
       vector_args.push_back(&d_B);
-      vector_args.push_back(&elem_size);
-      vector_args.push_back(&num_elems2);
-      vector_args.push_back(&fid_count);
-      vector_args.push_back(&c_sz);
       trans_method += "_bp_soa_to_aos";
       break;
     case BP_AOS_TO_SOA :
@@ -440,30 +417,18 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
       vector_args = {};
       vector_args.push_back(&d_A);
       vector_args.push_back(&d_B);
-      vector_args.push_back(&elem_size);
-      vector_args.push_back(&num_elems2);
-      vector_args.push_back(&fid_count);
-      vector_args.push_back(&c_sz);
       trans_method += "_bp_aos_to_soa";
       break;
     default: 
       vector_args = {};
       vector_args.push_back(&d_A);
       vector_args.push_back(&d_B);
-      vector_args.push_back(&elem_size);
-      vector_args.push_back(&num_elems2);
-      vector_args.push_back(&fid_count);
-      vector_args.push_back(&c_sz);
       trans_method += "_bp_soa_to_aos";
       break;
   }
   
   size_t shared_size = block_size * ne_per_t * sizeof(float); 
-  //grid_size = grid_size/ne_per_t;
   grid_size = block_count;
-
-  //std::cout << "blocks per grid : " <<  grid_size << "\n";//(size_A)/block_size/ne_per_t << "\n";
-  //std::cout << "threads per block : " <<  block_size << "\n";//(size_A)/block_size/ne_per_t << "\n";
  
   dim3 block(block_size, 1, 1);
   dim3 grid(grid_size, 1, 1); 
@@ -502,7 +467,7 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
  
  if (method == BP_SOA_TO_AOS || method == BP_SOA_TO_AOS_SINGLE){ 
     for (int i = 0; i < size_A; i++) {
-    std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] <<  " h_A : " << h_A[i] << std::endl;
+    //std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] <<  " h_A : " << h_A[i] << std::endl;
   
       if (fabs(h_Ccheck[i] - h_A[i/fid_count + (i%fid_count)*num_elems]) > 1e-5) {
  //       std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
@@ -513,7 +478,7 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
  else if (method == BP_AOS_TO_SOA || method == BP_AOS_TO_SOA_SINGLE){
   
     for (int i = 0; i < size_A; i++) {
-    std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << " h_A : " << h_A[i] << std::endl;
+   // std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << " h_A : " << h_A[i] << std::endl;
   
       if (fabs(h_Ccheck[i/fid_count + (i%fid_count)*num_elems] - h_A[i]) > 1e-5) {
 //        std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i/fid_count + (i%fid_count)*num_elems] << " h_A : " << h_A[i] << std::endl;
@@ -554,7 +519,6 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   int mem_ops = 1;
   int total_bytes = mem_size_A * mem_ops;
   std::cout << trans_method << "," << kernel_time  << "," << fid_count << "," << num_elems << "," << total_bytes << "," << total_bytes/kernel_time/1000000 << "," << block_count << "," << block_size << "," << c_sz << std::endl;
-    }
 }
 
 
