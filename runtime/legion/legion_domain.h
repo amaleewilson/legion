@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -218,7 +218,7 @@ namespace Legion {
    */
   class DomainPoint {
   public:
-    enum { MAX_POINT_DIM = ::MAX_POINT_DIM };
+    enum { MAX_POINT_DIM = LEGION_MAX_DIM };
 
     DomainPoint(void);
     DomainPoint(coord_t index);
@@ -285,7 +285,7 @@ namespace Legion {
     typedef ::realm_id_t IDType;
     // Keep this in sync with legion_domain_max_rect_dim_t
     // in legion_config.h
-    enum { MAX_RECT_DIM = ::MAX_RECT_DIM };
+    enum { MAX_RECT_DIM = LEGION_MAX_DIM };
     Domain(void);
     Domain(const Domain& other);
     Domain(const DomainPoint &lo, const DomainPoint &hi);
@@ -358,11 +358,14 @@ namespace Legion {
     class DomainPointIterator {
     public:
       DomainPointIterator(const Domain& d);
+      DomainPointIterator(const DomainPointIterator &rhs);
 
       bool step(void);
 
       operator bool(void) const;
-      DomainPointIterator& operator++(int /*i am postfix*/);
+      DomainPointIterator& operator=(const DomainPointIterator &rhs);
+      DomainPointIterator& operator++(void);
+      DomainPointIterator operator++(int /*i am postfix*/);
     public:
       DomainPoint p;
       // Some buffers that we will do in-place new statements to in
@@ -395,7 +398,7 @@ namespace Legion {
     inline COORD_T operator[](unsigned index) const;
     inline const Point<DIM,COORD_T>* operator->(void) const;
     inline PointInRectIterator<DIM,COORD_T>& operator++(void);
-    inline PointInRectIterator<DIM,COORD_T>& operator++(int/*postfix*/);
+    inline PointInRectIterator<DIM,COORD_T> operator++(int/*postfix*/);
   protected:
     Realm::PointInRectIterator<DIM,COORD_T> itr;
     mutable Point<DIM,COORD_T> current;
@@ -414,7 +417,7 @@ namespace Legion {
     inline const Rect<DIM,COORD_T>& operator*(void) const;
     inline const Rect<DIM,COORD_T>* operator->(void) const;
     inline RectInDomainIterator<DIM,COORD_T>& operator++(void);
-    inline RectInDomainIterator<DIM,COORD_T>& operator++(int/*postfix*/);
+    inline RectInDomainIterator<DIM,COORD_T> operator++(int/*postfix*/);
   protected:
     Realm::IndexSpaceIterator<DIM,COORD_T> itr;
     mutable Rect<DIM,COORD_T> current;
@@ -435,7 +438,7 @@ namespace Legion {
     inline COORD_T operator[](unsigned index) const; 
     inline const Point<DIM,COORD_T>* operator->(void) const;
     inline PointInDomainIterator& operator++(void);
-    inline PointInDomainIterator& operator++(int /*postfix*/);
+    inline PointInDomainIterator operator++(int /*postfix*/);
   protected:
     RectInDomainIterator<DIM,COORD_T> rect_itr;
     PointInRectIterator<DIM,COORD_T> point_itr;

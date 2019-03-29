@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University
+/* Copyright 2019 Stanford University
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,9 +47,10 @@ extern "C" {
   NEW_OPAQUE_TYPE(legion_runtime_t);
   NEW_OPAQUE_TYPE(legion_context_t);
   NEW_OPAQUE_TYPE(legion_domain_point_iterator_t);
-  NEW_OPAQUE_TYPE(legion_rect_in_domain_iterator_1d_t);
-  NEW_OPAQUE_TYPE(legion_rect_in_domain_iterator_2d_t);
-  NEW_OPAQUE_TYPE(legion_rect_in_domain_iterator_3d_t);
+#define NEW_ITERATOR_TYPE(DIM) \
+  NEW_OPAQUE_TYPE(legion_rect_in_domain_iterator_##DIM##d_t);
+  LEGION_FOREACH_N(NEW_ITERATOR_TYPE);
+#undef NEW_ITERATOR_TYPE
   NEW_OPAQUE_TYPE(legion_coloring_t);
   NEW_OPAQUE_TYPE(legion_domain_coloring_t);
   NEW_OPAQUE_TYPE(legion_point_coloring_t);
@@ -61,6 +62,10 @@ extern "C" {
   NEW_OPAQUE_TYPE(legion_predicate_t);
   NEW_OPAQUE_TYPE(legion_future_t);
   NEW_OPAQUE_TYPE(legion_future_map_t);
+#define NEW_DEFERRED_BUFFER_TYPE(DIM) \
+  NEW_OPAQUE_TYPE(legion_deferred_buffer_char_##DIM##d_t);
+  LEGION_FOREACH_N(NEW_DEFERRED_BUFFER_TYPE)
+#undef NEW_DEFERRED_BUFFER_TYPE
   NEW_OPAQUE_TYPE(legion_task_launcher_t);
   NEW_OPAQUE_TYPE(legion_index_launcher_t);
   NEW_OPAQUE_TYPE(legion_inline_launcher_t);
@@ -71,9 +76,10 @@ extern "C" {
   NEW_OPAQUE_TYPE(legion_attach_launcher_t);
   NEW_OPAQUE_TYPE(legion_must_epoch_launcher_t);
   NEW_OPAQUE_TYPE(legion_physical_region_t);
-  NEW_OPAQUE_TYPE(legion_accessor_array_1d_t);
-  NEW_OPAQUE_TYPE(legion_accessor_array_2d_t);
-  NEW_OPAQUE_TYPE(legion_accessor_array_3d_t);
+#define NEW_ACCESSOR_ARRAY_TYPE(DIM) \
+  NEW_OPAQUE_TYPE(legion_accessor_array_##DIM##d_t);
+  LEGION_FOREACH_N(NEW_ACCESSOR_ARRAY_TYPE)
+#undef NEW_ACCESSOR_ARRAY_TYPE
   NEW_OPAQUE_TYPE(legion_index_iterator_t);
   NEW_OPAQUE_TYPE(legion_task_t);
   NEW_OPAQUE_TYPE(legion_inline_t);
@@ -106,58 +112,29 @@ extern "C" {
 
   typedef legion_coord_t coord_t;
 
-#define NEW_POINT_TYPE(T, DIM) typedef struct T { coord_t x[DIM]; } T
-  NEW_POINT_TYPE(legion_point_1d_t, 1);
-  NEW_POINT_TYPE(legion_point_2d_t, 2);
-  NEW_POINT_TYPE(legion_point_3d_t, 3);
+#define NEW_POINT_TYPE(DIM) typedef struct legion_point_##DIM##d_t { coord_t x[DIM]; } legion_point_##DIM##d_t;
+  LEGION_FOREACH_N(NEW_POINT_TYPE)
 #undef NEW_POINT_TYPE
 
-#define NEW_RECT_TYPE(T, PT) typedef struct T { PT lo, hi; } T
-  NEW_RECT_TYPE(legion_rect_1d_t, legion_point_1d_t);
-  NEW_RECT_TYPE(legion_rect_2d_t, legion_point_2d_t);
-  NEW_RECT_TYPE(legion_rect_3d_t, legion_point_3d_t);
+#define NEW_RECT_TYPE(DIM) typedef struct legion_rect_##DIM##d_t { legion_point_##DIM##d_t lo, hi; } legion_rect_##DIM##d_t;
+  LEGION_FOREACH_N(NEW_RECT_TYPE)
 #undef NEW_RECT_TYPE
 
-#define NEW_BLOCKIFY_TYPE(T, PT) \
-  typedef struct T { PT block_size; PT offset; } T
-  NEW_BLOCKIFY_TYPE(legion_blockify_1d_t, legion_point_1d_t);
-  NEW_BLOCKIFY_TYPE(legion_blockify_2d_t, legion_point_2d_t);
-  NEW_BLOCKIFY_TYPE(legion_blockify_3d_t, legion_point_3d_t);
+#define NEW_BLOCKIFY_TYPE(DIM) \
+  typedef struct legion_blockify_##DIM##d_t { legion_point_##DIM##d_t block_size; legion_point_##DIM##d_t offset; } legion_blockify_##DIM##d_t;
+  LEGION_FOREACH_N(NEW_BLOCKIFY_TYPE)
 #undef NEW_BLOCKIFY_TYPE
 
-#define NEW_TRANSFORM_TYPE(T, X, Y) \
-  typedef struct T { coord_t trans[X][Y]; } T
-  NEW_TRANSFORM_TYPE(legion_transform_1x1_t, 1, 1);
-  NEW_TRANSFORM_TYPE(legion_transform_1x2_t, 1, 2);
-  NEW_TRANSFORM_TYPE(legion_transform_1x3_t, 1, 3);
-  NEW_TRANSFORM_TYPE(legion_transform_2x1_t, 2, 1);
-  NEW_TRANSFORM_TYPE(legion_transform_2x2_t, 2, 2);
-  NEW_TRANSFORM_TYPE(legion_transform_2x3_t, 2, 3);
-  NEW_TRANSFORM_TYPE(legion_transform_3x1_t, 3, 1);
-  NEW_TRANSFORM_TYPE(legion_transform_3x2_t, 3, 2);
-  NEW_TRANSFORM_TYPE(legion_transform_3x3_t, 3, 3);
+#define NEW_TRANSFORM_TYPE(D1,D2) \
+  typedef struct legion_transform_##D1##x##D2##_t { coord_t trans[D1][D2]; } legion_transform_##D1##x##D2##_t;
+  LEGION_FOREACH_NN(NEW_TRANSFORM_TYPE)
 #undef NEW_TRANSFORM_TYPE
 
-#define NEW_AFFINE_TRANSFORM_TYPE(T, TT, PT) \
-  typedef struct T { TT transform; PT offset; } T
-  NEW_AFFINE_TRANSFORM_TYPE(legion_affine_transform_1x1_t, 
-                            legion_transform_1x1_t, legion_point_1d_t);
-  NEW_AFFINE_TRANSFORM_TYPE(legion_affine_transform_1x2_t,
-                            legion_transform_1x2_t, legion_point_1d_t);
-  NEW_AFFINE_TRANSFORM_TYPE(legion_affine_transform_1x3_t,
-                            legion_transform_1x3_t, legion_point_1d_t);
-  NEW_AFFINE_TRANSFORM_TYPE(legion_affine_transform_2x1_t, 
-                            legion_transform_2x1_t, legion_point_2d_t);
-  NEW_AFFINE_TRANSFORM_TYPE(legion_affine_transform_2x2_t,
-                            legion_transform_2x2_t, legion_point_2d_t);
-  NEW_AFFINE_TRANSFORM_TYPE(legion_affine_transform_2x3_t,
-                            legion_transform_2x3_t, legion_point_2d_t);
-  NEW_AFFINE_TRANSFORM_TYPE(legion_affine_transform_3x1_t, 
-                            legion_transform_3x1_t, legion_point_3d_t);
-  NEW_AFFINE_TRANSFORM_TYPE(legion_affine_transform_3x2_t,
-                            legion_transform_3x2_t, legion_point_3d_t);
-  NEW_AFFINE_TRANSFORM_TYPE(legion_affine_transform_3x3_t,
-                            legion_transform_3x3_t, legion_point_3d_t);
+#define NEW_AFFINE_TRANSFORM_TYPE(D1,D2) \
+  typedef struct legion_affine_transform_##D1##x##D2##_t { \
+    legion_transform_##D1##x##D2##_t transform; legion_point_##D1##d_t offset; } \
+  legion_affine_transform_##D1##x##D2##_t;
+  LEGION_FOREACH_NN(NEW_AFFINE_TRANSFORM_TYPE)
 #undef NEW_AFFINE_TRANSFORM_TYPE
 
   /**
@@ -170,7 +147,27 @@ extern "C" {
 // have to do this by hand here. To avoid this bitrotting, at least
 // make the preprocessor check that the value is equal to what we
 // expect.
+#if LEGION_MAX_DIM == 1
+#define MAX_DOMAIN_DIM 2 // 2 * LEGION_MAX_RECT_DIM
+#elif LEGION_MAX_DIM == 2
+#define MAX_DOMAIN_DIM 4 // 2 * LEGION_MAX_RECT_DIM
+#elif LEGION_MAX_DIM == 3
 #define MAX_DOMAIN_DIM 6 // 2 * LEGION_MAX_RECT_DIM
+#elif LEGION_MAX_DIM == 4
+#define MAX_DOMAIN_DIM 8 // 2 * LEGION_MAX_RECT_DIM
+#elif LEGION_MAX_DIM == 5
+#define MAX_DOMAIN_DIM 10 // 2 * LEGION_MAX_RECT_DIM
+#elif LEGION_MAX_DIM == 6
+#define MAX_DOMAIN_DIM 12 // 2 * LEGION_MAX_RECT_DIM
+#elif LEGION_MAX_DIM == 7
+#define MAX_DOMAIN_DIM 14 // 2 * LEGION_MAX_RECT_DIM
+#elif LEGION_MAX_DIM == 8
+#define MAX_DOMAIN_DIM 16 // 2 * LEGION_MAX_RECT_DIM
+#elif LEGION_MAX_DIM == 9
+#define MAX_DOMAIN_DIM 18 // 2 * LEGION_MAX_RECT_DIM
+#else
+#error "Illegal value of LEGION_MAX_DIM"
+#endif
 #if MAX_DOMAIN_DIM != 2 * LEGION_MAX_RECT_DIM // sanity check value
 #error Mismatch in MAX_DOMAIN_DIM
 #endif
@@ -195,7 +192,27 @@ extern "C" {
 // have to do this by hand here. To avoid this bitrotting, at least
 // make the preprocessor check that the value is equal to what we
 // expect.
+#if LEGION_MAX_DIM == 1
+#define MAX_MATRIX_DIM 1
+#elif LEGION_MAX_DIM == 2
+#define MAX_MATRIX_DIM 4
+#elif LEGION_MAX_DIM == 3
 #define MAX_MATRIX_DIM 9
+#elif LEGION_MAX_DIM == 4
+#define MAX_MATRIX_DIM 16
+#elif LEGION_MAX_DIM == 5
+#define MAX_MATRIX_DIM 25
+#elif LEGION_MAX_DIM == 6
+#define MAX_MATRIX_DIM 36
+#elif LEGION_MAX_DIM == 7
+#define MAX_MATRIX_DIM 49
+#elif LEGION_MAX_DIM == 8
+#define MAX_MATRIX_DIM 64
+#elif LEGION_MAX_DIM == 9
+#define MAX_MATRIX_DIM 81 
+#else
+#error "Illegal value of LEGION_MAX_DIM"
+#endif
 #if MAX_MATRIX_DIM != LEGION_MAX_POINT_DIM * LEGION_MAX_POINT_DIM // sanity check
 #error Mismatch in MAX_MATRIX_DIM
 #endif
@@ -281,6 +298,7 @@ extern "C" {
     bool leaf /* = false */;
     bool inner /* = false */;
     bool idempotent /* = false */;
+    bool replicable /* = false */;
   }  legion_task_config_options_t;
 
   /**
@@ -338,7 +356,9 @@ extern "C" {
     bool inline_task;
     bool stealable;
     bool map_locally;
+    bool valid_instances;
     bool memoize;
+    bool replicate;
     legion_task_priority_t parent_priority;
   } legion_task_options_t;
 
@@ -369,7 +389,29 @@ extern "C" {
   typedef
     legion_logical_region_t (*legion_projection_functor_logical_region_t)(
       legion_runtime_t /* runtime */,
-      const legion_mappable_t /* mappable */,
+      legion_logical_region_t /* upper_bound */,
+      legion_domain_point_t /* point */,
+      legion_domain_t /* launch domain */);
+
+  /**
+   * Interface for a Legion C projection functor (Logical Partition
+   * upper bound).
+   */
+  typedef
+    legion_logical_region_t (*legion_projection_functor_logical_partition_t)(
+      legion_runtime_t /* runtime */,
+      legion_logical_partition_t /* upper_bound */,
+      legion_domain_point_t /* point */,
+      legion_domain_t /* launch domain */);
+
+  /**
+   * Interface for a Legion C projection functor (Logical Region
+   * upper bound).
+   */
+  typedef
+    legion_logical_region_t (*legion_projection_functor_logical_region_mappable_t)(
+      legion_runtime_t /* runtime */,
+      legion_mappable_t /* mappable */,
       unsigned /* index */,
       legion_logical_region_t /* upper_bound */,
       legion_domain_point_t /* point */);
@@ -379,9 +421,9 @@ extern "C" {
    * upper bound).
    */
   typedef
-    legion_logical_region_t (*legion_projection_functor_logical_partition_t)(
+    legion_logical_region_t (*legion_projection_functor_logical_partition_mappable_t)(
       legion_runtime_t /* runtime */,
-      const legion_mappable_t /* mappable */,
+      legion_mappable_t /* mappable */,
       unsigned /* index */,
       legion_logical_partition_t /* upper_bound */,
       legion_domain_point_t /* point */);
@@ -419,20 +461,11 @@ extern "C" {
   /**
    * @see Legion::Domain::from_rect()
    */
-  legion_domain_t
-  legion_domain_from_rect_1d(legion_rect_1d_t r);
-
-  /**
-   * @see Legion::Domain::from_rect()
-   */
-  legion_domain_t
-  legion_domain_from_rect_2d(legion_rect_2d_t r);
-
-  /**
-   * @see Legion::Domain::from_rect()
-   */
-  legion_domain_t
-  legion_domain_from_rect_3d(legion_rect_3d_t r);
+#define FROM_RECT(DIM) \
+  legion_domain_t \
+  legion_domain_from_rect_##DIM##d(legion_rect_##DIM##d_t r);
+  LEGION_FOREACH_N(FROM_RECT)
+#undef FROM_RECT
 
   /**
    * @see Legion::Domain::Domain(Legion::IndexSpace)
@@ -444,20 +477,11 @@ extern "C" {
   /**
    * @see Legion::Domain::get_rect()
    */
-  legion_rect_1d_t
-  legion_domain_get_rect_1d(legion_domain_t d);
-
-  /**
-   * @see Legion::Domain::get_rect()
-   */
-  legion_rect_2d_t
-  legion_domain_get_rect_2d(legion_domain_t d);
-
-  /**
-   * @see Legion::Domain::get_rect()
-   */
-  legion_rect_3d_t
-  legion_domain_get_rect_3d(legion_domain_t d);
+#define GET_RECT(DIM) \
+  legion_rect_##DIM##d_t \
+  legion_domain_get_rect_##DIM##d(legion_domain_t d);
+  LEGION_FOREACH_N(GET_RECT)
+#undef GET_RECT
 
   bool
   legion_domain_is_dense(legion_domain_t d);
@@ -465,14 +489,17 @@ extern "C" {
   // These are the same as above but will ignore 
   // the existence of any sparsity map, whereas the 
   // ones above will fail if a sparsity map exists
-  legion_rect_1d_t
-  legion_domain_get_bounds_1d(legion_domain_t d);
+#define GET_BOUNDS(DIM) \
+  legion_rect_##DIM##d_t \
+  legion_domain_get_bounds_##DIM##d(legion_domain_t d);
+  LEGION_FOREACH_N(GET_BOUNDS)
+#undef GET_BOUNDS
 
-  legion_rect_2d_t
-  legion_domain_get_bounds_2d(legion_domain_t d);
-
-  legion_rect_3d_t
-  legion_domain_get_bounds_3d(legion_domain_t d);
+  /**
+   * @see Legion::Domain::contains()
+   */
+  bool
+  legion_domain_contains(legion_domain_t d, legion_domain_point_t p);
 
   /**
    * @see Legion::Domain::get_volume()
@@ -484,59 +511,17 @@ extern "C" {
   // Domain Transform Operations
   // -----------------------------------------------------------------------
 
-  legion_domain_transform_t
-  legion_domain_transform_from_1x1(legion_transform_1x1_t t);
+#define FROM_TRANSFORM(D1,D2) \
+  legion_domain_transform_t \
+  legion_domain_transform_from_##D1##x##D2(legion_transform_##D1##x##D2##_t t);
+  LEGION_FOREACH_NN(FROM_TRANSFORM)
+#undef FROM_TRANSFORM
 
-  legion_domain_transform_t
-  legion_domain_transform_from_1x2(legion_transform_1x2_t t);
-
-  legion_domain_transform_t
-  legion_domain_transform_from_1x3(legion_transform_1x3_t t);
-
-  legion_domain_transform_t
-  legion_domain_transform_from_2x1(legion_transform_2x1_t t);
-
-  legion_domain_transform_t
-  legion_domain_transform_from_2x2(legion_transform_2x2_t t);
-
-  legion_domain_transform_t
-  legion_domain_transform_from_2x3(legion_transform_2x3_t t);
-
-  legion_domain_transform_t
-  legion_domain_transform_from_3x1(legion_transform_3x1_t t);
-
-  legion_domain_transform_t
-  legion_domain_transform_from_3x2(legion_transform_3x2_t t);
-
-  legion_domain_transform_t
-  legion_domain_transform_from_3x3(legion_transform_3x3_t t);
-
-  legion_domain_affine_transform_t
-  legion_domain_affine_transform_from_1x1(legion_affine_transform_1x1_t t);
-
-  legion_domain_affine_transform_t
-  legion_domain_affine_transform_from_1x2(legion_affine_transform_1x2_t t);
-
-  legion_domain_affine_transform_t
-  legion_domain_affine_transform_from_1x3(legion_affine_transform_1x3_t t);
-
-  legion_domain_affine_transform_t
-  legion_domain_affine_transform_from_2x1(legion_affine_transform_2x1_t t);
-
-  legion_domain_affine_transform_t
-  legion_domain_affine_transform_from_2x2(legion_affine_transform_2x2_t t);
-
-  legion_domain_affine_transform_t
-  legion_domain_affine_transform_from_2x3(legion_affine_transform_2x3_t t);
-
-  legion_domain_affine_transform_t
-  legion_domain_affine_transform_from_3x1(legion_affine_transform_3x1_t t);
-
-  legion_domain_affine_transform_t
-  legion_domain_affine_transform_from_3x2(legion_affine_transform_3x2_t t);
-
-  legion_domain_affine_transform_t
-  legion_domain_affine_transform_from_3x3(legion_affine_transform_3x3_t t);
+#define FROM_AFFINE(D1,D2) \
+  legion_domain_affine_transform_t \
+  legion_domain_affine_transform_from_##D1##x##D2(legion_affine_transform_##D1##x##D2##_t t);
+  LEGION_FOREACH_NN(FROM_AFFINE)
+#undef FROM_AFFINE
 
   // -----------------------------------------------------------------------
   // Domain Point Operations
@@ -545,38 +530,20 @@ extern "C" {
   /**
    * @see Legion::DomainPoint::from_point()
    */
-  legion_domain_point_t
-  legion_domain_point_from_point_1d(legion_point_1d_t p);
-
-  /**
-   * @see Legion::DomainPoint::from_point()
-   */
-  legion_domain_point_t
-  legion_domain_point_from_point_2d(legion_point_2d_t p);
-
-  /**
-   * @see Legion::DomainPoint::from_point()
-   */
-  legion_domain_point_t
-  legion_domain_point_from_point_3d(legion_point_3d_t p);
+#define FROM_POINT(DIM) \
+  legion_domain_point_t \
+  legion_domain_point_from_point_##DIM##d(legion_point_##DIM##d_t p);
+  LEGION_FOREACH_N(FROM_POINT)
+#undef FROM_POINT
 
   /**
    * @see Legion::DomainPoint::get_point()
    */
-  legion_point_1d_t
-  legion_domain_point_get_point_1d(legion_domain_point_t p);
-
-  /**
-   * @see Legion::DomainPoint::get_point()
-   */
-  legion_point_2d_t
-  legion_domain_point_get_point_2d(legion_domain_point_t p);
-
-  /**
-   * @see Legion::DomainPoint::get_point()
-   */
-  legion_point_3d_t
-  legion_domain_point_get_point_3d(legion_domain_point_t p);
+#define GET_POINT(DIM) \
+  legion_point_##DIM##d_t \
+  legion_domain_point_get_point_##DIM##d(legion_domain_point_t p);
+  LEGION_FOREACH_N(GET_POINT)
+#undef GET_POINT
 
   /**
    * @see Legion::DomainPoint::nil()
@@ -641,69 +608,50 @@ extern "C" {
    *
    * @see Legion::Domain::RectInDomainIterator::RectInDomainIterator()
    */
-  legion_rect_in_domain_iterator_1d_t
-  legion_rect_in_domain_iterator_create_1d(legion_domain_t handle);
-
-  legion_rect_in_domain_iterator_2d_t
-  legion_rect_in_domain_iterator_create_2d(legion_domain_t handle);
-
-  legion_rect_in_domain_iterator_3d_t
-  legion_rect_in_domain_iterator_create_3d(legion_domain_t handle);
+#define ITERATOR_CREATE(DIM) \
+  legion_rect_in_domain_iterator_##DIM##d_t \
+  legion_rect_in_domain_iterator_create_##DIM##d(legion_domain_t handle);
+  LEGION_FOREACH_N(ITERATOR_CREATE)
+#undef ITERATOR_CREATE
 
   /**
    * @param handle Caller must have ownership of parameter `handle`.
    *
    * @see Legion::Domain::RectInDomainIterator::~RectInDomainIterator()
    */
-  void
-  legion_rect_in_domain_iterator_destroy_1d(
-                                    legion_rect_in_domain_iterator_1d_t handle);
-  void
-  legion_rect_in_domain_iterator_destroy_2d(
-                                    legion_rect_in_domain_iterator_2d_t handle);
-  void
-  legion_rect_in_domain_iterator_destroy_3d(
-                                    legion_rect_in_domain_iterator_3d_t handle);
+#define ITERATOR_DESTROY(DIM) \
+  void legion_rect_in_domain_iterator_destroy_##DIM##d( \
+        legion_rect_in_domain_iterator_##DIM##d_t handle);
+  LEGION_FOREACH_N(ITERATOR_DESTROY)
+#undef ITERATOR_DESTROY
 
   /**
    * @see Legion::Domain::RectInDomainIterator::valid()
    */
-  bool
-  legion_rect_in_domain_iterator_valid_1d(
-                                    legion_rect_in_domain_iterator_1d_t handle);
-  bool
-  legion_rect_in_domain_iterator_valid_2d(
-                                    legion_rect_in_domain_iterator_2d_t handle);
-  bool
-  legion_rect_in_domain_iterator_valid_3d(
-                                    legion_rect_in_domain_iterator_3d_t handle);
+#define ITERATOR_VALID(DIM) \
+  bool legion_rect_in_domain_iterator_valid_##DIM##d( \
+        legion_rect_in_domain_iterator_##DIM##d_t handle);
+  LEGION_FOREACH_N(ITERATOR_VALID)
+#undef ITERATOR_VALID
 
   /**
    * @see Legion::Domain::RectInDomainIterator::step()
    */
-  bool
-  legion_rect_in_domain_iterator_step_1d(
-                                    legion_rect_in_domain_iterator_1d_t handle);
-  bool
-  legion_rect_in_domain_iterator_step_2d(
-                                    legion_rect_in_domain_iterator_2d_t handle);
-  bool
-  legion_rect_in_domain_iterator_step_3d(
-                                    legion_rect_in_domain_iterator_3d_t handle);
+#define ITERATOR_STEP(DIM) \
+  bool legion_rect_in_domain_iterator_step_##DIM##d( \
+        legion_rect_in_domain_iterator_##DIM##d_t handle);
+  LEGION_FOREACH_N(ITERATOR_STEP)
+#undef ITERATOR_STEP
 
   /**
    * @see Legion::Domain::RectInDomainIterator::operator*()
    */
-  legion_rect_1d_t
-  legion_rect_in_domain_iterator_get_rect_1d(
-                                    legion_rect_in_domain_iterator_1d_t handle);
-  legion_rect_2d_t
-  legion_rect_in_domain_iterator_get_rect_2d(
-                                    legion_rect_in_domain_iterator_2d_t handle);
-  legion_rect_3d_t
-  legion_rect_in_domain_iterator_get_rect_3d(
-                                    legion_rect_in_domain_iterator_3d_t handle);
-
+#define ITERATOR_OP(DIM) \
+  legion_rect_##DIM##d_t \
+  legion_rect_in_domain_iterator_get_rect_##DIM##d( \
+      legion_rect_in_domain_iterator_##DIM##d_t handle);
+  LEGION_FOREACH_N(ITERATOR_OP)
+#undef ITERATOR_OP
 
   // -----------------------------------------------------------------------
   // Coloring Operations
@@ -944,6 +892,17 @@ extern "C" {
                                   size_t num_spaces);
 
   /**
+   * @return Caller takes ownership of return value.
+   *
+   * @see Legion::Runtime::subtract_index_spaces
+   */
+  legion_index_space_t
+  legion_index_space_subtraction(legion_runtime_t runtime,
+                                 legion_context_t ctx,
+                                 legion_index_space_t left,
+                                 legion_index_space_t right);
+
+  /**
    * @see Legion::Runtime::has_multiple_domains().
    */
   bool
@@ -959,6 +918,14 @@ extern "C" {
   legion_index_space_get_domain(legion_runtime_t runtime,
                                 legion_index_space_t handle);
 
+  /**
+   * @param handle Caller must have ownership of parameter `handle`.
+   *
+   * @see Legion::Runtime::has_parent_index_partition()
+   */
+  bool
+  legion_index_space_has_parent_index_partition(legion_runtime_t runtime,
+                                                legion_index_space_t handle);
   /**
    * @param handle Caller must have ownership of parameter `handle`.
    *
@@ -1108,41 +1075,16 @@ extern "C" {
    * @see Legion::Runtime::create_index_partition<T>(
    *        Context, IndexSpace, const T&, int)
    */
-  legion_index_partition_t
-  legion_index_partition_create_blockify_1d(
-    legion_runtime_t runtime,
-    legion_context_t ctx,
-    legion_index_space_t parent,
-    legion_blockify_1d_t blockify,
+#define CREATE_BLOCKIFY(DIM) \
+  legion_index_partition_t \
+  legion_index_partition_create_blockify_##DIM##d( \
+    legion_runtime_t runtime, \
+    legion_context_t ctx, \
+    legion_index_space_t parent, \
+    legion_blockify_##DIM##d_t blockify, \
     int part_color /* = AUTO_GENERATE_ID */);
-
-  /**
-   * @return Caller takes ownership of return value.
-   *
-   * @see Legion::Runtime::create_index_partition<T>(
-   *        Context, IndexSpace, const T&, int)
-   */
-  legion_index_partition_t
-  legion_index_partition_create_blockify_2d(
-    legion_runtime_t runtime,
-    legion_context_t ctx,
-    legion_index_space_t parent,
-    legion_blockify_2d_t blockify,
-    int part_color /* = AUTO_GENERATE_ID */);
-
-  /**
-   * @return Caller takes ownership of return value.
-   *
-   * @see Legion::Runtime::create_index_partition<T>(
-   *        Context, IndexSpace, const T&, int)
-   */
-  legion_index_partition_t
-  legion_index_partition_create_blockify_3d(
-    legion_runtime_t runtime,
-    legion_context_t ctx,
-    legion_index_space_t parent,
-    legion_blockify_3d_t blockify,
-    int part_color /* = AUTO_GENERATE_ID */);
+  LEGION_FOREACH_N(CREATE_BLOCKIFY)
+#undef CREATE_BLOCKIFY
 
   /**
    * @return Caller takes ownership of return value.
@@ -1188,6 +1130,21 @@ extern "C" {
     legion_index_space_t color_space,
     legion_partition_kind_t part_kind /* = COMPUTE_KIND */,
     int color /* = AUTO_GENERATE_ID */);
+
+  /**
+   * @return Caller takes ownership of return value.
+   *
+   * @see Legion::Runtime::create_partition_by_intersection()
+   */
+  legion_index_partition_t
+  legion_index_partition_create_by_intersection_mirror(
+    legion_runtime_t runtime,
+    legion_context_t ctx,
+    legion_index_space_t parent,
+    legion_index_partition_t handle,
+    legion_partition_kind_t part_kind /* = COMPUTE_KIND */,
+    int color /* = AUTO_GENERATE_ID */,
+    bool dominates /* = false */);
 
   /**
    * @return Caller takes ownership of return value.
@@ -1302,6 +1259,79 @@ extern "C" {
     legion_domain_t extent,
     legion_partition_kind_t part_kind /* = COMPUTE_KIND */,
     int color /* = AUTO_GENERATE_ID */);
+
+  /**
+   * @return Caller takes ownership of return value.
+   *
+   * @see Legion::Runtime::create_pending_partition()
+   */
+  legion_index_partition_t
+  legion_index_partition_create_pending_partition(
+    legion_runtime_t runtime,
+    legion_context_t ctx,
+    legion_index_space_t parent,
+    legion_index_space_t color_space,
+    legion_partition_kind_t part_kind /* = COMPUTE_KIND */,
+    int color /* = AUTO_GENERATE_ID */);
+
+  /**
+   * @see Legion::Runtime::create_index_space_union()
+   */
+  legion_index_space_t
+  legion_index_partition_create_index_space_union_spaces(
+    legion_runtime_t runtime,
+    legion_context_t ctx,
+    legion_index_partition_t parent,
+    legion_domain_point_t color,
+    const legion_index_space_t *spaces,
+    size_t num_spaces);
+
+  /**
+   * @see Legion::Runtime::create_index_space_union()
+   */
+  legion_index_space_t
+  legion_index_partition_create_index_space_union_partition(
+    legion_runtime_t runtime,
+    legion_context_t ctx,
+    legion_index_partition_t parent,
+    legion_domain_point_t color,
+    legion_index_partition_t handle);
+
+  /**
+   * @see Legion::Runtime::create_index_space_intersection()
+   */
+  legion_index_space_t
+  legion_index_partition_create_index_space_intersection_spaces(
+    legion_runtime_t runtime,
+    legion_context_t ctx,
+    legion_index_partition_t parent,
+    legion_domain_point_t color,
+    const legion_index_space_t *spaces,
+    size_t num_spaces);
+
+  /**
+   * @see Legion::Runtime::create_index_space_intersection()
+   */
+  legion_index_space_t
+  legion_index_partition_create_index_space_intersection_partition(
+    legion_runtime_t runtime,
+    legion_context_t ctx,
+    legion_index_partition_t parent,
+    legion_domain_point_t color,
+    legion_index_partition_t handle);
+
+  /**
+   * @see Legion::Runtime::create_index_space_difference()
+   */
+  legion_index_space_t
+  legion_index_partition_create_index_space_difference(
+    legion_runtime_t runtime,
+    legion_context_t ctx,
+    legion_index_partition_t parent,
+    legion_domain_point_t color,
+    legion_index_space_t initial,
+    const legion_index_space_t *spaces,
+    size_t num_spaces);
 
   /**
    * @see Legion::Runtime::is_index_partition_disjoint()
@@ -1471,6 +1501,18 @@ extern "C" {
                                            bool wait_until_ready /* = false */);
 
   /**
+   * @param handle Caller must have ownership of parameter `fields`.
+   *
+   * @see Legion::Runtime::get_field_space_fields()
+   */
+  bool
+  legion_field_space_has_fields(legion_runtime_t runtime,
+                                legion_context_t ctx,
+                                legion_field_space_t handle,
+                                const legion_field_id_t *fields,
+                                size_t fields_size);
+
+  /**
    * @see Legion::Runtime::attach_semantic_information()
    */
   void
@@ -1531,6 +1573,15 @@ extern "C" {
                                 legion_field_space_t handle,
                                 legion_field_id_t id,
                                 const char **result);
+
+  /**
+   * @see Legion::Runtime::get_field_size()
+   */
+  size_t
+  legion_field_id_get_size(legion_runtime_t runtime,
+                           legion_context_t ctx,
+                           legion_field_space_t handle,
+                           legion_field_id_t id);
 
   // -----------------------------------------------------------------------
   // Logical Region Operations
@@ -2234,6 +2285,45 @@ extern "C" {
                                legion_domain_point_t point);
 
   // -----------------------------------------------------------------------
+  // Deferred Buffer Operations
+  // -----------------------------------------------------------------------
+
+  /**
+   * @return Caller takes ownership of return value.
+   *
+   * @see Legion::DeferredBuffer::DeferredBuffer()
+   */
+#define BUFFER_CREATE(DIM) \
+  legion_deferred_buffer_char_##DIM##d_t \
+  legion_deferred_buffer_char_##DIM##d_create( \
+      legion_rect_##DIM##d_t bounds, \
+      legion_memory_kind_t kind, \
+      char *initial_value);
+  LEGION_FOREACH_N(BUFFER_CREATE)
+#undef BUFFER_CREATE
+
+  /*
+   * @see Legion::DeferredBuffer::ptr()
+   */
+#define BUFFER_PTR(DIM) \
+  char* \
+  legion_deferred_buffer_char_##DIM##d_ptr( \
+      legion_deferred_buffer_char_##DIM##d_t buffer, \
+      legion_point_##DIM##d_t p);
+  LEGION_FOREACH_N(BUFFER_PTR)
+#undef BUFFER_PTR
+
+  /*
+   * @see Legion::DeferredBuffer::~DeferredBuffer()
+   */
+#define BUFFER_DESTROY(DIM) \
+  void \
+  legion_deferred_buffer_char_##DIM##d_destroy( \
+      legion_deferred_buffer_char_##DIM##d_t buffer);
+  LEGION_FOREACH_N(BUFFER_DESTROY)
+#undef BUFFER_DESTROY
+
+  // -----------------------------------------------------------------------
   // Task Launch Operations
   // -----------------------------------------------------------------------
 
@@ -2359,6 +2449,13 @@ extern "C" {
                                  legion_domain_point_t point);
 
   /**
+   * @see Legion::TaskLauncher::sharding_space
+   */
+  void
+  legion_task_launcher_set_sharding_space(legion_task_launcher_t launcher,
+                                          legion_index_space_t is);
+
+  /**
    * @return Caller takes ownership of return value.
    *
    * @see Legion::IndexTaskLauncher::IndexTaskLauncher()
@@ -2402,6 +2499,18 @@ extern "C" {
                                           legion_context_t ctx,
                                           legion_index_launcher_t launcher,
                                           legion_reduction_op_id_t redop);
+
+  /**
+   * @return Caller takes ownership of return value.
+   *
+   * @see Legion::Runtime::execute_index_space(Context, const IndexTaskLauncher &, ReductionOpID)
+   */
+  legion_future_t
+  legion_index_launcher_execute_deterministic_reduction(legion_runtime_t runtime,
+                                                        legion_context_t ctx,
+                                                        legion_index_launcher_t launcher,
+                                                        legion_reduction_op_id_t redop,
+                                                        bool deterministic);
 
   /**
    * @see Legion::IndexTaskLauncher::add_region_requirement()
@@ -2516,6 +2625,13 @@ extern "C" {
   legion_index_launcher_add_arrival_barrier(legion_index_launcher_t launcher,
                                             legion_phase_barrier_t bar);
 
+  /**
+   * @see Legion::IndexTaskLauncher::sharding_space
+   */
+  void
+  legion_index_launcher_set_sharding_space(legion_index_launcher_t launcher,
+                                           legion_index_space_t is);
+
   // -----------------------------------------------------------------------
   // Inline Mapping Operations
   // -----------------------------------------------------------------------
@@ -2615,6 +2731,115 @@ extern "C" {
     legion_field_id_t fid,
     legion_future_t f,
     legion_predicate_t pred /* = legion_predicate_true() */);
+
+  /**
+   * @see Legion::Runtime::fill_field()
+   * Same as above except using index fills
+   */
+  void
+  legion_runtime_index_fill_field(
+    legion_runtime_t runtime,
+    legion_context_t ctx,
+    legion_logical_partition_t handle,
+    legion_logical_region_t parent,
+    legion_field_id_t fid,
+    const void *value,
+    size_t value_size,
+    legion_projection_id_t proj /* = 0 */,
+    legion_predicate_t pred /* = legion_predicate_true() */,
+    legion_mapper_id_t id /* = 0 */,
+    legion_mapping_tag_id_t launcher_tag /* = 0 */);
+
+  /**
+   * @see Legion::Runtime::fill_field()
+   * Same as above except using index fills
+   */
+  void
+  legion_runtime_index_fill_field_with_space(
+    legion_runtime_t runtime,
+    legion_context_t ctx,
+    legion_index_space_t space,
+    legion_logical_partition_t handle,
+    legion_logical_region_t parent,
+    legion_field_id_t fid,
+    const void *value,
+    size_t value_size,
+    legion_projection_id_t proj /* = 0 */,
+    legion_predicate_t pred /* = legion_predicate_true() */,
+    legion_mapper_id_t id /* = 0 */,
+    legion_mapping_tag_id_t launcher_tag /* = 0 */);
+
+  /**
+   * @see Legion::Runtime::fill_field()
+   * Same as above except using index fills
+   */
+  void
+  legion_runtime_index_fill_field_with_domain(
+    legion_runtime_t runtime,
+    legion_context_t ctx,
+    legion_domain_t domain,
+    legion_logical_partition_t handle,
+    legion_logical_region_t parent,
+    legion_field_id_t fid,
+    const void *value,
+    size_t value_size,
+    legion_projection_id_t proj /* = 0 */,
+    legion_predicate_t pred /* = legion_predicate_true() */,
+    legion_mapper_id_t id /* = 0 */,
+    legion_mapping_tag_id_t launcher_tag /* = 0 */);
+
+  /**
+   * @see Legion::Runtime::fill_field()
+   * Same as above except using index fills
+   */
+  void
+  legion_runtime_index_fill_field_future(
+    legion_runtime_t runtime,
+    legion_context_t ctx,
+    legion_logical_partition_t handle,
+    legion_logical_region_t parent,
+    legion_field_id_t fid,
+    legion_future_t f,
+    legion_projection_id_t proj /* = 0 */,
+    legion_predicate_t pred /* = legion_predicate_true() */,
+    legion_mapper_id_t id /* = 0 */,
+    legion_mapping_tag_id_t launcher_tag /* = 0 */);
+
+  /**
+   * @see Legion::Runtime::fill_field()
+   * Same as above except using index fills
+   */
+  void
+  legion_runtime_index_fill_field_future_with_space(
+    legion_runtime_t runtime,
+    legion_context_t ctx,
+    legion_index_space_t space,
+    legion_logical_partition_t handle,
+    legion_logical_region_t parent,
+    legion_field_id_t fid,
+    legion_future_t f,
+    legion_projection_id_t proj /* = 0 */,
+    legion_predicate_t pred /* = legion_predicate_true() */,
+    legion_mapper_id_t id /* = 0 */,
+    legion_mapping_tag_id_t launcher_tag /* = 0 */);
+
+  /**
+   * @see Legion::Runtime::fill_field()
+   * Same as above except using index fills
+   */
+  void
+  legion_runtime_index_fill_field_future_with_domain(
+    legion_runtime_t runtime,
+    legion_context_t ctx,
+    legion_index_space_t domain,
+    legion_logical_partition_t handle,
+    legion_logical_region_t parent,
+    legion_field_id_t fid,
+    legion_future_t f,
+    legion_projection_id_t proj /* = 0 */,
+    legion_predicate_t pred /* = legion_predicate_true() */,
+    legion_mapper_id_t id /* = 0 */,
+    legion_mapping_tag_id_t launcher_tag /* = 0 */);
 
   // -----------------------------------------------------------------------
   // File Operations
@@ -3263,66 +3488,31 @@ extern "C" {
    *
    * @see Legion::PhysicalRegion::get_field_accessor()
    */
-  legion_accessor_array_1d_t
-  legion_physical_region_get_field_accessor_array_1d(
-    legion_physical_region_t handle,
+#define ACCESSOR_ARRAY(DIM) \
+  legion_accessor_array_##DIM##d_t \
+  legion_physical_region_get_field_accessor_array_##DIM##d( \
+    legion_physical_region_t handle, \
     legion_field_id_t fid);
+  LEGION_FOREACH_N(ACCESSOR_ARRAY)
+#undef ACCESSOR_ARRAY
 
-  legion_accessor_array_1d_t
-  legion_physical_region_get_field_accessor_array_1d_with_transform(
-      legion_physical_region_t handle,
-      legion_field_id_t fid,
+#define ACCESSOR_ARRAY(DIM) \
+  legion_accessor_array_##DIM##d_t \
+  legion_physical_region_get_field_accessor_array_##DIM##d_with_transform( \
+      legion_physical_region_t handle, \
+      legion_field_id_t fid, \
       legion_domain_affine_transform_t transform);
+  LEGION_FOREACH_N(ACCESSOR_ARRAY)
+#undef ACCESSOR_ARRAY
   
-  /**
-   * @return Caller takes ownership of return value.
-   *
-   * @see Legion::PhysicalRegion::get_field_accessor()
-   */
-  legion_accessor_array_2d_t
-  legion_physical_region_get_field_accessor_array_2d(
-    legion_physical_region_t handle,
-    legion_field_id_t fid);
-
-  legion_accessor_array_2d_t
-  legion_physical_region_get_field_accessor_array_2d_with_transform(
-    legion_physical_region_t handle,
-    legion_field_id_t fid,
-    legion_domain_affine_transform_t transform);
-
-  /**
-   * @return Caller takes ownership of return value.
-   *
-   * @see Legion::PhysicalRegion::get_field_accessor()
-   */
-  legion_accessor_array_3d_t
-  legion_physical_region_get_field_accessor_array_3d(
-    legion_physical_region_t handle,
-    legion_field_id_t fid);
-
-  legion_accessor_array_3d_t
-  legion_physical_region_get_field_accessor_array_3d_with_transform(
-    legion_physical_region_t handle,
-    legion_field_id_t fid,
-    legion_domain_affine_transform_t transform);
-
-  void *
-  legion_accessor_array_1d_raw_rect_ptr(legion_accessor_array_1d_t handle,
-                                        legion_rect_1d_t rect,
-                                        legion_rect_1d_t *subrect,
+#define RAW_PTR(DIM) \
+  void * \
+  legion_accessor_array_##DIM##d_raw_rect_ptr(legion_accessor_array_##DIM##d_t handle, \
+                                        legion_rect_##DIM##d_t rect, \
+                                        legion_rect_##DIM##d_t *subrect, \
                                         legion_byte_offset_t *offsets);
-
-  void *
-  legion_accessor_array_2d_raw_rect_ptr(legion_accessor_array_2d_t handle,
-                                        legion_rect_2d_t rect,
-                                        legion_rect_2d_t *subrect,
-                                        legion_byte_offset_t *offsets);
-
-  void *
-  legion_accessor_array_3d_raw_rect_ptr(legion_accessor_array_3d_t handle,
-                                        legion_rect_3d_t rect,
-                                        legion_rect_3d_t *subrect,
-                                        legion_byte_offset_t *offsets);
+  LEGION_FOREACH_N(RAW_PTR)
+#undef RAW_PTR
 
   // Read
   void
@@ -3330,20 +3520,13 @@ extern "C" {
                                 legion_ptr_t ptr,
                                 void *dst, size_t bytes);
 
-  void
-  legion_accessor_array_1d_read_point(legion_accessor_array_1d_t handle,
-                                      legion_point_1d_t point,
+#define READ_ARRAY(DIM) \
+  void \
+  legion_accessor_array_##DIM##d_read_point(legion_accessor_array_##DIM##d_t handle, \
+                                      legion_point_##DIM##d_t point, \
                                       void *dst, size_t bytes);
-
-  void
-  legion_accessor_array_2d_read_point(legion_accessor_array_2d_t handle,
-                                      legion_point_2d_t point,
-                                      void *dst, size_t bytes);
-  
-  void
-  legion_accessor_array_3d_read_point(legion_accessor_array_3d_t handle,
-                                      legion_point_3d_t point,
-                                      void *dst, size_t bytes);
+  LEGION_FOREACH_N(READ_ARRAY)
+#undef READ_ARRAY
 
   // Write
   void
@@ -3351,55 +3534,34 @@ extern "C" {
                                  legion_ptr_t ptr,
                                  const void *src, size_t bytes);
 
-  void
-  legion_accessor_array_1d_write_point(legion_accessor_array_1d_t handle,
-                                       legion_point_1d_t point,
+#define WRITE_ARRAY(DIM) \
+  void \
+  legion_accessor_array_##DIM##d_write_point(legion_accessor_array_##DIM##d_t handle, \
+                                       legion_point_##DIM##d_t point, \
                                        const void *src, size_t bytes);
-
-  void
-  legion_accessor_array_2d_write_point(legion_accessor_array_2d_t handle,
-                                       legion_point_2d_t point,
-                                       const void *src, size_t bytes);
-
-  void
-  legion_accessor_array_3d_write_point(legion_accessor_array_3d_t handle,
-                                       legion_point_3d_t point,
-                                       const void *src, size_t bytes);
+  LEGION_FOREACH_N(WRITE_ARRAY)
+#undef WRITE_ARRAY
 
   // Ref
   void *
   legion_accessor_array_1d_ref(legion_accessor_array_1d_t handle,
                                legion_ptr_t ptr);
 
-  void *
-  legion_accessor_array_1d_ref_point(legion_accessor_array_1d_t handle,
-                                     legion_point_1d_t point);
-
-  void *
-  legion_accessor_array_2d_ref_point(legion_accessor_array_2d_t handle,
-                                     legion_point_2d_t point);
-
-  void *
-  legion_accessor_array_3d_ref_point(legion_accessor_array_3d_t handle,
-                                     legion_point_3d_t point);
+#define REF_ARRAY(DIM) \
+  void * \
+  legion_accessor_array_##DIM##d_ref_point(legion_accessor_array_##DIM##d_t handle, \
+                                     legion_point_##DIM##d_t point);
+  LEGION_FOREACH_N(REF_ARRAY)
+#undef REF_ARRAY
 
   /**
    * @param handle Caller must have ownership of parameter `handle`.
    */
-  void
-  legion_accessor_array_1d_destroy(legion_accessor_array_1d_t handle);
-
-  /**
-   * @param handle Caller must have ownership of parameter `handle`.
-   */
-  void
-  legion_accessor_array_2d_destroy(legion_accessor_array_2d_t handle);
-
-  /**
-   * @param handle Caller must have ownership of parameter `handle`.
-   */
-  void
-  legion_accessor_array_3d_destroy(legion_accessor_array_3d_t handle);
+#define DESTROY_ARRAY(DIM) \
+  void \
+  legion_accessor_array_##DIM##d_destroy(legion_accessor_array_##DIM##d_t handle);
+  LEGION_FOREACH_N(DESTROY_ARRAY)
+#undef DESTROY_ARRAY
 
   /**
    * @return Caller takes ownership of return value.
@@ -3897,6 +4059,12 @@ extern "C" {
   legion_runtime_set_top_level_task_id(legion_task_id_t top_id);
 
   /**
+   * @see Legion::Runtime::get_maximum_dimension()
+   */
+  size_t
+  legion_runtime_get_maximum_dimension(void);
+
+  /**
    * @see Legion::Runtime::get_input_args()
    */
   const legion_input_args_t
@@ -3942,9 +4110,21 @@ extern "C" {
   void
   legion_runtime_preregister_projection_functor(
     legion_projection_id_t id,
+    bool exclusive,
     unsigned depth,
     legion_projection_functor_logical_region_t region_functor,
     legion_projection_functor_logical_partition_t partition_functor);
+
+  /**
+   * @see Legion::Runtime::preregister_projection_functor()
+   */
+  void
+  legion_runtime_preregister_projection_functor_mappable(
+    legion_projection_id_t id,
+    bool exclusive,
+    unsigned depth,
+    legion_projection_functor_logical_region_mappable_t region_functor,
+    legion_projection_functor_logical_partition_mappable_t partition_functor);
 
   /**
    * @see Legion::Runtime::register_projection_functor()
@@ -3953,9 +4133,22 @@ extern "C" {
   legion_runtime_register_projection_functor(
     legion_runtime_t runtime,
     legion_projection_id_t id,
+    bool exclusive,
     unsigned depth,
     legion_projection_functor_logical_region_t region_functor,
     legion_projection_functor_logical_partition_t partition_functor);
+
+  /**
+   * @see Legion::Runtime::register_projection_functor()
+   */
+  void
+  legion_runtime_register_projection_functor_mappable(
+    legion_runtime_t runtime,
+    legion_projection_id_t id,
+    bool exclusive,
+    unsigned depth,
+    legion_projection_functor_logical_region_mappable_t region_functor,
+    legion_projection_functor_logical_partition_mappable_t partition_functor);
 
   /**
    * @see Legion::Runtime::generate_library_task_ids()

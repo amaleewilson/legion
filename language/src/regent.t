@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University, NVIDIA Corporation
+-- Copyright 2019 Stanford University, NVIDIA Corporation
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -63,6 +63,10 @@ local language = {
     "__fence",
     "__fields",
     "__forbid",
+    "__idempotent",
+    "__import_ispace",
+    "__import_region",
+    "__import_partition",
     "__inline",
     "__inner",
     "__leaf",
@@ -74,6 +78,7 @@ local language = {
     "__parallel_prefix",
     "__physical",
     "__raw",
+    "__replicable",
     "__runtime",
     "__spmd",
     "__trace",
@@ -104,7 +109,6 @@ local language = {
     "fill",
     "hdf5",
     "image",
-    "index_type", -- reserved for future use
     "isnull",
     "ispace",
     "list_cross_product",
@@ -126,12 +130,12 @@ local language = {
     "phase_barrier",
     "preimage",
     "product",
-    "ptr", -- reserved for future use
     "reads",
     "reduces",
     "relaxed",
     "release",
     "region",
+    "restrict",
     "simultaneous",
     "static_cast",
     "unsafe_cast",

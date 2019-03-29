@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -580,6 +580,19 @@ namespace Realm {
     return out;
   }
 
+  template <int M, int P, int N, typename T, typename T2> __CUDA_HD__
+  inline Matrix<M, N, T> operator*(const Matrix<M, P, T>& m, const Matrix<P, N, T2>& n)
+  {
+    Matrix<M,N,T> out;
+    for(int i = 0; i < M; i++)
+      for(int j = 0; j < N; j++) {
+        out[i][j] = m[i][0] * n[0][j];
+        for(int k = 1; k < P; k++)
+          out[i][j] += m[i][k] * n[k][j];
+      }
+    return out;
+  }
+
   template <int M, int N, typename T> __CUDA_HD__
   inline Point<N, T>& Matrix<M,N,T>::operator[](int index)
   {
@@ -671,10 +684,69 @@ namespace Realm {
     fill_data.indirect = 0;
   }
 
+  inline CopySrcDstField::CopySrcDstField(const CopySrcDstField& copy_from)
+    : inst(copy_from.inst)
+    , field_id(copy_from.field_id)
+    , size(copy_from.size)
+    , redop_id(copy_from.redop_id)
+    , red_fold(copy_from.red_fold)
+    , serdez_id(copy_from.serdez_id)
+    , subfield_offset(copy_from.subfield_offset)
+    , indirect_index(copy_from.indirect_index)
+  {
+    // we know there's a fill value if the field ID is -1
+    if(copy_from.field_id == FieldID(-1)) {
+      if(size <= MAX_DIRECT_SIZE) {
+	// copy whole buffer to make sure indirect is initialized too
+	memcpy(fill_data.direct, copy_from.fill_data.direct, MAX_DIRECT_SIZE);
+      } else {
+	if(copy_from.fill_data.indirect) {
+	  fill_data.indirect = malloc(size);
+	  memcpy(fill_data.indirect, copy_from.fill_data.indirect, size);
+	} else
+	  fill_data.indirect = 0;
+      }
+    } else
+      fill_data.indirect = 0;
+  }
+
+  inline CopySrcDstField& CopySrcDstField::operator=(const CopySrcDstField& copy_from)
+  {
+    if((field_id != FieldID(-1)) && (size > MAX_DIRECT_SIZE) && fill_data.indirect)
+      free(fill_data.indirect);
+
+    inst = copy_from.inst;
+    field_id = copy_from.field_id;
+    size = copy_from.size;
+    redop_id = copy_from.redop_id;
+    red_fold = copy_from.red_fold;
+    serdez_id = copy_from.serdez_id;
+    subfield_offset = copy_from.subfield_offset;
+    indirect_index = copy_from.indirect_index;
+
+    // we know there's a fill value if the field ID is -1
+    if(copy_from.field_id == FieldID(-1)) {
+      if(size <= MAX_DIRECT_SIZE) {
+	// copy whole buffer to make sure indirect is initialized too
+	memcpy(fill_data.direct, copy_from.fill_data.direct, MAX_DIRECT_SIZE);
+      } else {
+	if(copy_from.fill_data.indirect) {
+	  fill_data.indirect = malloc(size);
+	  memcpy(fill_data.indirect, copy_from.fill_data.indirect, size);
+	} else
+	  fill_data.indirect = 0;
+      }
+    } else
+      fill_data.indirect = 0;
+
+    return *this;
+  }
+
   inline CopySrcDstField::~CopySrcDstField(void)
   {
-    if((size > MAX_DIRECT_SIZE) && fill_data.indirect)
+    if((field_id == FieldID(-1)) && (size > MAX_DIRECT_SIZE)) {
       free(fill_data.indirect);
+    }
   }
 
   inline CopySrcDstField &CopySrcDstField::set_field(RegionInstance _inst,
@@ -730,6 +802,57 @@ namespace Realm {
   inline CopySrcDstField &CopySrcDstField::set_fill(T value)
   {
     return set_fill(&value, sizeof(T));
+  }
+
+  template <typename S>
+  inline bool serialize(S& s, const CopySrcDstField& v)
+  {
+    if(!((s << v.inst) &&
+	 (s << v.field_id) &&
+	 (s << v.size) &&
+	 (s << v.redop_id) &&
+	 (s << v.red_fold) &&
+	 (s << v.serdez_id) &&
+	 (s << v.subfield_offset) &&
+	 (s << v.indirect_index))) return false;
+
+    // we know there's a fill value if the field ID is -1
+    if(v.field_id == FieldID(-1)) {
+      if(!s.append_bytes(((v.size <= CopySrcDstField::MAX_DIRECT_SIZE) ?
+			    v.fill_data.direct :
+			    v.fill_data.indirect),
+			 v.size))
+	return false;
+    }
+
+    return true;
+  }
+
+  template <typename S>
+  inline bool deserialize(S& s, CopySrcDstField& v)
+  {
+    if(!((s >> v.inst) &&
+	 (s >> v.field_id) &&
+	 (s >> v.size) &&
+	 (s >> v.redop_id) &&
+	 (s >> v.red_fold) &&
+	 (s >> v.serdez_id) &&
+	 (s >> v.subfield_offset) &&
+	 (s >> v.indirect_index))) return false;
+
+    // we know there's a fill value if the field ID is -1
+    if(v.field_id == FieldID(-1)) {
+      if(v.size <= CopySrcDstField::MAX_DIRECT_SIZE) {
+	if(!s.extract_bytes(v.fill_data.direct, v.size))
+	  return false;
+      } else {
+	v.fill_data.indirect = malloc(v.size);
+	if(!s.extract_bytes(v.fill_data.indirect, v.size))
+	  return false;
+      }
+    }
+
+    return true;
   }
 
 
@@ -1050,23 +1173,24 @@ namespace Realm {
   template <int N, typename T>
   inline bool IndexSpace<N,T>::overlaps(const IndexSpace<N,T>& other) const
   {
-    if(dense()) {
-      if(other.dense()) {
-	// just test bounding boxes
-	return bounds.overlaps(other.bounds);
-      } else {
-	// have the other guy test against our bounding box
-	return other.contains_any(bounds);
-      }
-    } else {
-      if(other.dense()) {
-	return contains_any(other.bounds);
-      } else {
-	// nasty case - both sparse
-	assert(0);
-	return true;
-      }
-    }
+    // this covers the both-dense case as well as the same-sparsity-map case
+    if(sparsity == other.sparsity)
+      return bounds.overlaps(other.bounds);
+
+    // dense vs. sparse in both directions
+    if(dense())
+      return other.contains_any(bounds);
+
+    if(other.dense())
+      return contains_any(other.bounds);
+
+    // both sparse case can be expensive...
+    SparsityMapPublicImpl<N,T> *impl = sparsity.impl();
+    SparsityMapPublicImpl<N,T> *other_impl = other.sparsity.impl();
+    // overlap can only be within intersecion of bounds
+    Rect<N,T> isect = bounds.intersection(other.bounds);
+
+    return impl->overlaps(other_impl, isect, false /*!approx*/);
   }
 
   // actual number of points in index space (may be less than volume of bounding box)
@@ -1175,23 +1299,24 @@ namespace Realm {
   template <int N, typename T>
   inline bool IndexSpace<N,T>::overlaps_approx(const IndexSpace<N,T>& other) const
   {
-    if(dense()) {
-      if(other.dense()) {
-	// just test bounding boxes
-	return bounds.overlaps(other.bounds);
-      } else {
-	// have the other guy test against our bounding box
-	return other.contains_any_approx(bounds);
-      }
-    } else {
-      if(other.dense()) {
-	return contains_any_approx(other.bounds);
-      } else {
-	// nasty case - both sparse
-	assert(0);
-	return true;
-      }
-    }
+    // this covers the both-dense case as well as the same-sparsity-map case
+    if(sparsity == other.sparsity)
+      return bounds.overlaps(other.bounds);
+
+    // dense vs. sparse in both directions
+    if(dense())
+      return other.contains_any_approx(bounds);
+
+    if(other.dense())
+      return contains_any_approx(other.bounds);
+
+    // both sparse case can be expensive...
+    SparsityMapPublicImpl<N,T> *impl = sparsity.impl();
+    SparsityMapPublicImpl<N,T> *other_impl = other.sparsity.impl();
+    // overlap can only be within intersecion of bounds
+    Rect<N,T> isect = bounds.intersection(other.bounds);
+
+    return impl->overlaps(other_impl, isect, true /*approx*/);
   }
 
   // approximage number of points in index space (may be less than volume of bounding box, but larger than

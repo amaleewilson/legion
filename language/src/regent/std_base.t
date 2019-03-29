@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University, NVIDIA Corporation
+-- Copyright 2019 Stanford University, NVIDIA Corporation
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ local base = {}
 
 base.config, base.args = config.args()
 
+local max_dim = base.config["legion-dim"]
 
 -- Hack: Terra symbols don't support the hash() method so monkey patch
 -- it in here. This allows deterministic hashing of Terra symbols,
@@ -37,12 +38,15 @@ end
 -- ## Legion Bindings
 -- #################
 
-terralib.linklibrary("libregent.so")
+if data.is_luajit() then
+  terralib.linklibrary("libregent.so")
+end
 local c = terralib.includecstring([[
 #include "legion.h"
-#include "legion_terra.h"
-#include "legion_terra_partitions.h"
+#include "regent.h"
+#include "regent_partitions.h"
 #include "murmur_hash3.h"
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,7 +54,7 @@ local c = terralib.includecstring([[
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
-]])
+]], {"-DREALM_MAX_DIM=" .. tostring(max_dim), "-DLEGION_MAX_DIM=" .. tostring(max_dim)})
 base.c = c
 
 -- #####################################
@@ -77,40 +81,61 @@ terra base.assert(x : bool, message : rawstring)
   end
 end
 
-terra base.domain_from_bounds_1d(start : c.legion_point_1d_t,
-                                 extent : c.legion_point_1d_t)
-  var rect = c.legion_rect_1d_t {
-    lo = start,
-    hi = c.legion_point_1d_t {
-      x = array(start.x[0] + extent.x[0] - 1),
-    },
-  }
-  return c.legion_domain_from_rect_1d(rect)
+for dim = 1, max_dim do
+  local point_type = c["legion_point_" .. tostring(dim) .. "d_t"]
+  local rect_type = c["legion_rect_" .. tostring(dim) .. "d_t"]
+  local domain_from_rect = c["legion_domain_from_rect_" .. tostring(dim) .. "d"]
+  local domain_from_bounds = "domain_from_bounds_" .. tostring(dim) .. "d"
+
+  base[domain_from_bounds] = terra(start : point_type, extent : point_type)
+    var rect = rect_type {
+      lo = start,
+      hi = point_type {
+        x = array([data.range(0, dim):map(function(i) return `(start.x[i] + extent.x[i] - 1) end)]),
+      },
+    }
+    return domain_from_rect(rect)
+  end
 end
 
-terra base.domain_from_bounds_2d(start : c.legion_point_2d_t,
-                                 extent : c.legion_point_2d_t)
-  var rect = c.legion_rect_2d_t {
-    lo = start,
-    hi = c.legion_point_2d_t {
-      x = array(start.x[0] + extent.x[0] - 1,
-                start.x[1] + extent.x[1] - 1),
-    },
+-- A whitelist of functions that are known to be ok. We're importing a
+-- fixed list of known C headers above, so it should be ok to use a
+-- blacklist here.
+base.replicable_whitelist = {}
+do
+  local blacklist = data.set {
+    "fprintf",
+    "fscanf",
+    "printf",
+    "scanf",
+    "rand",
+    "rand_r",
+    "vfscanf",
+    "vscanf",
   }
-  return c.legion_domain_from_rect_2d(rect)
-end
+  for k, v in pairs(c) do
+    if not blacklist[k] then
+      base.replicable_whitelist[v] = true
+    end
+  end
 
-terra base.domain_from_bounds_3d(start : c.legion_point_3d_t,
-                                 extent : c.legion_point_3d_t)
-  var rect = c.legion_rect_3d_t {
-    lo = start,
-    hi = c.legion_point_3d_t {
-      x = array(start.x[0] + extent.x[0] - 1,
-                start.x[1] + extent.x[1] - 1,
-                start.x[2] + extent.x[2] - 1),
-    },
+  local other = {
+    base.assert_error,
+    base.assert,
+    base.domain_from_bounds_1d,
+    base.domain_from_bounds_2d,
+    base.domain_from_bounds_3d,
+
+    -- Terra functions that happen to be placed in global scope:
+    _G["sizeof"],
+    _G["vector"],
+    _G["vectorof"],
+    _G["array"],
+    _G["arrayof"],
   }
-  return c.legion_domain_from_rect_3d(rect)
+  for _, v in ipairs(other) do
+    base.replicable_whitelist[v] = true
+  end
 end
 
 -- #####################################
@@ -235,45 +260,58 @@ local function max_value(value_type)
     return terralib.cast(value_type, math.huge)
   end
 end
-
-base.reduction_ops = terralib.newlist({
-    {op = "+", name = "plus", init = zero},
-    {op = "-", name = "minus", init = zero},
-    {op = "*", name = "times", init = one},
-    {op = "/", name = "divide", init = one},
-    {op = "max", name = "max", init = min_value},
-    {op = "min", name = "min", init = max_value},
-})
-
-base.reduction_types = terralib.newlist({
-    float,
-    double,
-    int32,
-    int64,
-    uint32,
-    uint64,
-})
-
-base.reduction_op_init = {}
-for _, op in ipairs(base.reduction_ops) do
-  base.reduction_op_init[op.op] = {}
-  for _, op_type in ipairs(base.reduction_types) do
-    base.reduction_op_init[op.op][op_type] = op.init(op_type)
+local function lift(fn)
+  return function(value_type)
+    if value_type:isarray() then
+      return `(array([data.range(value_type.N):map(function(_)
+        return lift(fn)(value_type.type)
+      end)]))
+    else
+      return fn(value_type)
+    end
   end
 end
 
--- Prefill the table of reduction op IDs.
+base.reduction_ops = data.map_from_table({
+    ["+"] =   { name = "plus",   init = lift(zero)      },
+    ["-"] =   { name = "minus",  init = lift(zero)      },
+    ["*"] =   { name = "times",  init = lift(one)       },
+    ["/"] =   { name = "divide", init = lift(one)       },
+    ["max"] = { name = "max",    init = lift(min_value) },
+    ["min"] = { name = "min",    init = lift(max_value) },
+})
 base.reduction_op_ids = {}
+base.reduction_op_init = {}
+base.registered_reduction_ops = terralib.newlist()
 do
   local base_op_id = 101
-  for _, op in ipairs(base.reduction_ops) do
-    for _, op_type in ipairs(base.reduction_types) do
-      local op_id = base_op_id
-      base_op_id = base_op_id + 1
-      if not base.reduction_op_ids[op.op] then
-        base.reduction_op_ids[op.op] = {}
-      end
-      base.reduction_op_ids[op.op][op_type] = op_id
+  function base.update_reduction_op(op, op_type, init)
+    if base.reduction_op_ids[op] ~= nil and
+       base.reduction_op_ids[op][op_type] ~= nil
+    then
+      return
+    end
+    local op_id = base_op_id
+    base_op_id = base_op_id + 1
+    if not base.reduction_op_ids[op] then
+      base.reduction_op_ids[op] = {}
+    end
+    if not base.reduction_op_init[op] then
+      base.reduction_op_init[op] = {}
+    end
+    base.reduction_op_ids[op][op_type] = op_id
+    base.reduction_op_init[op][op_type] = init or base.reduction_ops[op].init(op_type)
+    base.registered_reduction_ops:insert({op, op_type})
+  end
+
+  -- Prefill the table of reduction op IDs for primitive types.
+  local reduction_ops =
+    terralib.newlist({ "+", "-", "*", "/", "max", "min" })
+  local primitive_reduction_types =
+    terralib.newlist({ float, double, int32, int64, uint32, uint64 })
+  for _, op in ipairs(reduction_ops) do
+    for _, op_type in ipairs(primitive_reduction_types) do
+      base.update_reduction_op(op, op_type)
     end
   end
 end
@@ -533,6 +571,10 @@ function base.types.is_rect_type(t)
   return terralib.types.istype(t) and rawget(t, "is_rect_type") or false
 end
 
+function base.types.is_transform_type(t)
+  return terralib.types.istype(t) and rawget(t, "is_transform_type") or false
+end
+
 function base.types.is_ispace(t)
   return terralib.types.istype(t) and rawget(t, "is_ispace") or false
 end
@@ -784,6 +826,14 @@ function base.variant:is_cuda()
   return self.cuda
 end
 
+function base.variant:set_is_openmp(openmp)
+  self.openmp = openmp
+end
+
+function base.variant:is_openmp()
+  return self.openmp
+end
+
 function base.variant:set_is_external(external)
   self.external = external
 end
@@ -813,6 +863,7 @@ do
       kernel = kernel,
     }
     global_kernel_id = global_kernel_id + 1
+    kernel:setname(kernel_name)
     return kernel_id
   end
 end
@@ -962,6 +1013,22 @@ function base.variant:get_layout_constraints()
   return self.layout_constraints
 end
 
+function base.variant:add_execution_constraint(constraint)
+  if not self.execution_constraints then
+    self.execution_constraints = terralib.newlist()
+  end
+  self.execution_constraints:insert(constraint)
+end
+
+function base.variant:has_execution_constraints()
+  return self.execution_constraints
+end
+
+function base.variant:get_execution_constraints()
+  assert(self.execution_constraints)
+  return self.execution_constraints
+end
+
 do
   function base.new_variant(task, name)
     assert(base.is_task(task))
@@ -974,11 +1041,13 @@ do
       untyped_ast = false,
       definition = false,
       cuda = false,
+      openmp = false,
       external = false,
       inline = false,
       cudakernels = false,
       config_options = false,
       layout_constraints = false,
+      execution_constraints = false,
     }, base.variant)
 
     task.variants:insert(variant)
@@ -1083,17 +1152,6 @@ end
 function base.task:get_field_id_param_labels()
   assert(self.field_id_param_labels)
   return self.field_id_param_labels
-end
-
-function base.task:set_field_id_param_symbols(t)
-  assert(not self.field_id_param_symbols)
-  assert(t)
-  self.field_id_param_symbols = t
-end
-
-function base.task:get_field_id_param_symbols()
-  assert(self.field_id_param_symbols)
-  return self.field_id_param_symbols
 end
 
 function base.task:set_type(t, force)
@@ -1293,7 +1351,7 @@ function base.task:set_compile_thunk(compile_thunk)
 end
 
 function base.task:complete()
-  if not self.is_complete then
+  if not self.is_inline and not self.is_complete then
     self.is_complete = true
     if not self.compile_thunk then return end
     for _, variant in ipairs(self.variants) do
@@ -1305,6 +1363,23 @@ end
 
 function base.task:compile()
   return self:complete()
+end
+
+function base.task:set_is_inline(is_inline)
+  self.is_inline = is_inline
+end
+
+function base.task:set_optimization_thunk(optimization_thunk)
+  self.optimization_thunk = optimization_thunk
+end
+
+function base.task:optimize()
+  if self.is_inline then
+    if not self.optimization_thunk then return self end
+    self.optimization_thunk()
+    self.is_inline = false
+  end
+  return self
 end
 
 function base.task:__tostring()
@@ -1357,6 +1432,8 @@ do
       -- Compilation continuations:
       compile_thunk = false,
       is_complete = false,
+      optimization_thunk = false,
+      is_inline = false,
     }, base.task)
   end
 end

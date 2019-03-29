@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,13 +76,13 @@ namespace Realm {
 
     AddressSpace RegionInstance::address_space(void) const
     {
-      return ID(id).instance.owner_node;
+      return ID(id).instance_owner_node();
     }
 
     Memory RegionInstance::get_location(void) const
     {
-      return ID::make_memory(ID(id).instance.owner_node,
-			     ID(id).instance.mem_idx).convert<Memory>();
+      return ID::make_memory(ID(id).instance_owner_node(),
+			     ID(id).instance_mem_idx()).convert<Memory>();
     }
 
     /*static*/ Event RegionInstance::create_instance(RegionInstance& inst,
@@ -423,7 +423,7 @@ namespace Realm {
     RegionInstanceImpl::RegionInstanceImpl(RegionInstance _me, Memory _memory)
       : me(_me), memory(_memory) //, lis(0)
     {
-      lock.init(ID(me).convert<Reservation>(), ID(me).instance.creator_node);
+      lock.init(ID(me).convert<Reservation>(), ID(me).instance_creator_node());
       lock.in_use = true;
 
       metadata.inst_offset = (size_t)-1;
@@ -440,7 +440,7 @@ namespace Realm {
 	delete metadata.layout;
     }
 
-    void RegionInstanceImpl::notify_allocation(bool success, size_t offset)
+    void RegionInstanceImpl::notify_allocation(bool success, size_t offset, size_t footprint)
     {
       if(!success) {
 	// if somebody is listening to profiling measurements, we report
@@ -449,6 +449,16 @@ namespace Realm {
 			       measurements.wants_measurement<ProfilingMeasurements::InstanceAllocResult>());
 	if(report_failure) {
 	  log_inst.info() << "allocation failed: inst=" << me;
+
+	  // poison the completion event, if it exists
+	  Event ready_event = Event::NO_EVENT;
+	  {
+	    AutoHSLLock al(mutex);
+	    ready_event = metadata.ready_event;
+	    metadata.ready_event = Event::NO_EVENT;
+	    metadata.inst_offset = (size_t)-2;
+	  }
+
 	  if(measurements.wants_measurement<ProfilingMeasurements::InstanceStatus>()) {
 	    ProfilingMeasurements::InstanceStatus stat;
 	    stat.result = ProfilingMeasurements::InstanceStatus::FAILED_ALLOCATION;
@@ -458,6 +468,7 @@ namespace Realm {
 
 	  if(measurements.wants_measurement<ProfilingMeasurements::InstanceAllocResult>()) {
 	    ProfilingMeasurements::InstanceAllocResult result;
+            result.footprint = footprint;
 	    result.success = false;
 	    measurements.add_measurement(result);
 	  }
@@ -468,14 +479,6 @@ namespace Realm {
           // clear the measurments after we send the response
           measurements.clear();
 
-	  // poison the completion event, if it exists
-	  Event ready_event = Event::NO_EVENT;
-	  {
-	    AutoHSLLock al(mutex);
-	    ready_event = metadata.ready_event;
-	    metadata.ready_event = Event::NO_EVENT;
-	    metadata.inst_offset = (size_t)-2;
-	  }
 	  if(ready_event.exists())
 	    GenEventImpl::trigger(ready_event, true /*poisoned*/);
 	  return;
@@ -516,6 +519,7 @@ namespace Realm {
 
       if(measurements.wants_measurement<ProfilingMeasurements::InstanceAllocResult>()) {
 	ProfilingMeasurements::InstanceAllocResult result;
+        result.footprint = footprint;
 	result.success = true;
 	measurements.add_measurement(result);
       }
@@ -539,23 +543,23 @@ namespace Realm {
     {
       log_inst.debug() << "deallocation completed: inst=" << me;
 
-      if (measurements.wants_measurement<ProfilingMeasurements::InstanceStatus>()) {
-	ProfilingMeasurements::InstanceStatus stat;
-	stat.result = ProfilingMeasurements::InstanceStatus::DESTROYED_SUCCESSFULLY;
-	stat.error_code = 0;
-	measurements.add_measurement(stat);
-      }
-
-      if (measurements.wants_measurement<ProfilingMeasurements::InstanceTimeline>()) {
-	timeline.record_delete_time();
-	measurements.add_measurement(timeline);
-      }
-
-      // send any remaining incomplete profiling responses
-      measurements.send_responses(requests);
-
       // was this a successfully allocatated instance?
       if(metadata.inst_offset != size_t(-2)) {
+	if (measurements.wants_measurement<ProfilingMeasurements::InstanceStatus>()) {
+	  ProfilingMeasurements::InstanceStatus stat;
+	  stat.result = ProfilingMeasurements::InstanceStatus::DESTROYED_SUCCESSFULLY;
+	  stat.error_code = 0;
+	  measurements.add_measurement(stat);
+	}
+
+	if (measurements.wants_measurement<ProfilingMeasurements::InstanceTimeline>()) {
+	  timeline.record_delete_time();
+	  measurements.add_measurement(timeline);
+	}
+
+	// send any remaining incomplete profiling responses
+	measurements.send_responses(requests);
+
 	// send any required invalidation messages for metadata
 	bool recycle_now = metadata.initiate_cleanup(me.id);
 	if(recycle_now)

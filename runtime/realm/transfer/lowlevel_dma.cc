@@ -1,5 +1,5 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
- * Copyright 2018 Los Alamos National Laboratory
+/* Copyright 2019 Stanford University, NVIDIA Corporation
+ * Copyright 2019 Los Alamos National Laboratory
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,7 +50,6 @@
 #include "realm/serialize.h"
 
 TYPE_IS_SERIALIZABLE(Realm::OffsetsAndSize);
-TYPE_IS_SERIALIZABLE(Realm::CopySrcDstField);
 
 namespace Realm {
 
@@ -180,7 +179,7 @@ namespace Realm {
     void PendingIBQueue::enqueue_request(Memory tgt_mem, IBAllocRequest* req)
     {
       AutoHSLLock al(queue_mutex);
-      assert(ID(tgt_mem).memory.owner_node == my_node_id);
+      assert(NodeID(ID(tgt_mem).memory_owner_node()) == my_node_id);
       // If we can allocate in target memory, no need to pend the request
       off_t ib_offset = get_runtime()->get_memory_impl(tgt_mem)->alloc_bytes(req->ib_size);
       if (ib_offset >= 0) {
@@ -220,7 +219,7 @@ namespace Realm {
     void PendingIBQueue::dequeue_request(Memory tgt_mem)
     {
       AutoHSLLock al(queue_mutex);
-      assert(ID(tgt_mem).memory.owner_node == my_node_id);
+      assert(NodeID(ID(tgt_mem).memory_owner_node()) == my_node_id);
       std::map<Memory, std::queue<IBAllocRequest*> *>::iterator it = queues.find(tgt_mem);
       // no pending ib requests
       if (it == queues.end()) return;
@@ -521,7 +520,7 @@ namespace Realm {
 
     /*static*/ void RemoteIBAllocRequestAsync::handle_request(RequestArgs args)
     {
-      assert(ID(args.memory).memory.owner_node == my_node_id);
+      assert(NodeID(ID(args.memory).memory_owner_node()) == my_node_id);
       IBAllocRequest* ib_req
           = new IBAllocRequest(args.node, args.req, args.idx,
                                args.src_inst_id, args.dst_inst_id, args.size);
@@ -574,7 +573,7 @@ namespace Realm {
 
     /*static*/ void RemoteIBFreeRequestAsync::handle_request(RequestArgs args)
     {
-      assert(ID(args.memory).memory.owner_node == my_node_id);
+      assert(NodeID(ID(args.memory).memory_owner_node()) == my_node_id);
       get_runtime()->get_memory_impl(args.memory)->free_bytes(args.ib_offset, args.ib_size);
       ib_req_queue->dequeue_request(args.memory);
     }
@@ -595,11 +594,11 @@ namespace Realm {
     {
       //CopyRequest* cr = (CopyRequest*) req;
       //AutoHSLLock al(cr->ib_mutex);
-      if(ID(mem).memory.owner_node == my_node_id) {
+      if(NodeID(ID(mem).memory_owner_node()) == my_node_id) {
         get_runtime()->get_memory_impl(mem)->free_bytes(offset, size);
         ib_req_queue->dequeue_request(mem);
       } else {
-        RemoteIBFreeRequestAsync::send_request(ID(mem).memory.owner_node,
+        RemoteIBFreeRequestAsync::send_request(ID(mem).memory_owner_node(),
             mem, offset, size);
       }
     }
@@ -642,7 +641,7 @@ namespace Realm {
 	  ib_size = IB_MAX_SIZE;
       }
       //log_ib_alloc.info("alloc_ib: src_inst_id(%llx) dst_inst_id(%llx) idx(%d) size(%lu) memory(%llx)", inst_pair.first.id, inst_pair.second.id, idx, ib_size, tgt_mem.id);
-      if (ID(tgt_mem).memory.owner_node == my_node_id) {
+      if (NodeID(ID(tgt_mem).memory_owner_node()) == my_node_id) {
         // create local intermediate buffer
         IBAllocRequest* ib_req
           = new IBAllocRequest(my_node_id, this, idx, inst_pair.first.id,
@@ -650,7 +649,7 @@ namespace Realm {
         ib_req_queue->enqueue_request(tgt_mem, ib_req);
       } else {
         // create remote intermediate buffer
-        RemoteIBAllocRequestAsync::send_request(ID(tgt_mem).memory.owner_node, tgt_mem, this, idx, inst_pair.first.id, inst_pair.second.id, ib_size);
+        RemoteIBAllocRequestAsync::send_request(ID(tgt_mem).memory_owner_node(), tgt_mem, this, idx, inst_pair.first.id, inst_pair.second.id, ib_size);
       }
     }
 
@@ -732,7 +731,7 @@ namespace Realm {
 	// TODO
 	// SJT: actually, is this needed any more?
         //Memory tgt_mem = get_runtime()->get_instance_impl(oas_by_inst->begin()->first.second)->memory;
-        //NodeID tgt_node = ID(tgt_mem).memory.owner_node;
+        //NodeID tgt_node = ID(tgt_mem).memory_owner_node();
 	//assert(tgt_node == my_node_id);
         state = STATE_GEN_PATH;
       }
@@ -1318,7 +1317,7 @@ namespace Realm {
     {
       Memory::Kind src_ll_kind = get_runtime()->get_memory_impl(src_mem)->lowlevel_kind;
       Memory::Kind dst_ll_kind = get_runtime()->get_memory_impl(dst_mem)->lowlevel_kind;
-      if(ID(src_mem).memory.owner_node == ID(dst_mem).memory.owner_node) {
+      if(ID(src_mem).memory_owner_node() == ID(dst_mem).memory_owner_node()) {
         switch(src_ll_kind) {
         case Memory::GLOBAL_MEM:
           if (is_cpu_mem(dst_ll_kind)) {
@@ -1459,7 +1458,7 @@ namespace Realm {
       XferDes::XferKind kind = XferDes::XFER_NONE;
 
       // look at the dma channels available on the source node
-      NodeID src_node = ID(src_mem).memory.owner_node;
+      NodeID src_node = ID(src_mem).memory_owner_node();
       const Node& n = get_runtime()->nodes[src_node];
       for(std::vector<DMAChannel *>::const_iterator it = n.dma_channels.begin();
 	  it != n.dma_channels.end();
@@ -1506,13 +1505,13 @@ namespace Realm {
       std::map<Memory, std::vector<Memory> > dist;
       std::set<Memory> all_mem;
       std::queue<Memory> active_nodes;
-      Node* node = &(get_runtime()->nodes[ID(src_mem).memory.owner_node]);
+      Node* node = &(get_runtime()->nodes[ID(src_mem).memory_owner_node()]);
       for (std::vector<MemoryImpl*>::const_iterator it = node->ib_memories.begin();
            it != node->ib_memories.end(); it++) {
         all_mem.insert((*it)->me);
       }
-      if(ID(dst_mem).memory.owner_node != ID(src_mem).memory.owner_node) {
-	node = &(get_runtime()->nodes[ID(dst_mem).memory.owner_node]);
+      if(ID(dst_mem).memory_owner_node() != ID(src_mem).memory_owner_node()) {
+	node = &(get_runtime()->nodes[ID(dst_mem).memory_owner_node()]);
 	for (std::vector<MemoryImpl*>::const_iterator it = node->ib_memories.begin();
 	     it != node->ib_memories.end(); it++) {
 	  all_mem.insert((*it)->me);
@@ -1683,7 +1682,7 @@ namespace Realm {
       for (OASByInst::iterator it = oas_by_inst->begin(); it != oas_by_inst->end(); it++) {
         std::vector<XferDesID> sub_path;
         for (unsigned idx = 0; idx < mem_path.size() - 1; idx ++) {
-          XferDesID new_xdid = get_xdq_singleton()->get_guid(ID(mem_path[idx]).memory.owner_node);
+          XferDesID new_xdid = get_xdq_singleton()->get_guid(ID(mem_path[idx]).memory_owner_node());
           sub_path.push_back(new_xdid);
           path.push_back(new_xdid);
         }
@@ -1763,7 +1762,7 @@ namespace Realm {
 						     ibvec[idx - 2].size);
 	      xd_src_serdez_id = 0;
 	      mark_started = false;
-	      xd_target_node = ID(ibvec[idx - 2].memory).memory.owner_node;
+	      xd_target_node = ID(ibvec[idx - 2].memory).memory_owner_node();
 	    }
 
 	    // xferdes output
@@ -1799,7 +1798,7 @@ namespace Realm {
 	    // special case: gasnet reads must always be done from the node that
 	    //  owns the destination memory
 	    if(kind == XferDes::XFER_GASNET_READ)
-	      xd_target_node = ID(xd_dst_mem).memory.owner_node;
+	      xd_target_node = ID(xd_dst_mem).memory_owner_node();
 
             XferOrder::Type order;
             if (mem_path.size() == 2)

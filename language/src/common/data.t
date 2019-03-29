@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University
+-- Copyright 2019 Stanford University
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -44,6 +44,11 @@
 -- depends on the internal representation of that data structure.
 
 local data = {}
+
+-- Utility for figuring out if we're in LuaJIT or PUC Lua.
+function data.is_luajit()
+  return type(rawget(_G,"jit")) == "table"
+end
 
 -- #####################################
 -- ## Hashing
@@ -196,6 +201,17 @@ function data.flatten(list)
   local result = terralib.newlist()
   for _, sublist in ipairs(list) do
     result:insertall(sublist)
+  end
+  return result
+end
+
+function data.take(n, list)
+  local result = terralib.newlist()
+  for i, elt in ipairs(list) do
+    result:insert(elt)
+    if i >= n then
+      break
+    end
   end
   return result
 end

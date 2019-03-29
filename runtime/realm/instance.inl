@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,6 +50,7 @@ namespace Realm {
     return id != rhs.id;
   }
 
+  __CUDA_HD__
   inline bool RegionInstance::exists(void) const
   {
     return id != 0;
@@ -63,11 +64,7 @@ namespace Realm {
   template <int N, typename T>
   inline IndexSpace<N,T> RegionInstance::get_indexspace(void) const
   {
-    const InstanceLayout<N,T> *layout = dynamic_cast<const InstanceLayout<N,T> *>(this->get_layout());
-    if(!layout) {
-      log_inst.fatal() << "dimensionality mismatch between instance and index space!";
-      assert(0);
-    }
+    const InstanceLayout<N,T> *layout = checked_cast<const InstanceLayout<N,T> *>(this->get_layout());
     return layout->space;
   }
 		

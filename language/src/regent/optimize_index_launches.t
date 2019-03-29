@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University
+-- Copyright 2019 Stanford University
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -484,6 +484,7 @@ local function analyze_is_projectable(cx, arg)
 end
 
 local optimize_index_launch = {}
+local optimize_index_launches = {}
 
 local function ignore(...) end
 
@@ -541,7 +542,8 @@ local function optimize_loop_body(cx, node, report_pass, report_fail)
     end
   else
     if body:is(ast.typed.stat.Expr) and
-      body.expr:is(ast.typed.expr.Call)
+      (body.expr:is(ast.typed.expr.Call) or
+       body.expr:is(ast.typed.expr.Fill))
     then
       call = body.expr
     elseif body:is(ast.typed.stat.Reduce) and
@@ -556,10 +558,11 @@ local function optimize_loop_body(cx, node, report_pass, report_fail)
     end
   end
 
-  local task = call.fn.value
-  if not std.is_task(task) then
-    report_fail(call, "loop optimization failed: function is not a task")
-    return
+  if call:is(ast.typed.expr.Call) then
+    if not std.is_task(call.fn.value) then
+      report_fail(call, "loop optimization failed: function is not a task")
+      return
+    end
   end
 
   if #call.conditions > 0 then
@@ -618,90 +621,140 @@ local function optimize_loop_body(cx, node, report_pass, report_fail)
   --     they come from a disjoint partition, as long as indexing into
   --     said partition is provably disjoint.
 
-  local param_types = task:get_type().parameters
-  local args = call.args
   local args_provably = ast.IndexLaunchArgsProvably {
     invariant = terralib.newlist(),
     projectable = terralib.newlist(),
   }
-  local regions_previously_used = terralib.newlist()
-  local mapping = {}
-  for i, arg in ipairs(args) do
-    if not analyze_is_side_effect_free(loop_cx, arg) then
-      report_fail(call, "loop optimization failed: argument " .. tostring(i) .. " is not side-effect free")
-      return
-    end
 
-    local arg_invariant = analyze_is_loop_invariant(loop_cx, arg)
-
-    local arg_projectable = false
-    local partition_type
-
-    local arg_type = std.as_read(arg.expr_type)
-    -- XXX: This will break again if arg isn't unique for each argument,
-    --      which can happen when de-duplicating AST nodes.
-    assert(mapping[arg] == nil)
-    mapping[arg] = param_types[i]
-    -- Tests for conformance to index launch requirements.
-    if std.is_ispace(arg_type) or std.is_region(arg_type) then
-      if analyze_is_projectable(loop_cx, arg) then
-        partition_type = std.as_read(arg.value.expr_type)
-        arg_projectable = true
+  -- Perform a simpler analysis if the expression is not a task launch
+  if not call:is(ast.typed.expr.Call) then
+    if call:is(ast.typed.expr.Fill) then
+      if #preamble > 0 then
+        report_fail(call, "loop optimization failed: fill must not have any preamble statement")
       end
 
-      if not (arg_projectable or arg_invariant) then
-        report_fail(call, "loop optimization failed: argument " .. tostring(i) .. " is not provably projectable or invariant")
+      if not analyze_is_side_effect_free(loop_cx, call.value) then
+        report_fail(call.value, "loop optimization failed: fill value" ..
+            " is not side-effect free")
         return
       end
+
+      if not analyze_is_loop_invariant(loop_cx, call.value) then
+        report_fail(call.value, "loop optimization failed: fill value" ..
+            " is not provably invariant")
+        return
+      end
+
+      local projection = call.dst.region
+      if not analyze_is_projectable(loop_cx, projection) then
+        report_fail(call, "loop optimization failed: fill target" ..
+            " is not provably projectable")
+        return
+      end
+
+      local partition_type = std.as_read(projection.value.expr_type)
+      if not (partition_type and partition_type:is_disjoint() and
+              check_index_noninterference_self(loop_cx, projection))
+      then
+        report_fail(call, "loop optimization failed: fill target" ..
+            " interferes with itself")
+        return
+      end
+
+      args_provably.invariant:insert(false)
+      args_provably.projectable:insert(true)
+    else
+      -- TODO: Add index copies
+      assert(false)
     end
 
-    if std.is_phase_barrier(arg_type) then
-      -- Phase barriers must be invariant, or must not be used as an arrival/wait.
-      if not arg_invariant then
-        for _, variables in pairs(task:get_conditions()) do
-          if variables[i] then
-            report_fail(call, "loop optimization failed: argument " .. tostring(i) .. " is not provably invariant")
+  else
+    local task = call.fn.value
+    local param_types = task:get_type().parameters
+    local args = call.args
+    local regions_previously_used = terralib.newlist()
+    local mapping = {}
+    for i, arg in ipairs(args) do
+      if not analyze_is_side_effect_free(loop_cx, arg) then
+        report_fail(call, "loop optimization failed: argument " .. tostring(i) .. " is not side-effect free")
+        return
+      end
+
+      local arg_invariant = analyze_is_loop_invariant(loop_cx, arg)
+
+      local arg_projectable = false
+      local partition_type
+
+      local arg_type = std.as_read(arg.expr_type)
+      -- XXX: This will break again if arg isn't unique for each argument,
+      --      which can happen when de-duplicating AST nodes.
+      assert(mapping[arg] == nil)
+      mapping[arg] = param_types[i]
+      -- Tests for conformance to index launch requirements.
+      if std.is_ispace(arg_type) or std.is_region(arg_type) then
+        if analyze_is_projectable(loop_cx, arg) then
+          partition_type = std.as_read(arg.value.expr_type)
+          arg_projectable = true
+        end
+
+        if not (arg_projectable or arg_invariant) then
+          report_fail(call, "loop optimization failed: argument " .. tostring(i) ..
+              " is not provably projectable or invariant")
+          return
+        end
+      end
+
+      if std.is_phase_barrier(arg_type) then
+        -- Phase barriers must be invariant, or must not be used as an arrival/wait.
+        if not arg_invariant then
+          for _, variables in pairs(task:get_conditions()) do
+            if variables[i] then
+              report_fail(call, "loop optimization failed: argument " .. tostring(i) ..
+                  " is not provably invariant")
+              return
+            end
+          end
+        end
+      end
+
+      if std.is_list(arg_type) and arg_type:is_list_of_regions() then
+        -- FIXME: Deoptimize lists of regions for the moment. Lists
+        -- would have to be (at a minimum) invariant though other
+        -- restrictions may apply.
+        report_fail(call, "loop optimization failed: argument " .. tostring(i) .. " is a list of regions")
+        return
+      end
+
+      -- Tests for non-interference.
+      if std.is_region(arg_type) then
+        do
+          local passed, failure_i = analyze_noninterference_previous(
+            loop_cx, task, arg, regions_previously_used, mapping)
+          if not passed then
+            report_fail(call, "loop optimization failed: argument " .. tostring(i) ..
+                " interferes with argument " .. tostring(failure_i))
+            return
+          end
+        end
+
+        do
+          local passed = analyze_noninterference_self(
+            loop_cx, task, arg, partition_type, mapping)
+          if not passed then
+            report_fail(call, "loop optimization failed: argument " .. tostring(i) ..
+                " interferes with itself")
             return
           end
         end
       end
-    end
 
-    if std.is_list(arg_type) and arg_type:is_list_of_regions() then
-      -- FIXME: Deoptimize lists of regions for the moment. Lists
-      -- would have to be (at a minimum) invariant though other
-      -- restrictions may apply.
-      report_fail(call, "loop optimization failed: argument " .. tostring(i) .. " is a list of regions")
-      return
-    end
+      args_provably.invariant[i] = arg_invariant
+      args_provably.projectable[i] = arg_projectable
 
-    -- Tests for non-interference.
-    if std.is_region(arg_type) then
-      do
-        local passed, failure_i = analyze_noninterference_previous(
-          loop_cx, task, arg, regions_previously_used, mapping)
-        if not passed then
-          report_fail(call, "loop optimization failed: argument " .. tostring(i) .. " interferes with argument " .. tostring(failure_i))
-          return
-        end
+      regions_previously_used[i] = nil
+      if std.is_region(arg_type) then
+        regions_previously_used[i] = arg
       end
-
-      do
-        local passed = analyze_noninterference_self(
-          loop_cx, task, arg, partition_type, mapping)
-        if not passed then
-          report_fail(call, "loop optimization failed: argument " .. tostring(i) .. " interferes with itself")
-          return
-        end
-      end
-    end
-
-    args_provably.invariant[i] = arg_invariant
-    args_provably.projectable[i] = arg_projectable
-
-    regions_previously_used[i] = nil
-    if std.is_region(arg_type) then
-      regions_previously_used[i] = arg
     end
   end
 
@@ -737,7 +790,9 @@ function optimize_index_launch.stat_for_num(cx, node)
 
   local body = optimize_loop_body(cx, node, report_pass, report_fail)
   if not body then
-    return node
+    return node {
+      block = optimize_index_launches.block(cx, node.block),
+    }
   end
 
   return ast.typed.stat.IndexLaunchNum {
@@ -773,7 +828,9 @@ function optimize_index_launch.stat_for_list(cx, node)
 
   local body = optimize_loop_body(cx, node, report_pass, report_fail)
   if not body then
-    return node
+    return node {
+      block = optimize_index_launches.block(cx, node.block),
+    }
   end
 
   return ast.typed.stat.IndexLaunchList {
@@ -789,21 +846,60 @@ function optimize_index_launch.stat_for_list(cx, node)
   }
 end
 
-local optimize_index_launches = {}
+function optimize_index_launches.stat_block(cx, node)
+  return node {
+    block = optimize_index_launches.block(cx, node.block),
+  }
+end
 
-local function optimize_index_launches_node(cx)
-  return function(node)
-    if node:is(ast.typed.stat.ForNum) then
-      return optimize_index_launch.stat_for_num(cx, node)
-    elseif node:is(ast.typed.stat.ForList) then
-      return optimize_index_launch.stat_for_list(cx, node)
-    end
-    return node
-  end
+function optimize_index_launches.stat_if(cx, node)
+  local then_block = optimize_index_launches.block(cx, node.then_block)
+  local elseif_blocks = node.elseif_blocks:map(function(elseif_block)
+    return optimize_index_launches.stat(cx, elseif_block)
+  end)
+  local else_block = optimize_index_launches.block(cx, node.else_block)
+  return node {
+    then_block = then_block,
+    elseif_blocks = elseif_blocks,
+    else_block = else_block,
+  }
+end
+
+function optimize_index_launches.stat_elseif(cx, node)
+  local block = optimize_index_launches.block(cx, node.block)
+  return node { block = block }
+end
+
+local function do_nothing(cx, node) return node end
+
+local optimize_index_launches_stat_table = {
+  [ast.typed.stat.ForNum]    = optimize_index_launch.stat_for_num,
+  [ast.typed.stat.ForList]   = optimize_index_launch.stat_for_list,
+
+  [ast.typed.stat.While]     = optimize_index_launches.stat_block,
+  [ast.typed.stat.Repeat]    = optimize_index_launches.stat_block,
+  [ast.typed.stat.Block]     = optimize_index_launches.stat_block,
+  [ast.typed.stat.MustEpoch] = optimize_index_launches.stat_block,
+  [ast.typed.stat.While]     = optimize_index_launches.stat_block,
+  [ast.typed.stat.If]        = optimize_index_launches.stat_if,
+  [ast.typed.stat.Elseif]    = optimize_index_launches.stat_elseif,
+  [ast.typed.stat]           = do_nothing,
+}
+
+local optimize_index_launches_stat = ast.make_single_dispatch(
+  optimize_index_launches_stat_table,
+  {})
+
+function optimize_index_launches.stat(cx, node)
+  return optimize_index_launches_stat(cx)(node)
 end
 
 function optimize_index_launches.block(cx, node)
-  return ast.map_node_postorder(optimize_index_launches_node(cx), node)
+  return node {
+    stats = node.stats:map(function(stat)
+      return optimize_index_launches.stat(cx, stat)
+    end)
+  }
 end
 
 function optimize_index_launches.top_task(cx, node)
@@ -816,7 +912,9 @@ function optimize_index_launches.top_task(cx, node)
 end
 
 function optimize_index_launches.top(cx, node)
-  if node:is(ast.typed.top.Task) then
+  if node:is(ast.typed.top.Task) and
+     not node.config_options.leaf
+  then
     return optimize_index_launches.top_task(cx, node)
 
   else

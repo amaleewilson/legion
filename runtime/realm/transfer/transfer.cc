@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1049,7 +1049,7 @@ namespace Realm {
       cur_point = iter.rect.lo;
 
       inst_impl = get_runtime()->get_instance_impl(inst);
-      inst_layout = dynamic_cast<const InstanceLayout<N,T> *>(inst.get_layout());
+      inst_layout = checked_cast<const InstanceLayout<N,T> *>(inst.get_layout());
       fields = _fields;
     }
   }
@@ -1788,18 +1788,18 @@ namespace Realm {
       RegionInstanceImpl *impl = get_runtime()->get_instance_impl(*ii);
       // can't wait for it here - make sure it's valid before calling
       assert(impl->metadata.is_valid());
-      const InstanceLayout<N,T> *layout = dynamic_cast<const InstanceLayout<N,T> *>(impl->metadata.layout);
+      const InstanceLayout<N,T> *layout = checked_cast<const InstanceLayout<N,T> *>(impl->metadata.layout);
       for(typename std::vector<InstancePieceList<N,T> >::const_iterator it = layout->piece_lists.begin();
 	  it != layout->piece_lists.end();
 	  ++it) {
 	for(typename std::vector<InstanceLayoutPiece<N,T> *>::const_iterator it2 = it->pieces.begin();
 	    it2 != it->pieces.end();
 	    ++it2) {
-	  const AffineLayoutPiece<N,T> *affine = dynamic_cast<const AffineLayoutPiece<N,T> *>(*it2);
-	  if(!affine) {
+	  if((*it2)->layout_type != InstanceLayoutPiece<N,T>::AffineLayoutType) {
 	    force_fortran_order = true;
 	    break;
 	  }
+	  const AffineLayoutPiece<N,T> *affine = checked_cast<const AffineLayoutPiece<N,T> *>(*it2);
 	  int piece_preferred_order[N];
 	  size_t prev_stride = 0;
 	  for(int i = 0; i < N; i++) {
@@ -1896,8 +1896,8 @@ namespace Realm {
   static NodeID select_dma_node(Memory src_mem, Memory dst_mem,
 				       ReductionOpID redop_id, bool red_fold)
   {
-    NodeID src_node = ID(src_mem).memory.owner_node;
-    NodeID dst_node = ID(dst_mem).memory.owner_node;
+    NodeID src_node = ID(src_mem).memory_owner_node();
+    NodeID dst_node = ID(dst_mem).memory_owner_node();
 
     bool src_is_rdma = get_runtime()->get_memory_impl(src_mem)->kind == MemoryImpl::MKIND_GLOBAL;
     bool dst_is_rdma = get_runtime()->get_memory_impl(dst_mem)->kind == MemoryImpl::MKIND_GLOBAL;
@@ -2029,7 +2029,7 @@ namespace Realm {
 					 wait_on, ev,
 					 0 /*priority*/, requests);
 
-    NodeID src_node = ID(src.inst).instance.owner_node;
+    NodeID src_node = ID(src.inst).instance_owner_node();
     if(src_node == my_node_id) {
       log_dma.debug("performing reduction on local node");
 
@@ -2097,7 +2097,7 @@ namespace Realm {
     FillRequest *r = new FillRequest(td, f, data.base(), data.size(),
 				     wait_on, ev, priority, requests);
 
-    NodeID tgt_node = ID(inst).instance.owner_node;
+    NodeID tgt_node = ID(inst).instance_owner_node();
     if(tgt_node == my_node_id) {
       get_runtime()->optable.add_local_operation(ev, r);
       r->check_readiness(false, dma_queue);

@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -173,6 +173,21 @@ namespace Realm {
     Table tables[NUM_TABLES];
     TableCleaner cleaner;
 #endif
+  };
+
+  struct CancelOperationMessage {
+    struct RequestArgs : public BaseMedium {
+      Event finish_event;
+    };
+
+    static void handle_request(RequestArgs args, const void *data, size_t datalen);
+
+    typedef ActiveMessageMediumNoReply<CANCEL_OPERATION_MSGID,
+				       RequestArgs,
+				       handle_request> Message;
+
+    static void send_request(NodeID target, Event finish_event,
+			     const void *reason_data, size_t reason_size);
   };
 
 };

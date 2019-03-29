@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University
+-- Copyright 2019 Stanford University
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -31,6 +31,10 @@ report.warn = function(node, ...)
   -- span is used to determine the source location of the warning.
   assert(node.span:is(ast.location))
 
+  io.stderr:write(node.span.source)
+  io.stderr:write(":")
+  io.stderr:write(tostring(node.span.start.line))
+  io.stderr:write(": ")
   io.stderr:write(...)
   io.stderr:write("\n")
 end

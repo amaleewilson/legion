@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University, Los Alamos National Laboratory
+-- Copyright 2019 Stanford University, Los Alamos National Laboratory
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -12,8 +12,9 @@
 -- See the License for the specific language governing permissions and
 -- limitations under the License.
 
-local std_base = require("regent/std_base")
+local base = require("regent/std_base")
 local config = require("regent/config").args()
+local data = require("common/data")
 local report = require("common/report")
 
 local cudahelper = {}
@@ -45,13 +46,9 @@ local ef = terralib.externfunction
 local externcall_builtin = terralib.externfunction
 
 local RuntimeAPI = terralib.includec("cuda_runtime.h")
-local HijackAPI = terralib.includec("legion_terra_cudart_hijack.h")
+local HijackAPI = terralib.includec("regent_cudart_hijack.h")
 
-local C = terralib.includecstring [[
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-]]
+local C = base.c
 
 local struct CUctx_st
 local struct CUmod_st
@@ -87,16 +84,16 @@ do
     if has_symbol("cuInit") then
       local r = DriverAPI.cuInit(0)
       assert(r == 0)
-      terra cudahelper.check_cuda_available()
-        return [r] == 0;
+      function cudahelper.check_cuda_available()
+        return true
       end
     else
-      terra cudahelper.check_cuda_available()
+      function cudahelper.check_cuda_available()
         return false
       end
     end
   else
-    terra cudahelper.check_cuda_available()
+    function cudahelper.check_cuda_available()
       return true
     end
   end
@@ -117,7 +114,7 @@ local terra assert(x : bool, message : rawstring)
   end
 end
 
-local terra get_cuda_version() : uint64
+local terra get_cuda_version_terra() : uint64
   var cx : &CUctx_st
   var cx_created = false
   var r = DriverAPI.cuCtxGetCurrent(&cx)
@@ -155,11 +152,15 @@ struct fat_bin_t {
 
 local terra register_ptx(ptxc : rawstring, ptxSize : uint32, version : uint64) : &&opaque
   var fat_bin : &fat_bin_t
+  var fat_size = sizeof(fat_bin_t)
   -- TODO: this line is leaking memory
-  fat_bin = [&fat_bin_t](C.malloc(sizeof(fat_bin_t)))
+  fat_bin = [&fat_bin_t](C.malloc(fat_size))
+  base.assert(fat_size == 0 or fat_bin ~= nil, "malloc failed in register_ptx")
   fat_bin.magic = 1234
   fat_bin.versions = 5678
-  fat_bin.data = C.malloc(ptxSize + 1)
+  var fat_data_size = ptxSize + 1
+  fat_bin.data = C.malloc(fat_data_size)
+  base.assert(fat_data_size == 0 or fat_bin.data ~= nil, "malloc failed in register_ptx")
   fat_bin.data = ptxc
   var handle = HijackAPI.hijackCudaRegisterFatBinary(fat_bin)
   return handle
@@ -178,7 +179,7 @@ local function find_device_library(target)
       libdevice = device_lib_dir .. f
     end
   end
-  assert(libdevice ~= nil, "Failed to find a device library")
+  lua_assert(libdevice ~= nil, "Failed to find a device library")
   return libdevice
 end
 
@@ -206,17 +207,28 @@ local function parse_cuda_arch(arch)
   return sm
 end
 
+local get_cuda_version
+do
+  local cached_cuda_version = nil
+  get_cuda_version = function()
+    if cached_cuda_version ~= nil then
+      return cached_cuda_version
+    end
+    if not config["cuda-offline"] then
+      cached_cuda_version = get_cuda_version_terra()
+    else
+      cached_cuda_version = parse_cuda_arch(config["cuda-arch"])
+    end
+    return cached_cuda_version
+  end
+end
+
 function cudahelper.jit_compile_kernels_and_register(kernels)
   local module = {}
   for k, v in pairs(kernels) do
     module[v.name] = v.kernel
   end
-  local version
-  if not config["cuda-offline"] then
-    version = get_cuda_version()
-  else
-    version = parse_cuda_arch(config["cuda-arch"])
-  end
+  local version = get_cuda_version()
   local libdevice = find_device_library(tonumber(version))
   local llvmbc = terralib.linkllvm(libdevice)
   externcall_builtin = function(name, ftype)
@@ -243,6 +255,7 @@ end
 local THREAD_BLOCK_SIZE = 128
 local MAX_NUM_BLOCK = 32768
 local GLOBAL_RED_BUFFER = 256
+lua_assert(GLOBAL_RED_BUFFER % THREAD_BLOCK_SIZE == 0)
 
 local tid_x   = cudalib.nvvm_read_ptx_sreg_tid_x
 local n_tid_x = cudalib.nvvm_read_ptx_sreg_ntid_x
@@ -297,10 +310,13 @@ local terra cas_uint32(address : &uint32, compare : uint32, value : uint32)
 end
 cas_uint32:setinlined(true)
 
-local function generate_atomic(op, typ)
+function cudahelper.generate_atomic_update(op, typ)
   if op == "+" and typ == float then
     return terralib.intrinsic("llvm.nvvm.atomic.load.add.f32.p0f32",
                               {&float,float} -> {float})
+  elseif op == "+" and typ == double and get_cuda_version() >= 60 then
+    return terralib.intrinsic("llvm.nvvm.atomic.load.add.f64.p0f64",
+                              {&double,double} -> {double})
   end
 
   local cas_type
@@ -326,7 +342,7 @@ local function generate_atomic(op, typ)
     repeat
       if not mask then
         assumed = old
-        new     = [std_base.quote_binary_op(op, assumed, operand)]
+        new     = [base.quote_binary_op(op, assumed, operand)]
         res     = cas_func([&cas_type](address), @assumed_b, @new_b)
         old     = @[&typ](&res)
         mask    = @assumed_b == @[&cas_type](&old)
@@ -385,33 +401,149 @@ function cudahelper.compute_reduction_buffer_size(node, reductions)
   return size
 end
 
+local internal_kernel_id = 2 ^ 30
+local internal_kernels = {}
+local INTERNAL_KERNEL_PREFIX = "__internal"
+
+function cudahelper.get_internal_kernels()
+  return internal_kernels
+end
+
+cudahelper.generate_buffer_init_kernel = terralib.memoize(function(type, op)
+  local value = base.reduction_op_init[op][type]
+  local op_name = base.reduction_ops[op].name
+  local kernel_id = internal_kernel_id
+  internal_kernel_id = internal_kernel_id - 1
+  local kernel_name =
+    INTERNAL_KERNEL_PREFIX .. "__init__" .. tostring(type) ..
+    "__" .. tostring(op_name) .. "__"
+  local terra init(buffer : &type)
+    var tid = tid_x() + bid_x() * n_tid_x()
+    buffer[tid] = [value]
+  end
+  init:setname(kernel_name)
+  internal_kernels[kernel_id] = {
+    name = kernel_name,
+    kernel = init,
+  }
+  return kernel_id
+end)
+
+cudahelper.generate_buffer_reduction_kernel = terralib.memoize(function(type, op)
+  local value = base.reduction_op_init[op][type]
+  local op_name = base.reduction_ops[op].name
+  local kernel_id = internal_kernel_id
+  internal_kernel_id = internal_kernel_id - 1
+  local kernel_name =
+    INTERNAL_KERNEL_PREFIX .. "__red__" .. tostring(type) ..
+    "__" .. tostring(op_name) .. "__"
+
+  local tid = terralib.newsymbol(c.size_t, "tid")
+  local input = terralib.newsymbol(&type, "input")
+  local result = terralib.newsymbol(&type, "result")
+  local shared_mem_ptr = cudalib.sharedmemory(type, THREAD_BLOCK_SIZE)
+
+  local shared_mem_init = `([input][ [tid] ])
+  for i = 1, (GLOBAL_RED_BUFFER / THREAD_BLOCK_SIZE) - 1 do
+    shared_mem_init =
+      base.quote_binary_op(op, shared_mem_init,
+                           `([input][ [tid] + [i * THREAD_BLOCK_SIZE] ]))
+  end
+  local terra red([input], [result])
+    var [tid] = tid_x()
+    [shared_mem_ptr][ [tid] ] = [shared_mem_init]
+    barrier()
+    [cudahelper.generate_reduction_tree(tid, shared_mem_ptr, op)]
+    barrier()
+    if [tid] == 0 then [result][0] = [shared_mem_ptr][ [tid] ] end
+  end
+
+  red:setname(kernel_name)
+  internal_kernels[kernel_id] = {
+    name = kernel_name,
+    kernel = red,
+  }
+  return kernel_id
+end)
+
 function cudahelper.generate_reduction_preamble(reductions)
   local preamble = quote end
   local device_ptrs = terralib.newlist()
   local device_ptrs_map = {}
+  local host_ptrs_map = {}
 
   for red_var, red_op in pairs(reductions) do
     local device_ptr = terralib.newsymbol(&red_var.type, red_var.displayname)
-    local init = std_base.reduction_op_init[red_op][red_var.type]
+    local host_ptr = terralib.newsymbol(&red_var.type, red_var.displayname)
+    local init_kernel_id = cudahelper.generate_buffer_init_kernel(red_var.type, red_op)
+    local init_args = terralib.newlist({device_ptr})
     preamble = quote
       [preamble];
       var [device_ptr] = [&red_var.type](nil)
+      var [host_ptr] = [&red_var.type](nil)
       do
-        var r = RuntimeAPI.cudaMalloc([&&opaque](&[device_ptr]),
-                                      [sizeof(red_var.type) * GLOBAL_RED_BUFFER])
-        assert([r] == 0 and [device_ptr] ~= [&red_var.type](nil), "cudaMalloc failed")
-        var v : (red_var.type)[GLOBAL_RED_BUFFER]
-        for i = 0, GLOBAL_RED_BUFFER do v[i] = [init] end
-        RuntimeAPI.cudaMemcpy([device_ptr], [&opaque]([&red_var.type](v)),
-                              [sizeof(red_var.type) * GLOBAL_RED_BUFFER],
-                              RuntimeAPI.cudaMemcpyHostToDevice)
+        var bounds : C.legion_rect_1d_t
+        bounds.lo.x[0] = 0
+        bounds.hi.x[0] = [sizeof(red_var.type) * GLOBAL_RED_BUFFER - 1]
+        var buffer = C.legion_deferred_buffer_char_1d_create(bounds, C.GPU_FB_MEM, [&int8](nil))
+        [device_ptr] =
+          [&red_var.type]([&opaque](C.legion_deferred_buffer_char_1d_ptr(buffer, bounds.lo)))
+        [cudahelper.codegen_kernel_call(init_kernel_id, GLOBAL_RED_BUFFER, init_args, 0, true)]
+      end
+      do
+        var bounds : C.legion_rect_1d_t
+        bounds.lo.x[0] = 0
+        bounds.hi.x[0] = [sizeof(red_var.type) - 1]
+        var buffer = C.legion_deferred_buffer_char_1d_create(bounds, C.Z_COPY_MEM, [&int8](nil))
+        [host_ptr] =
+          [&red_var.type]([&opaque](C.legion_deferred_buffer_char_1d_ptr(buffer, bounds.lo)))
       end
     end
     device_ptrs:insert(device_ptr)
     device_ptrs_map[device_ptr] = red_var
+    host_ptrs_map[device_ptr] = host_ptr
   end
 
-  return device_ptrs, device_ptrs_map, preamble
+  return device_ptrs, device_ptrs_map, host_ptrs_map, preamble
+end
+
+function cudahelper.generate_reduction_tree(tid, shared_mem_ptr, red_op)
+  local reduction_tree = quote end
+  local step = THREAD_BLOCK_SIZE
+  while step > 64 do
+    step = step / 2
+    reduction_tree = quote
+      [reduction_tree]
+      if [tid] < step then
+        var v = [base.quote_binary_op(red_op,
+                                      `([shared_mem_ptr][ [tid] ]),
+                                      `([shared_mem_ptr][ [tid] + [step] ]))]
+
+        terralib.attrstore(&[shared_mem_ptr][ [tid] ], v, { isvolatile = true })
+      end
+      barrier()
+    end
+  end
+  local unrolled_reductions = terralib.newlist()
+  while step > 1 do
+    step = step / 2
+    unrolled_reductions:insert(quote
+      do
+        var v = [base.quote_binary_op(red_op,
+                                      `([shared_mem_ptr][ [tid] ]),
+                                      `([shared_mem_ptr][ [tid] + [step] ]))]
+        terralib.attrstore(&[shared_mem_ptr][ [tid] ], v, { isvolatile = true })
+      end
+      barrier()
+    end)
+  end
+  reduction_tree = quote
+    [reduction_tree]
+    if [tid] < 32 then
+      [unrolled_reductions]
+    end
+  end
+  return reduction_tree
 end
 
 function cudahelper.generate_reduction_kernel(reductions, device_ptrs_map)
@@ -421,7 +553,7 @@ function cudahelper.generate_reduction_kernel(reductions, device_ptrs_map)
     local red_op = reductions[red_var]
     local shared_mem_ptr =
       cudalib.sharedmemory(red_var.type, THREAD_BLOCK_SIZE)
-    local init = std_base.reduction_op_init[red_op][red_var.type]
+    local init = base.reduction_op_init[red_op][red_var.type]
     preamble = quote
       [preamble]
       var [red_var] = [init]
@@ -429,41 +561,7 @@ function cudahelper.generate_reduction_kernel(reductions, device_ptrs_map)
     end
 
     local tid = terralib.newsymbol(c.size_t, "tid")
-    local reduction_tree = quote end
-    local step = THREAD_BLOCK_SIZE
-    while step > 64 do
-      step = step / 2
-      reduction_tree = quote
-        [reduction_tree]
-        if [tid] < step then
-          var v = [std_base.quote_binary_op(red_op,
-                                            `([shared_mem_ptr][ [tid] ]),
-                                            `([shared_mem_ptr][ [tid] + [step] ]))]
-
-          terralib.attrstore(&[shared_mem_ptr][ [tid] ], v, { isvolatile = true })
-        end
-        barrier()
-      end
-    end
-    local unrolled_reductions = terralib.newlist()
-    while step > 1 do
-      step = step / 2
-      unrolled_reductions:insert(quote
-        do
-          var v = [std_base.quote_binary_op(red_op,
-                                            `([shared_mem_ptr][ [tid] ]),
-                                            `([shared_mem_ptr][ [tid] + [step] ]))]
-          terralib.attrstore(&[shared_mem_ptr][ [tid] ], v, { isvolatile = true })
-        end
-        barrier()
-      end)
-    end
-    reduction_tree = quote
-      [reduction_tree]
-      if [tid] < 32 then
-        [unrolled_reductions]
-      end
-    end
+    local reduction_tree = cudahelper.generate_reduction_tree(tid, shared_mem_ptr, red_op)
     postamble = quote
       do
         var [tid] = tid_x()
@@ -472,7 +570,7 @@ function cudahelper.generate_reduction_kernel(reductions, device_ptrs_map)
         barrier()
         [reduction_tree]
         if [tid] == 0 then
-          [generate_atomic(red_op, red_var.type)](
+          [cudahelper.generate_atomic_update(red_op, red_var.type)](
             &[device_ptr][bid % [GLOBAL_RED_BUFFER] ], [shared_mem_ptr][ [tid] ])
         end
       end
@@ -481,31 +579,37 @@ function cudahelper.generate_reduction_kernel(reductions, device_ptrs_map)
   return preamble, postamble
 end
 
-function cudahelper.generate_reduction_postamble(reductions, device_ptrs_map)
-  local postamble = nil
+function cudahelper.generate_reduction_postamble(reductions, device_ptrs_map, host_ptrs_map)
+  local postamble = quote end
   for device_ptr, red_var in pairs(device_ptrs_map) do
     local red_op = reductions[red_var]
-    local init = std_base.reduction_op_init[red_op][red_var.type]
-    if postamble == nil then
-      postamble = quote RuntimeAPI.cudaDeviceSynchronize() end
-    end
+    local red_kernel_id = cudahelper.generate_buffer_reduction_kernel(red_var.type, red_op)
+    local host_ptr = host_ptrs_map[device_ptr]
+    local red_args = terralib.newlist({device_ptr, host_ptr})
+    local shared_mem_size = terralib.sizeof(red_var.type) * THREAD_BLOCK_SIZE
     postamble = quote
-      [postamble]
-      do
-        var v : (red_var.type)[GLOBAL_RED_BUFFER]
-        RuntimeAPI.cudaMemcpy([&opaque]([&red_var.type](v)), [device_ptr],
-                              [sizeof(red_var.type) * GLOBAL_RED_BUFFER],
-                              RuntimeAPI.cudaMemcpyDeviceToHost)
-        var tmp : red_var.type = [init]
-        for i = 0, GLOBAL_RED_BUFFER do
-          tmp = [std_base.quote_binary_op(red_op, tmp, `(v[i]))]
-        end
-        [red_var] = [std_base.quote_binary_op(red_op, red_var, tmp)]
-        RuntimeAPI.cudaFree([device_ptr])
-      end
+      [postamble];
+      [cudahelper.codegen_kernel_call(red_kernel_id, THREAD_BLOCK_SIZE, red_args, shared_mem_size, true)]
     end
   end
-  if postamble == nil then postamble = quote end end
+
+  local needs_sync = true
+  for device_ptr, red_var in pairs(device_ptrs_map) do
+    if needs_sync then
+      postamble = quote
+        [postamble];
+        RuntimeAPI.cudaDeviceSynchronize()
+      end
+      needs_sync = false
+    end
+    local red_op = reductions[red_var]
+    local host_ptr = host_ptrs_map[device_ptr]
+    postamble = quote
+      [postamble];
+      [red_var] = [base.quote_binary_op(red_op, red_var, `([host_ptr][0]))]
+    end
+  end
+
   return postamble
 end
 
@@ -532,7 +636,7 @@ local function generate_prefix_op_kernel(shmem, tid, num_leaves, op, init, left_
           var bi : int = offset * ob - [left_to_right]
           ai = ai + bank_offset(ai)
           bi = bi + bank_offset(bi)
-          [shmem][bi] = [std_base.quote_binary_op(op, `([shmem][ai]), `([shmem][bi]))]
+          [shmem][bi] = [base.quote_binary_op(op, `([shmem][ai]), `([shmem][bi]))]
         end
         offset = offset << 1
         d = d >> 1
@@ -552,7 +656,7 @@ local function generate_prefix_op_kernel(shmem, tid, num_leaves, op, init, left_
           bi = bi + bank_offset(bi)
           var x = [shmem][ai]
           [shmem][ai] = [shmem][bi]
-          [shmem][bi] = [std_base.quote_binary_op(op, x, `([shmem][bi]))]
+          [shmem][bi] = [base.quote_binary_op(op, x, `([shmem][bi]))]
         end
         d = d << 1
       end
@@ -599,11 +703,11 @@ local function generate_prefix_op_prescan(shmem, lhs, rhs, lhs_ptr, rhs_ptr, res
     var [res]
     [idx].__ptr = t
     [rhs.actions]
-    [res] = [std_base.quote_binary_op(op, `([shmem][ [idx].__ptr + bank_offset([idx].__ptr) ]), rhs.value)]
+    [res] = [base.quote_binary_op(op, `([shmem][ [idx].__ptr + bank_offset([idx].__ptr) ]), rhs.value)]
     [lhs.actions]
     [idx].__ptr = [idx].__ptr + [THREAD_BLOCK_SIZE]
     [rhs.actions]
-    [res] = [std_base.quote_binary_op(op, `([shmem][ [idx].__ptr + bank_offset([idx].__ptr) ]), rhs.value)]
+    [res] = [base.quote_binary_op(op, `([shmem][ [idx].__ptr + bank_offset([idx].__ptr) ]), rhs.value)]
     [lhs.actions]
   end
 
@@ -632,13 +736,13 @@ local function generate_prefix_op_prescan(shmem, lhs, rhs, lhs_ptr, rhs_ptr, res
     var [res]
     [idx].__ptr = t
     [rhs.actions]
-    [res] = [std_base.quote_binary_op(op,
+    [res] = [base.quote_binary_op(op,
         `([shmem][ [idx].__ptr + bank_offset([idx].__ptr) ]), rhs.value)]
     [lhs.actions]
     [idx].__ptr = [idx].__ptr + (num_leaves / 2)
     if [idx].__ptr < num_elmts then
       [rhs.actions]
-      [res] = [std_base.quote_binary_op(op,
+      [res] = [base.quote_binary_op(op,
           `([shmem][ [idx].__ptr + bank_offset([idx].__ptr) ]), rhs.value)]
       [lhs.actions]
     end
@@ -675,12 +779,12 @@ local function generate_prefix_op_scan(shmem, lhs_wr, lhs_rd, lhs_ptr, res, idx,
     tidx = t
     [idx].__ptr = (tidx + lr) * [offset] - lr
     [lhs_rd.actions]
-    [res] = [std_base.quote_binary_op(op, `([shmem][tidx + bank_offset(tidx)]), lhs_rd.value)]
+    [res] = [base.quote_binary_op(op, `([shmem][tidx + bank_offset(tidx)]), lhs_rd.value)]
     [lhs_wr.actions]
     tidx = tidx + [THREAD_BLOCK_SIZE]
     [idx].__ptr = (tidx + lr) * [offset] - lr
     [lhs_rd.actions]
-    [res] = [std_base.quote_binary_op(op, `([shmem][tidx + bank_offset(tidx)]), lhs_rd.value)]
+    [res] = [base.quote_binary_op(op, `([shmem][tidx + bank_offset(tidx)]), lhs_rd.value)]
     [lhs_wr.actions]
   end
 
@@ -729,26 +833,26 @@ local function generate_prefix_op_scan(shmem, lhs_wr, lhs_rd, lhs_ptr, res, idx,
       var tidx = t
       [idx].__ptr = (tidx + 1) * [offset] - 1
       [lhs_rd.actions]
-      [res] = [std_base.quote_binary_op(op, `([shmem][tidx + bank_offset(tidx)]), lhs_rd.value)]
+      [res] = [base.quote_binary_op(op, `([shmem][tidx + bank_offset(tidx)]), lhs_rd.value)]
       [lhs_wr.actions]
       tidx = tidx + num_leaves / 2
       if [tidx] < [num_elmts] then
         [idx].__ptr = (tidx + 1) * [offset] - 1
         [lhs_rd.actions]
-        [res] = [std_base.quote_binary_op(op, `([shmem][tidx + bank_offset(tidx)]), lhs_rd.value)]
+        [res] = [base.quote_binary_op(op, `([shmem][tidx + bank_offset(tidx)]), lhs_rd.value)]
         [lhs_wr.actions]
       end
     else
       var tidx = t
       [idx].__ptr = tidx * [offset]
       [lhs_rd.actions]
-      [res] = [std_base.quote_binary_op(op, `([shmem][tidx + bank_offset(tidx)]), lhs_rd.value)]
+      [res] = [base.quote_binary_op(op, `([shmem][tidx + bank_offset(tidx)]), lhs_rd.value)]
       [lhs_wr.actions]
       tidx = tidx + num_leaves / 2
       if [tidx] < [num_elmts] then
         [idx].__ptr = tidx * [offset]
         [lhs_rd.actions]
-        [res] = [std_base.quote_binary_op(op, `([shmem][tidx + bank_offset(tidx)]), lhs_rd.value)]
+        [res] = [base.quote_binary_op(op, `([shmem][tidx + bank_offset(tidx)]), lhs_rd.value)]
         [lhs_wr.actions]
       end
     end
@@ -767,7 +871,7 @@ function cudahelper.generate_prefix_op_kernels(lhs_wr, lhs_rd, rhs, lhs_ptr, rhs
                                                res, idx, dir, op, elem_type)
   local BLOCK_SIZE = THREAD_BLOCK_SIZE * 2
   local shmem = cudalib.sharedmemory(elem_type, BLOCK_SIZE)
-  local init = std_base.reduction_op_init[op][elem_type]
+  local init = base.reduction_op_init[op][elem_type]
 
   local prescan_full, prescan_arbitrary =
     generate_prefix_op_prescan(shmem, lhs_wr, rhs, lhs_ptr, rhs_ptr, res, idx, dir, op, init)
@@ -794,7 +898,7 @@ function cudahelper.generate_prefix_op_kernels(lhs_wr, lhs_rd, rhs, lhs_ptr, rhs
       [lhs_rd.actions]
       var v2 = [lhs_rd.value]
 
-      [res] = [std_base.quote_binary_op(op, v1, v2)]
+      [res] = [base.quote_binary_op(op, v1, v2)]
       [lhs_wr.actions]
     else
       var t = [cudahelper.global_thread_id()]
@@ -808,7 +912,7 @@ function cudahelper.generate_prefix_op_kernels(lhs_wr, lhs_rd, rhs, lhs_ptr, rhs
       [lhs_rd.actions]
       var v2 = [lhs_rd.value]
 
-      [res] = [std_base.quote_binary_op(op, v1, v2)]
+      [res] = [base.quote_binary_op(op, v1, v2)]
       [lhs_wr.actions]
     end
   end
@@ -974,7 +1078,6 @@ function cudahelper.generate_parallel_prefix_op(variant, total, lhs_wr, lhs_rd, 
         var [num_threads] = total - [BLOCK_SIZE]
         [call_postscan_full]
       end
-      RuntimeAPI.cudaDeviceSynchronize()
     end
   end
 
@@ -1046,14 +1149,45 @@ local builtin_gpu_fns = {
   tan   = externcall_builtin("__nv_tan"   , double -> double),
 }
 
-local cpu_fn_to_gpu_fn = {}
+local function get_nv_fn_name(name, type)
+  lua_assert(type:isfloat())
+  local nv_name = "__nv_" .. name
 
-function cudahelper.register_builtin(name, cpu_fn)
-  cpu_fn_to_gpu_fn[cpu_fn] = builtin_gpu_fns[name]
+  -- Okay. a little divergence from the C standard...
+  if name == "isnan" or name == "isinf" then
+    if type == double then
+      nv_name = nv_name .. "d"
+    else
+      nv_name = nv_name .. "f"
+    end
+  -- Seriously?
+  elseif name == "finite" then
+    if type == double then
+      nv_name = "__nv_isfinited"
+    else
+      nv_name = "__nv_finitef"
+    end
+  elseif type == float then
+    nv_name = nv_name .. "f"
+  end
+  return nv_name
 end
 
-function cudahelper.replace_with_builtin(fn)
-  return cpu_fn_to_gpu_fn[fn] or fn
+local function get_cuda_definition(self)
+  if self:has_variant("cuda") then
+    return self:get_variant("cuda")
+  else
+    local fn_type = self.super:get_definition().type
+    local fn_name = get_nv_fn_name(self:get_name(), self:get_arg_type())
+    lua_assert(fn_name ~= nil)
+    local fn = externcall_builtin(fn_name, fn_type)
+    self:set_variant("cuda", fn)
+    return fn
+  end
+end
+
+function cudahelper.get_cuda_variant(math_fn)
+  return math_fn:override(get_cuda_definition)
 end
 
 return cudahelper

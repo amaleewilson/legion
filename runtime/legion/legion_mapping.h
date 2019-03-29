@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -231,7 +231,7 @@ namespace Legion {
       Mapper(MapperRuntime *rt);
       virtual ~Mapper(void);
     public:
-      MapperRuntime *const runtime;
+      MapperRuntime *const runtime; 
     public:
       /**
        ** ----------------------------------------------------------------------
@@ -318,6 +318,17 @@ namespace Legion {
        *     from being stolen as it will have already been mapped
        *     once it enters the ready queue.
        *
+       * valid_instance default:true
+       *     When calls to map_task are performed, it's often the 
+       *     case that the mapper will want to know the currently valid
+       *     instances are for that region. There is some overhead to
+       *     doing this and the mapper may want to avoid this overhead
+       *     in cases where it knows it won't need the information such
+       *     as when it is going to virtually map all the regions for 
+       *     an inner task. By setting this flag to false the mapper
+       *     can opt-out of receiving the valid instance information
+       *     for a task.
+       *
        * parent_priority default:current
        *     If the mapper for the parent task permits child
        *     operations to mutate the priority of the parent task
@@ -329,7 +340,9 @@ namespace Legion {
         bool                                   inline_task;  // = false
         bool                                   stealable;   // = false
         bool                                   map_locally;  // = false
+        bool                                   valid_instances; // = true
         bool                                   memoize;  // = false
+        bool                                   replicate; // = false
         TaskPriority                           parent_priority; // = current
       };
       //------------------------------------------------------------------------
@@ -424,6 +437,7 @@ namespace Legion {
       struct SliceTaskInput {
         IndexSpace                             domain_is;
         Domain                                 domain;
+        IndexSpace                             sharding_is;
       };
       struct SliceTaskOutput {
         std::vector<TaskSlice>                 slices;
@@ -541,17 +555,13 @@ namespace Legion {
        * each of the different region requirements for the task in 
        * 'mapped_regions', as well of any currently valid physical instances
        * for those regions in the set of 'valid_instances' for each region
-       * requirement. The mapper then specifies the desired number of copies
-       * of each region requirement that it wants to generate in the 
-       * 'copy_count' vector. Setting this count to 0 will prevent any copies 
-       * from being made. The runtime will first walk through the list of 
-       * physical instances in 'chosen_ranking' and issue copies to the target 
-       * physical instances for each region requirement. The runtime will
-       * continue issuing copies until the copy count has been met. If the
-       * copy count has still not been satisfied, the runtime will progress
-       * through the layout constraints until either it has met the copy
-       * count or the requested number of physical instances in the target
-       * memories have been created.
+       * requirement. The mapper can then specify one or more new instances
+       * to update with the output from the task for each region requirement.
+       * Unlike map_task where the chosen_instances are filtered so that only
+       * the first instance which has space for a given field is updated, each
+       * instances specified in 'chosen_instances' will be updated for any 
+       * fields of the original region requirement for which they have 
+       * sufficient space. 
        */
       struct PostMapInput {
         std::vector<std::vector<PhysicalInstance> >     mapped_regions;
@@ -1409,6 +1419,8 @@ namespace Legion {
       struct SelectTunableInput {
         TunableID                               tunable_id;
         MappingTagID                            mapping_tag;
+        const void*                             args;
+        size_t                                  size;
       };
       struct SelectTunableOutput {
         void*                                   value;
@@ -1447,10 +1459,15 @@ namespace Legion {
         std::vector<const Task*>                    tasks;
         std::vector<MappingConstraint>              constraints;
         MappingTagID                                mapping_tag;
+        // For collective map_must_epoch only
+        std::vector<Processor>                      shard_mapping;
+        ShardID                                     local_shard;
       };
       struct MapMustEpochOutput {
         std::vector<Processor>                      task_processors;
         std::vector<std::vector<PhysicalInstance> > constraint_mappings;
+        // For collective map_must_epoch only
+        std::vector<int>                            weights;
       };
       //------------------------------------------------------------------------
       virtual void map_must_epoch(const MapperContext           ctx,
@@ -1637,6 +1654,23 @@ namespace Legion {
       virtual void handle_task_result(const MapperContext           ctx,
                                       const MapperTaskResult&       result) = 0;
       //------------------------------------------------------------------------
+    public:
+      // Future structs for control replication, 
+      // provided here for forward compatibility
+      struct MapReplicateTaskOutput {
+        std::vector<MapTaskOutput>                      task_mappings;
+        std::vector<Processor>                          control_replication_map;
+      };
+      struct SelectShardingFunctorInput {
+        std::vector<Processor>                  shard_mapping;
+      };
+      struct SelectShardingFunctorOutput {
+        ShardingID                              chosen_functor;
+      };
+      struct MustEpochShardingFunctorOutput :
+              public SelectShardingFunctorOutput {
+        bool                                    collective_map_must_epoch_call;
+      };
     };
 
     /**
@@ -1737,9 +1771,11 @@ namespace Legion {
       void release_layout(MapperContext ctx, 
                                     LayoutConstraintID layout_id) const;
       bool do_constraints_conflict(MapperContext ctx,
-                       LayoutConstraintID set1, LayoutConstraintID set2) const;
+                     LayoutConstraintID set1, LayoutConstraintID set2,
+                     const LayoutConstraint **conflict_constraint = NULL) const;
       bool do_constraints_entail(MapperContext ctx,
-                   LayoutConstraintID source, LayoutConstraintID target) const;
+                   LayoutConstraintID source, LayoutConstraintID target,
+                   const LayoutConstraint **failed_constraint = NULL) const;
     public:
       //------------------------------------------------------------------------
       // Methods for manipulating variants 
@@ -1763,6 +1799,8 @@ namespace Legion {
                                       VariantID variant_id)const;
       bool is_idempotent_variant(MapperContext ctx, TaskID task_id,
                                            VariantID variant_id) const;
+      bool is_replicable_variant(MapperContext ctx, TaskID task_id,
+                                      VariantID variant_id) const; 
     public:
       //------------------------------------------------------------------------
       // Methods for accelerating mapping decisions
@@ -1790,27 +1828,33 @@ namespace Legion {
                                     const LayoutConstraintSet &constraints, 
                                     const std::vector<LogicalRegion> &regions,
                                     PhysicalInstance &result, bool acquire=true,
-                                    GCPriority priority = 0) const;
+                                    GCPriority priority = 0,
+                                    bool tight_region_bounds = false,
+                                    size_t *footprint = NULL) const;
       bool create_physical_instance(
                                     MapperContext ctx, Memory target_memory,
                                     LayoutConstraintID layout_id,
                                     const std::vector<LogicalRegion> &regions,
                                     PhysicalInstance &result, bool acquire=true,
-                                    GCPriority priority = 0) const;
+                                    GCPriority priority = 0,
+                                    bool tight_region_bounds = false,
+                                    size_t *footprint = NULL) const;
       bool find_or_create_physical_instance(
                                     MapperContext ctx, Memory target_memory,
                                     const LayoutConstraintSet &constraints, 
                                     const std::vector<LogicalRegion> &regions,
                                     PhysicalInstance &result, bool &created, 
                                     bool acquire = true,GCPriority priority = 0,
-                                    bool tight_region_bounds = false) const;
+                                    bool tight_region_bounds = false,
+                                    size_t *footprint = NULL) const;
       bool find_or_create_physical_instance(
                                     MapperContext ctx, Memory target_memory,
                                     LayoutConstraintID layout_id,
                                     const std::vector<LogicalRegion> &regions,
                                     PhysicalInstance &result, bool &created, 
                                     bool acquire = true,GCPriority priority = 0,
-                                    bool tight_region_bounds = false) const;
+                                    bool tight_region_bounds = false,
+                                    size_t *footprint = NULL) const;
       bool find_physical_instance(
                                     MapperContext ctx, Memory target_memory,
                                     const LayoutConstraintSet &constraints,

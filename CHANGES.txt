@@ -1,6 +1,21 @@
 This file lists the major changes as they appear in the stable branch.  No
 attempt is made to keep this list accurate for the master branch.
 
+Version 18.12.0 (December 27, 2018)
+  * Realm
+    - More assorted bug fixes
+    - Minor performance improvements in logging and accessor code
+    - Handle signals on an alternate stack for better debugging/backtraces
+  * Regent
+    - Added a new built-in complex type
+    - Experimental support for building with PUC Lua
+    - Multiple fixes to CUDA code generation, vectorization,
+        auto-parallelization, and mapping optimization
+    - Better error messages for __demand(__leaf) and so on
+  * Python
+    - Use PyGILState for threading for compatibility with modules (e.g. numpy)
+    - Support for calling tasks written in Regent
+
 Version 18.09.0 (September 19, 2018)
   * Legion
     - Support for physical tracing, which can provide up to 7x improvement in
@@ -11,8 +26,8 @@ Version 18.09.0 (September 19, 2018)
     - Support for development snapshots of GASNet-EX (using GASNet-1
         compatibility interfaces for now)
   * Regent
-    - Changed precendence of logical operators (and, or) to match that of
-        Lua and Terra (or is now lower-precendence than and)
+    - Changed precedence of logical operators (and, or) to match that of
+        Lua and Terra (or is now lower-precedence than and)
     - Full support for accessing sparse multi-dimensional regions
     - Initial support for incremental compilation. Enable with
         REGENT_INCREMENTAL=1

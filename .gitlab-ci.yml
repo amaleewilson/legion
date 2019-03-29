@@ -83,6 +83,9 @@ variables:
 .cmake: &cmake
   USE_CMAKE: "1"
 
+.prof: &prof
+  USE_PROF: "1"
+
 .legion: &legion
   TEST_REGENT: "0"
 
@@ -193,6 +196,11 @@ before_script:
     - grep 'model name' /proc/cpuinfo | uniq -c
     - free
     - ./test.py
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - unknown_failure
 
 # Some additional tests are only run on certain configurations.
 .external_tests: &external_tests
@@ -204,6 +212,11 @@ before_script:
         ssh-add <(echo "$GITLAB_DEPLOY_KEY")
       fi
     - ./test.py --test=external --test=private
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - unknown_failure
 
 # For performance tests, run these commands:
 .perf_tests: &perf_tests
@@ -219,6 +232,11 @@ before_script:
     - export PERF_MIN_NODES=1
     - export PERF_MAX_NODES=1
     - ./test.py --test=perf
+  retry:
+    max: 2
+    when:
+      - runner_system_failure
+      - unknown_failure
 
 ###
 ### Jobs
@@ -257,6 +275,11 @@ gcc49_cxx98_debug_spy_regent:
   <<: [*linux_compute, *image, *tests]
   variables:
     <<: [*gcc49, *terra38, *debug, *cxx98_spy, *regent, *parallel]
+#   * Prof
+gcc49_cxx98_release_prof_regent:
+  <<: [*linux_compute, *image, *tests]
+  variables:
+    <<: [*gcc49, *terra38, *release, *cxx98_normal, *prof, *regent, *parallel]
 #   * C++11
 gcc49_cxx11_release_legion:
   <<: [*linux, *image, *tests]
@@ -312,6 +335,15 @@ gcc49_cxx98_debug_gasnetex_regent:
   <<: [*linux_compute, *image, *tests]
   variables:
     <<: [*gcc49, *terra38, *debug, *cxx98_normal, *gasnetex, *regent, *incremental]
+# * Integration: Python + Regent
+gcc49_cxx98_debug_python2_regent:
+  <<: [*linux, *image, *tests]
+  variables:
+    <<: [*gcc49, *terra38, *debug, *cxx98_normal, *python2, *regent]
+gcc49_cxx98_debug_python3_regent:
+  <<: [*linux, *image, *tests]
+  variables:
+    <<: [*gcc49, *terra38, *debug, *cxx98_normal, *python3, *regent]
 # * Integration: LLVM + GASNet
 gcc49_cxx98_debug_llvm_gasnet_legion:
   <<: [*linux_compute, *image, *tests]
@@ -371,6 +403,11 @@ clang38_cxx98_debug_spy_regent:
   <<: [*linux_compute, *image_clang, *tests]
   variables:
     <<: [*clang38, *terra38, *debug, *cxx98_spy, *regent, *parallel]
+#   * Prof
+clang38_cxx98_release_prof_regent:
+  <<: [*linux_compute, *image_clang, *tests]
+  variables:
+    <<: [*clang38, *terra38, *release, *cxx98_normal, *prof, *regent, *parallel]
 #   * C++11
 clang38_cxx11_release_legion:
   <<: [*linux, *image_clang, *tests]
@@ -422,6 +459,15 @@ clang38_cxx98_debug_gasnet_regent:
   <<: [*linux_compute, *image_clang, *tests]
   variables:
     <<: [*clang38, *terra38, *debug, *cxx98_normal, *gasnet, *regent, *incremental]
+# * Integration: Python + Regent
+clang38_cxx98_debug_python2_regent:
+  <<: [*linux, *image_clang, *tests]
+  variables:
+    <<: [*clang38, *terra38, *debug, *cxx98_normal, *python2, *regent]
+clang38_cxx98_debug_python3_regent:
+  <<: [*linux, *image_clang, *tests]
+  variables:
+    <<: [*clang38, *terra38, *debug, *cxx98_normal, *python3, *regent]
 # * Integration: LLVM + GASNet
 clang38_cxx98_debug_llvm_gasnet_legion:
   <<: [*linux_compute, *image_clang, *tests]

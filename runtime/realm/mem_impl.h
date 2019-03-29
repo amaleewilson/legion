@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -327,6 +327,7 @@ namespace Realm {
       struct RequestArgs {
 	RegionInstance inst;
 	size_t offset;
+        size_t footprint;
 	bool success;
       };
 
@@ -337,8 +338,8 @@ namespace Realm {
 					handle_request> Message;
 
       static void send_request(NodeID target,
-			       RegionInstance inst,
-			       size_t offset, bool success);
+			       RegionInstance inst, size_t offset, 
+                               size_t footprint, bool success);
     };
 
     struct MemStorageReleaseRequest {

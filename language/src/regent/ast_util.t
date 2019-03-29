@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University
+-- Copyright 2019 Stanford University
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -57,7 +57,8 @@ function ast_util.mk_expr_bounds_access(value)
   local expr_type = std.as_read(value.expr_type)
   local index_type
   if std.is_region(expr_type) then
-    index_type = expr_type:ispace().index_type
+    return ast_util.mk_expr_bounds_access(
+      ast_util.mk_expr_field_access(value, "ispace", expr_type:ispace()))
   elseif std.is_ispace(expr_type) then
     index_type = expr_type.index_type
   else
@@ -95,7 +96,7 @@ function ast_util.mk_expr_binary(op, lhs, rhs)
   }
 end
 
-function ast_util.mk_expr_call(fn, args)
+function ast_util.mk_expr_call(fn, args, replicable)
   args = args or terralib.newlist()
   if not terralib.islist(args) then
     args = terralib.newlist {args}
@@ -131,7 +132,7 @@ function ast_util.mk_expr_call(fn, args)
     args = args,
     expr_type = expr_type,
     conditions = terralib.newlist(),
-    replicable = false,
+    replicable = replicable or false,
     span = ast.trivial_span(),
     annotations = ast.default_annotations(),
   }
@@ -306,6 +307,7 @@ function ast_util.mk_stat_assignment(lhs, rhs)
   return ast.typed.stat.Assignment {
     lhs = lhs,
     rhs = rhs,
+    metadata = false,
     span = ast.trivial_span(),
     annotations = ast.default_annotations(),
   }
@@ -316,6 +318,7 @@ function ast_util.mk_stat_reduce(op, lhs, rhs)
     op = op,
     lhs = lhs,
     rhs = rhs,
+    metadata = false,
     span = ast.trivial_span(),
     annotations = ast.default_annotations(),
   }
@@ -326,6 +329,7 @@ function ast_util.mk_stat_for_list(symbol, value, block)
     symbol = symbol,
     value = value,
     block = block,
+    metadata = false,
     span = ast.trivial_span(),
     annotations = ast.default_annotations(),
   }

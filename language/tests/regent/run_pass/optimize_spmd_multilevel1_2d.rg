@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University
+-- Copyright 2019 Stanford University
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ local x1y1 = terralib.constant(`int2d { __ptr = regentlib.__int2d { 1, 1 } })
 
 task main()
   var grid = region(ispace(int2d, { 4, 4 }), int)
+  fill(grid, 0)
 
   var LR = partition(equal, grid, ispace(int2d, { 2, 1 }))
   var TB = partition(equal, grid, ispace(int2d, { 1, 2 }))

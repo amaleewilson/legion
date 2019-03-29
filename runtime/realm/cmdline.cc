@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -155,6 +155,18 @@ namespace Realm {
     errno = 0;  // no errors from before
     char *pos;
     target = strtoul(s.c_str(), &pos, 10);
+    if((errno == 0) && (*pos == 0)) {
+      return true;
+    } else 
+      return false;
+  }
+
+  template <>
+  bool convert_integer_cmdline_argument<long long>(const std::string& s, long long& target)
+  {
+    errno = 0;  // no errors from before
+    char *pos;
+    target = strtoll(s.c_str(), &pos, 10);
     if((errno == 0) && (*pos == 0)) {
       return true;
     } else 

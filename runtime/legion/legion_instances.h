@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,7 +111,7 @@ namespace Legion {
                       LayoutDescription *layout, const PointerConstraint &cons,
                       DistributedID did, AddressSpaceID owner_space, 
                       RegionNode *node, PhysicalInstance inst, 
-                      IndexSpaceNode *instance_domain,
+                      const size_t footprint, IndexSpaceNode *instance_domain,
                       bool own_domain, bool register_now);
       virtual ~PhysicalManager(void);
     public:
@@ -138,7 +138,6 @@ namespace Legion {
       inline VirtualManager* as_virtual_manager(void) const;
     public:
       virtual ApEvent get_use_event(void) const = 0;
-      virtual size_t get_instance_size(void) const = 0;
       virtual void notify_active(ReferenceMutator *mutator);
       virtual void notify_inactive(ReferenceMutator *mutator);
       virtual void notify_valid(ReferenceMutator *mutator);
@@ -160,6 +159,7 @@ namespace Legion {
       inline void remove_space_fields(std::set<FieldID> &fields) const
         { if (layout != NULL) layout->remove_space_fields(fields);
           else fields.clear(); }
+      inline size_t get_instance_size(void) const { return instance_footprint; }
     public:
       inline bool is_normal_instance(void) const 
         { return is_instance_manager(); }
@@ -177,10 +177,14 @@ namespace Legion {
       bool meets_region_tree(const std::vector<LogicalRegion> &regions) const;
       bool meets_regions(const std::vector<LogicalRegion> &regions,
                          bool tight_region_bounds = false) const;
-      bool entails(LayoutConstraints *constraints) const;
-      bool entails(const LayoutConstraintSet &constraints) const;
-      bool conflicts(LayoutConstraints *constraints) const;
-      bool conflicts(const LayoutConstraintSet &constraints) const;
+      bool entails(LayoutConstraints *constraints,
+                   const LayoutConstraint **failed_constraint) const;
+      bool entails(const LayoutConstraintSet &constraints,
+                   const LayoutConstraint **failed_constraint) const;
+      bool conflicts(LayoutConstraints *constraints,
+                     const LayoutConstraint **conflict_constraint) const;
+      bool conflicts(const LayoutConstraintSet &constraints,
+                     const LayoutConstraint **conflict_constraint) const;
     public:
       inline PhysicalInstance get_instance(void) const
       {
@@ -212,6 +216,7 @@ namespace Legion {
       RegionNode *const region_node;
       LayoutDescription *const layout;
       const PhysicalInstance instance;
+      const size_t instance_footprint;
       IndexSpaceNode *instance_domain;
       const bool own_domain;
       const PointerConstraint pointer_constraint;
@@ -253,8 +258,8 @@ namespace Legion {
                       IndexSpaceNode *instance_domain, bool own_domain,
                       RegionNode *node, LayoutDescription *desc, 
                       const PointerConstraint &constraint,
-                      bool register_now, ApEvent use_event,
-                      bool external_instance,
+                      bool register_now, size_t footprint,
+                      ApEvent use_event, bool external_instance,
                       Reservation read_only_mapping_reservation); 
       InstanceManager(const InstanceManager &rhs);
       virtual ~InstanceManager(void);
@@ -267,8 +272,6 @@ namespace Legion {
       virtual LegionRuntime::Accessor::RegionAccessor<
         LegionRuntime::Accessor::AccessorType::Generic>
           get_field_accessor(FieldID fid) const;
-    public:
-      virtual size_t get_instance_size(void) const;
     public:
       virtual ApEvent get_use_event(void) const { return use_event; }
       inline Reservation get_read_only_mapping_reservation(void) const
@@ -313,7 +316,7 @@ namespace Legion {
                        IndexSpaceNode *inst_domain, bool own_domain,
                        RegionNode *region_node, ReductionOpID redop, 
                        const ReductionOp *op, ApEvent use_event,
-                       bool register_now);
+                       size_t footprint, bool register_now);
       virtual ~ReductionManager(void);
     public:
       virtual LegionRuntime::Accessor::RegionAccessor<
@@ -322,8 +325,6 @@ namespace Legion {
       virtual LegionRuntime::Accessor::RegionAccessor<
         LegionRuntime::Accessor::AccessorType::Generic>
           get_field_accessor(FieldID fid) const = 0;
-    public:
-      virtual size_t get_instance_size(void) const = 0;
     public:
       virtual bool is_foldable(void) const = 0;
       virtual void find_field_offsets(const FieldMask &reduce_mask,
@@ -383,7 +384,7 @@ namespace Legion {
                            IndexSpaceNode *inst_domain, bool own_domain,
                            RegionNode *node, ReductionOpID redop, 
                            const ReductionOp *op, Domain dom,
-                           ApEvent use_event, bool register_now);
+                           ApEvent use_event,size_t fooprint,bool register_now);
       ListReductionManager(const ListReductionManager &rhs);
       virtual ~ListReductionManager(void);
     public:
@@ -395,7 +396,6 @@ namespace Legion {
       virtual LegionRuntime::Accessor::RegionAccessor<
         LegionRuntime::Accessor::AccessorType::Generic>
           get_field_accessor(FieldID fid) const;
-      virtual size_t get_instance_size(void) const;
     public:
       virtual bool is_foldable(void) const;
       virtual void find_field_offsets(const FieldMask &reduce_mask,
@@ -428,7 +428,7 @@ namespace Legion {
                            IndexSpaceNode *inst_dom, bool own_dom,
                            RegionNode *node, ReductionOpID redop, 
                            const ReductionOp *op, ApEvent use_event,
-                           bool register_now);
+                           size_t footprint, bool register_now);
       FoldReductionManager(const FoldReductionManager &rhs);
       virtual ~FoldReductionManager(void);
     public:
@@ -440,7 +440,6 @@ namespace Legion {
       virtual LegionRuntime::Accessor::RegionAccessor<
         LegionRuntime::Accessor::AccessorType::Generic>
           get_field_accessor(FieldID fid) const;
-      virtual size_t get_instance_size(void) const;
     public:
       virtual bool is_foldable(void) const;
       virtual void find_field_offsets(const FieldMask &reduce_mask,
@@ -480,7 +479,6 @@ namespace Legion {
           get_field_accessor(FieldID fid) const;
     public: 
       virtual ApEvent get_use_event(void) const;
-      virtual size_t get_instance_size(void) const;
       virtual void send_manager(AddressSpaceID target);
       virtual InstanceView* create_instance_top_view(InnerContext *context,
                                             AddressSpaceID logical_owner);
@@ -502,8 +500,8 @@ namespace Legion {
       virtual ~InstanceBuilder(void);
     public:
       void initialize(RegionTreeForest *forest);
-      size_t compute_needed_size(RegionTreeForest *forest);
-      PhysicalManager* create_physical_instance(RegionTreeForest *forest);
+      PhysicalManager* create_physical_instance(RegionTreeForest *forest,
+                                                size_t *footprint = NULL);
     public:
       virtual void handle_profiling_response(
                     const Realm::ProfilingResponse &response);
@@ -526,6 +524,7 @@ namespace Legion {
       const UniqueID creator_id;
     protected:
       PhysicalInstance instance;
+      size_t instance_footprint;
       RtUserEvent profiling_ready;
     protected:
       RegionNode *ancestor;

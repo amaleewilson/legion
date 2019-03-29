@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -321,25 +321,6 @@ namespace Realm {
     // no need for locks - only called within the thread
     Thread::self()->exception_handler_count--;
   }
-
-
-  ////////////////////////////////////////////////////////////////////////
-  //
-  // class Coroutine<YT, RT>
-#if DO_I_REALLY_WANT_COROUTINES
-  template <typename YT, typename RT>
-  inline Coroutine<YT, RT>::~Coroutine(void)
-  {
-  }
-
-  template <typename YT, typename RT>
-  inline YT Coroutine<YT, RT>::get_yield_value(void)
-  {
-    // illegal unless we're actually yielded...
-    assert(state == STATE_YIELDED);
-    return yield_value;
-  }
-#endif
 
 
   ////////////////////////////////////////////////////////////////////////

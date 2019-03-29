@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,9 +30,9 @@ namespace Legion {
     /////////////////////////////////////////////////////////////
 
     //--------------------------------------------------------------------------
-    TaskContext::TaskContext(Runtime *rt, TaskOp *owner,
+    TaskContext::TaskContext(Runtime *rt, TaskOp *owner, int d,
                              const std::vector<RegionRequirement> &reqs)
-      : runtime(rt), owner_task(owner), regions(reqs),
+      : runtime(rt), owner_task(owner), regions(reqs), depth(d),
         executing_processor(Processor::NO_PROC), total_tunable_count(0), 
         overhead_tracker(NULL), task_executed(false),
         has_inline_accessor(false), mutable_priority(false),
@@ -43,7 +43,7 @@ namespace Legion {
 
     //--------------------------------------------------------------------------
     TaskContext::TaskContext(const TaskContext &rhs)
-      : runtime(NULL), owner_task(NULL), regions(rhs.regions)
+      : runtime(NULL), owner_task(NULL), regions(rhs.regions), depth(-1)
     //--------------------------------------------------------------------------
     {
       // should never be called
@@ -85,13 +85,6 @@ namespace Legion {
     }
 
     //--------------------------------------------------------------------------
-    int TaskContext::get_depth(void) const
-    //--------------------------------------------------------------------------
-    {
-      return owner_task->get_depth();
-    }
-
-    //--------------------------------------------------------------------------
     Task* TaskContext::get_task(void)
     //--------------------------------------------------------------------------
     {
@@ -120,6 +113,233 @@ namespace Legion {
     //--------------------------------------------------------------------------
     {
       return false;
+    }
+
+    //--------------------------------------------------------------------------
+    IndexSpace TaskContext::create_index_space(RegionTreeForest *forest,
+                                         const void *realm_is, TypeTag type_tag)
+    //--------------------------------------------------------------------------
+    {
+      AutoRuntimeCall call(this); 
+      IndexSpace handle(runtime->get_unique_index_space_id(),
+                        runtime->get_unique_index_tree_id(), type_tag);
+      DistributedID did = runtime->get_available_distributed_id();
+#ifdef DEBUG_LEGION
+      log_index.debug("Creating index space %x in task%s (ID %lld)", 
+                      handle.id, get_task_name(), get_unique_id()); 
+#endif
+      if (runtime->legion_spy_enabled)
+        LegionSpy::log_top_index_space(handle.id);
+      forest->create_index_space(handle, realm_is, did); 
+      register_index_space_creation(handle);
+      return handle;
+    }
+
+    //--------------------------------------------------------------------------
+    IndexSpace TaskContext::union_index_spaces(RegionTreeForest *forest,
+                                          const std::vector<IndexSpace> &spaces)
+    //--------------------------------------------------------------------------
+    {
+      if (spaces.empty())
+        return IndexSpace::NO_SPACE;
+      AutoRuntimeCall call(this); 
+      IndexSpace handle(runtime->get_unique_index_space_id(),
+                        runtime->get_unique_index_tree_id(), 
+                        spaces[0].get_type_tag());
+      DistributedID did = runtime->get_available_distributed_id();
+#ifdef DEBUG_LEGION
+      log_index.debug("Creating index space %x in task%s (ID %lld)", 
+                      handle.id, get_task_name(), get_unique_id()); 
+#endif
+      if (runtime->legion_spy_enabled)
+        LegionSpy::log_top_index_space(handle.id);
+      forest->create_union_space(handle, owner_task, spaces, did); 
+      register_index_space_creation(handle);
+      return handle;
+    }
+
+    //--------------------------------------------------------------------------
+    IndexSpace TaskContext::intersect_index_spaces(RegionTreeForest *forest,
+                                          const std::vector<IndexSpace> &spaces)
+    //--------------------------------------------------------------------------
+    {
+      if (spaces.empty())
+        return IndexSpace::NO_SPACE;
+      AutoRuntimeCall call(this); 
+      IndexSpace handle(runtime->get_unique_index_space_id(),
+                        runtime->get_unique_index_tree_id(), 
+                        spaces[0].get_type_tag());
+      DistributedID did = runtime->get_available_distributed_id();
+#ifdef DEBUG_LEGION
+      log_index.debug("Creating index space %x in task%s (ID %lld)", 
+                      handle.id, get_task_name(), get_unique_id()); 
+#endif
+      if (runtime->legion_spy_enabled)
+        LegionSpy::log_top_index_space(handle.id);
+      forest->create_intersection_space(handle, owner_task, spaces, did);
+      register_index_space_creation(handle);
+      return handle;
+    }
+
+    //--------------------------------------------------------------------------
+    IndexSpace TaskContext::subtract_index_spaces(RegionTreeForest *forest,
+                                              IndexSpace left, IndexSpace right)
+    //--------------------------------------------------------------------------
+    {
+      AutoRuntimeCall call(this); 
+      IndexSpace handle(runtime->get_unique_index_space_id(),
+                        runtime->get_unique_index_tree_id(), 
+                        left.get_type_tag());
+      DistributedID did = runtime->get_available_distributed_id();
+#ifdef DEBUG_LEGION
+      log_index.debug("Creating index space %x in task%s (ID %lld)", 
+                      handle.id, get_task_name(), get_unique_id()); 
+#endif
+      if (runtime->legion_spy_enabled)
+        LegionSpy::log_top_index_space(handle.id);
+      forest->create_difference_space(handle, owner_task, left, right, did);
+      register_index_space_creation(handle);
+      return handle;
+    }
+
+    //--------------------------------------------------------------------------
+    FieldSpace TaskContext::create_field_space(RegionTreeForest *forest)
+    //--------------------------------------------------------------------------
+    {
+      AutoRuntimeCall call(this);
+      FieldSpace space(runtime->get_unique_field_space_id());
+      DistributedID did = runtime->get_available_distributed_id();
+#ifdef DEBUG_LEGION
+      log_field.debug("Creating field space %x in task %s (ID %lld)", 
+                      space.id, get_task_name(), get_unique_id());
+#endif
+      if (runtime->legion_spy_enabled)
+        LegionSpy::log_field_space(space.id);
+
+      forest->create_field_space(space, did);
+      register_field_space_creation(space);
+      return space;
+    }
+
+    //--------------------------------------------------------------------------
+    FieldAllocator TaskContext::create_field_allocator(
+                                   Legion::Runtime *external, FieldSpace handle)
+    //--------------------------------------------------------------------------
+    {
+      AutoRuntimeCall call(this);
+      return FieldAllocator(handle, this, external);
+    }
+
+    //--------------------------------------------------------------------------
+    FieldID TaskContext::allocate_field(RegionTreeForest *forest,
+                                        FieldSpace space, size_t field_size,
+                                        FieldID fid, bool local,
+                                        CustomSerdezID serdez_id)
+    //--------------------------------------------------------------------------
+    {
+      AutoRuntimeCall call(this);
+      if (fid == AUTO_GENERATE_ID)
+        fid = runtime->get_unique_field_id();
+#ifdef DEBUG_LEGION
+      else if (fid >= LEGION_MAX_APPLICATION_FIELD_ID)
+      {
+        REPORT_LEGION_ERROR(ERROR_TASK_ATTEMPTED_ALLOCATE_FILED,
+          "Task %s (ID %lld) attempted to allocate a field with "
+                       "ID %d which exceeds the LEGION_MAX_APPLICATION_FIELD_ID"
+                       " bound set in legion_config.h", get_task_name(),
+                       get_unique_id(), fid);
+        assert(false);
+      }
+#endif
+
+      if (runtime->legion_spy_enabled)
+        LegionSpy::log_field_creation(space.id, fid, field_size);
+
+      std::set<RtEvent> done_events;
+      if (local)
+        allocate_local_field(forest, space, field_size, fid, 
+                             serdez_id, done_events);
+      else
+        forest->allocate_field(space, field_size, fid, serdez_id);
+      register_field_creation(space, fid, local);
+      if (!done_events.empty())
+      {
+        RtEvent wait_on = Runtime::merge_events(done_events);
+        wait_on.wait();
+      }
+      return fid;
+    }
+
+    //--------------------------------------------------------------------------
+    void TaskContext::allocate_fields(RegionTreeForest *forest, 
+                                      FieldSpace space,
+                                      const std::vector<size_t> &sizes,
+                                      std::vector<FieldID> &resulting_fields,
+                                      bool local, CustomSerdezID serdez_id)
+    //--------------------------------------------------------------------------
+    {
+      AutoRuntimeCall call(this);
+      if (resulting_fields.size() < sizes.size())
+        resulting_fields.resize(sizes.size(), AUTO_GENERATE_ID);
+      for (unsigned idx = 0; idx < resulting_fields.size(); idx++)
+      {
+        if (resulting_fields[idx] == AUTO_GENERATE_ID)
+          resulting_fields[idx] = runtime->get_unique_field_id();
+#ifdef DEBUG_LEGION
+        else if (resulting_fields[idx] >= LEGION_MAX_APPLICATION_FIELD_ID)
+        {
+          REPORT_LEGION_ERROR(ERROR_TASK_ATTEMPTED_ALLOCATE_FIELD,
+            "Task %s (ID %lld) attempted to allocate a field with "
+            "ID %d which exceeds the LEGION_MAX_APPLICATION_FIELD_ID "
+            "bound set in legion_config.h", get_task_name(),
+            get_unique_id(), resulting_fields[idx]);
+          assert(false);
+        }
+#endif
+
+        if (runtime->legion_spy_enabled)
+          LegionSpy::log_field_creation(space.id, 
+                                        resulting_fields[idx], sizes[idx]);
+      }
+      std::set<RtEvent> done_events;
+      if (local)
+        allocate_local_fields(forest, space, sizes, resulting_fields,
+                              serdez_id, done_events);
+      else
+        forest->allocate_fields(space, sizes, resulting_fields, serdez_id);
+      register_field_creations(space, local, resulting_fields);
+      if (!done_events.empty())
+      {
+        RtEvent wait_on = Runtime::merge_events(done_events);
+        wait_on.wait();
+      }
+    }
+
+    //--------------------------------------------------------------------------
+    LogicalRegion TaskContext::create_logical_region(RegionTreeForest *forest,
+                                                     IndexSpace index_space,
+                                                     FieldSpace field_space,
+                                                     bool task_local)
+    //--------------------------------------------------------------------------
+    {
+      AutoRuntimeCall call(this);
+      RegionTreeID tid = runtime->get_unique_region_tree_id();
+      LogicalRegion region(tid, index_space, field_space);
+#ifdef DEBUG_LEGION
+      log_region.debug("Creating logical region in task %s (ID %lld) with "
+                       "index space %x and field space %x in new tree %d",
+                       get_task_name(), get_unique_id(), 
+                       index_space.id, field_space.id, tid);
+#endif
+      if (runtime->legion_spy_enabled)
+        LegionSpy::log_top_region(index_space.id, field_space.id, tid);
+
+      forest->create_logical_region(region);
+      // Register the creation of a top-level region with the context
+      register_region_creation(region, task_local);
+      if (task_local)
+        record_task_local_region(region); 
+      return region;
     }
 
     //--------------------------------------------------------------------------
@@ -1898,12 +2118,12 @@ namespace Legion {
     /////////////////////////////////////////////////////////////
 
     //--------------------------------------------------------------------------
-    InnerContext::InnerContext(Runtime *rt, TaskOp *owner, bool full_inner,
+    InnerContext::InnerContext(Runtime *rt, TaskOp *owner,int d,bool full_inner,
                                const std::vector<RegionRequirement> &reqs,
                                const std::vector<unsigned> &parent_indexes,
                                const std::vector<bool> &virt_mapped,
                                UniqueID uid, bool remote)
-      : TaskContext(rt, owner, reqs), 
+      : TaskContext(rt, owner, d, reqs),
         tree_context(rt->allocate_region_tree_context()), context_uid(uid), 
         remote_context(remote), full_inner_context(full_inner),
         parent_req_indexes(parent_indexes), virtual_mapped(virt_mapped), 
@@ -1951,7 +2171,7 @@ namespace Legion {
 
     //--------------------------------------------------------------------------
     InnerContext::InnerContext(const InnerContext &rhs)
-      : TaskContext(NULL, NULL, rhs.regions), tree_context(rhs.tree_context),
+      : TaskContext(NULL, NULL, 0, rhs.regions), tree_context(rhs.tree_context),
         context_uid(0), remote_context(false), full_inner_context(false),
         parent_req_indexes(rhs.parent_req_indexes), 
         virtual_mapped(rhs.virtual_mapped)
@@ -2059,13 +2279,6 @@ namespace Legion {
     //--------------------------------------------------------------------------
     {
       return context_uid;
-    }
-
-    //--------------------------------------------------------------------------
-    int InnerContext::get_depth(void) const
-    //--------------------------------------------------------------------------
-    {
-      return owner_task->get_depth();
     }
 
     //--------------------------------------------------------------------------
@@ -2231,8 +2444,6 @@ namespace Legion {
 #ifdef DEBUG_LEGION
       assert(owner_task != NULL);
 #endif
-      rez.serialize<bool>(false); // not the top-level context
-      int depth = get_depth();
       rez.serialize(depth);
       // See if we need to pack up base task information
       owner_task->pack_external_task(rez, target);
@@ -2311,94 +2522,7 @@ namespace Legion {
         runtime->forest->send_back_logical_state(tree_context, 
                         target_context_uid, req, target);
       }
-    }
-
-    //--------------------------------------------------------------------------
-    IndexSpace InnerContext::create_index_space(RegionTreeForest *forest,
-                                         const void *realm_is, TypeTag type_tag)
-    //--------------------------------------------------------------------------
-    {
-      AutoRuntimeCall call(this); 
-      IndexSpace handle(runtime->get_unique_index_space_id(),
-                        runtime->get_unique_index_tree_id(), type_tag);
-      DistributedID did = runtime->get_available_distributed_id();
-#ifdef DEBUG_LEGION
-      log_index.debug("Creating index space %x in task%s (ID %lld)", 
-                      handle.id, get_task_name(), get_unique_id()); 
-#endif
-      if (runtime->legion_spy_enabled)
-        LegionSpy::log_top_index_space(handle.id);
-      forest->create_index_space(handle, realm_is, did); 
-      register_index_space_creation(handle);
-      return handle;
-    }
-
-    //--------------------------------------------------------------------------
-    IndexSpace InnerContext::union_index_spaces(RegionTreeForest *forest,
-                                          const std::vector<IndexSpace> &spaces)
-    //--------------------------------------------------------------------------
-    {
-      if (spaces.empty())
-        return IndexSpace::NO_SPACE;
-      AutoRuntimeCall call(this); 
-      IndexSpace handle(runtime->get_unique_index_space_id(),
-                        runtime->get_unique_index_tree_id(), 
-                        spaces[0].get_type_tag());
-      DistributedID did = runtime->get_available_distributed_id();
-#ifdef DEBUG_LEGION
-      log_index.debug("Creating index space %x in task%s (ID %lld)", 
-                      handle.id, get_task_name(), get_unique_id()); 
-#endif
-      if (runtime->legion_spy_enabled)
-        LegionSpy::log_top_index_space(handle.id);
-      forest->create_union_space(handle, owner_task, spaces, did); 
-      register_index_space_creation(handle);
-      return handle;
-    }
-
-    //--------------------------------------------------------------------------
-    IndexSpace InnerContext::intersect_index_spaces(RegionTreeForest *forest,
-                                          const std::vector<IndexSpace> &spaces)
-    //--------------------------------------------------------------------------
-    {
-      if (spaces.empty())
-        return IndexSpace::NO_SPACE;
-      AutoRuntimeCall call(this); 
-      IndexSpace handle(runtime->get_unique_index_space_id(),
-                        runtime->get_unique_index_tree_id(), 
-                        spaces[0].get_type_tag());
-      DistributedID did = runtime->get_available_distributed_id();
-#ifdef DEBUG_LEGION
-      log_index.debug("Creating index space %x in task%s (ID %lld)", 
-                      handle.id, get_task_name(), get_unique_id()); 
-#endif
-      if (runtime->legion_spy_enabled)
-        LegionSpy::log_top_index_space(handle.id);
-      forest->create_intersection_space(handle, owner_task, spaces, did);
-      register_index_space_creation(handle);
-      return handle;
-    }
-
-    //--------------------------------------------------------------------------
-    IndexSpace InnerContext::subtract_index_spaces(RegionTreeForest *forest,
-                                              IndexSpace left, IndexSpace right)
-    //--------------------------------------------------------------------------
-    {
-      AutoRuntimeCall call(this); 
-      IndexSpace handle(runtime->get_unique_index_space_id(),
-                        runtime->get_unique_index_tree_id(), 
-                        left.get_type_tag());
-      DistributedID did = runtime->get_available_distributed_id();
-#ifdef DEBUG_LEGION
-      log_index.debug("Creating index space %x in task%s (ID %lld)", 
-                      handle.id, get_task_name(), get_unique_id()); 
-#endif
-      if (runtime->legion_spy_enabled)
-        LegionSpy::log_top_index_space(handle.id);
-      forest->create_difference_space(handle, owner_task, left, right, did);
-      register_index_space_creation(handle);
-      return handle;
-    }
+    } 
 
     //--------------------------------------------------------------------------
     void InnerContext::destroy_index_space(IndexSpace handle)
@@ -2607,6 +2731,62 @@ namespace Legion {
       // Tell the region tree forest about this partition
       RtEvent safe = forest->create_pending_partition(pid, parent, color_space,
                                         partition_color, kind, did, term_event);
+      // Now we can add the operation to the queue
+      runtime->add_to_dependence_queue(this, executing_processor, part_op);
+      // Wait for any notifications to occur before returning
+      if (safe.exists())
+        safe.wait();
+      return pid;
+    }
+
+    //--------------------------------------------------------------------------
+    IndexPartition InnerContext::create_partition_by_intersection(
+                                              RegionTreeForest *forest,
+                                              IndexSpace parent,
+                                              IndexPartition partition,
+                                              PartitionKind kind, Color color,
+                                              bool dominates)
+    //--------------------------------------------------------------------------
+    {
+      AutoRuntimeCall call(this);
+      IndexPartition pid(runtime->get_unique_index_partition_id(), 
+                         parent.get_tree_id(), parent.get_type_tag());
+      DistributedID did = runtime->get_available_distributed_id();
+#ifdef DEBUG_LEGION
+      log_index.debug("Creating intersection partition %d with parent "
+                      "index space %x in task %s (ID %lld)", pid.id, parent.id,
+                      get_task_name(), get_unique_id());
+      if (parent.get_type_tag() != partition.get_type_tag())
+        REPORT_LEGION_ERROR(ERROR_INDEXPARTITION_NOT_SAME_INDEX_TREE,
+            "IndexPartition %d does not have the same type as the "
+            "parent index space %x in task %s (UID %lld)", partition.id,
+            parent.id, get_task_name(), get_unique_id())
+#endif
+      LegionColor partition_color = INVALID_COLOR;
+      if (color != AUTO_GENERATE_ID)
+        partition_color = color;
+      PendingPartitionOp *part_op = 
+        runtime->get_available_pending_partition_op();
+      part_op->initialize_intersection_partition(this,pid,partition,dominates);
+      ApEvent term_event = part_op->get_completion_event();
+      IndexPartNode *part_node = forest->get_node(partition);
+      // See if we can determine disjointness if we weren't told
+      if ((kind == COMPUTE_KIND) || (kind == COMPUTE_COMPLETE_KIND) ||
+          (kind == COMPUTE_INCOMPLETE_KIND))
+      {
+        if (part_node->is_disjoint(true/*from app*/))
+        {
+          if (kind == COMPUTE_KIND)
+            kind = DISJOINT_KIND;
+          else if (kind == COMPUTE_COMPLETE_KIND)
+            kind = DISJOINT_COMPLETE_KIND;
+          else
+            kind = DISJOINT_INCOMPLETE_KIND;
+        }
+      }
+      // Tell the region tree forest about this partition
+      RtEvent safe = forest->create_pending_partition(pid, parent, 
+        part_node->color_space->handle, partition_color, kind, did, term_event);
       // Now we can add the operation to the queue
       runtime->add_to_dependence_queue(this, executing_processor, part_op);
       // Wait for any notifications to occur before returning
@@ -3281,26 +3461,7 @@ namespace Legion {
       // Now we can add the operation to the queue
       runtime->add_to_dependence_queue(this, executing_processor, part_op);
       return result;
-    }
-
-    //--------------------------------------------------------------------------
-    FieldSpace InnerContext::create_field_space(RegionTreeForest *forest)
-    //--------------------------------------------------------------------------
-    {
-      AutoRuntimeCall call(this);
-      FieldSpace space(runtime->get_unique_field_space_id());
-      DistributedID did = runtime->get_available_distributed_id();
-#ifdef DEBUG_LEGION
-      log_field.debug("Creating field space %x in task %s (ID %lld)", 
-                      space.id, get_task_name(), get_unique_id());
-#endif
-      if (runtime->legion_spy_enabled)
-        LegionSpy::log_field_space(space.id);
-
-      forest->create_field_space(space, did);
-      register_field_space_creation(space);
-      return space;
-    }
+    } 
 
     //--------------------------------------------------------------------------
     void InnerContext::destroy_field_space(FieldSpace handle)
@@ -3314,99 +3475,133 @@ namespace Legion {
       DeletionOp *op = runtime->get_available_deletion_op();
       op->initialize_field_space_deletion(this, handle);
       runtime->add_to_dependence_queue(this, executing_processor, op);
+    } 
+
+    //--------------------------------------------------------------------------
+    void InnerContext::allocate_local_field(RegionTreeForest *forest,
+                                          FieldSpace space, size_t field_size,
+                                          FieldID fid, CustomSerdezID serdez_id,
+                                          std::set<RtEvent> &done_events)
+    //--------------------------------------------------------------------------
+    {
+      // See if we've exceeded our local field allocations 
+      // for this field space
+      AutoLock local_lock(local_field_lock);
+      std::vector<LocalFieldInfo> &infos = local_fields[space];
+      if (infos.size() == runtime->max_local_fields)
+        REPORT_LEGION_ERROR(ERROR_EXCEEDED_MAXIMUM_NUMBER_LOCAL_FIELDS,
+          "Exceeded maximum number of local fields in "
+                      "context of task %s (UID %lld). The maximum "
+                      "is currently set to %d, but can be modified "
+                      "with the -lg:local flag.", get_task_name(),
+                      get_unique_id(), runtime->max_local_fields)
+      std::set<unsigned> current_indexes;
+      for (std::vector<LocalFieldInfo>::const_iterator it = 
+            infos.begin(); it != infos.end(); it++)
+        current_indexes.insert(it->index);
+      std::vector<FieldID> fields(1, fid);
+      std::vector<size_t> sizes(1, field_size);
+      std::vector<unsigned> new_indexes;
+      if (!forest->allocate_local_fields(space, fields, sizes, serdez_id, 
+                                         current_indexes, new_indexes))
+        REPORT_LEGION_ERROR(ERROR_UNABLE_ALLOCATE_LOCAL_FIELD,
+          "Unable to allocate local field in context of "
+                      "task %s (UID %lld) due to local field size "
+                      "fragmentation. This situation can be improved "
+                      "by increasing the maximum number of permitted "
+                      "local fields in a context with the -lg:local "
+                      "flag.", get_task_name(), get_unique_id())
+#ifdef DEBUG_LEGION
+      assert(new_indexes.size() == 1);
+#endif
+      // Only need the lock here when modifying since all writes
+      // to this data structure are serialized
+      infos.push_back(LocalFieldInfo(fid, field_size, serdez_id, 
+                                     new_indexes[0], false));
+      AutoLock rem_lock(remote_lock,1,false/*exclusive*/);
+      // Have to send notifications to any remote nodes
+      for (std::map<AddressSpaceID,RemoteContext*>::const_iterator it = 
+            remote_instances.begin(); it != remote_instances.end(); it++)
+      {
+        RtUserEvent done_event = Runtime::create_rt_user_event();
+        Serializer rez;
+        {
+          RezCheck z(rez);
+          rez.serialize(it->second);
+          rez.serialize<size_t>(1); // field space count
+          rez.serialize(space);
+          rez.serialize<size_t>(1); // field count
+          rez.serialize(infos.back());
+          rez.serialize(done_event);
+        }
+        runtime->send_local_field_update(it->first, rez);
+        done_events.insert(done_event);
+      }
     }
 
     //--------------------------------------------------------------------------
-    FieldID InnerContext::allocate_field(RegionTreeForest *forest,
-                                         FieldSpace space, size_t field_size,
-                                         FieldID fid, bool local,
-                                         CustomSerdezID serdez_id)
+    void InnerContext::allocate_local_fields(RegionTreeForest *forest,
+                                   FieldSpace space,
+                                   const std::vector<size_t> &sizes,
+                                   const std::vector<FieldID> &resulting_fields,
+                                   CustomSerdezID serdez_id,
+                                   std::set<RtEvent> &done_events)
     //--------------------------------------------------------------------------
     {
-      AutoRuntimeCall call(this);
-      if (fid == AUTO_GENERATE_ID)
-        fid = runtime->get_unique_field_id();
+      // See if we've exceeded our local field allocations 
+      // for this field space
+      AutoLock local_lock(local_field_lock);
+      std::vector<LocalFieldInfo> &infos = local_fields[space];
+      if ((infos.size() + sizes.size()) > runtime->max_local_fields)
+        REPORT_LEGION_ERROR(ERROR_EXCEEDED_MAXIMUM_NUMBER_LOCAL_FIELDS,
+          "Exceeded maximum number of local fields in "
+                      "context of task %s (UID %lld). The maximum "
+                      "is currently set to %d, but can be modified "
+                      "with the -lg:local flag.", get_task_name(),
+                      get_unique_id(), runtime->max_local_fields)
+      std::set<unsigned> current_indexes;
+      for (std::vector<LocalFieldInfo>::const_iterator it = 
+            infos.begin(); it != infos.end(); it++)
+        current_indexes.insert(it->index);
+      std::vector<unsigned> new_indexes;
+      if (!forest->allocate_local_fields(space, resulting_fields, sizes, 
+                                serdez_id, current_indexes, new_indexes))
+        REPORT_LEGION_ERROR(ERROR_UNABLE_ALLOCATE_LOCAL_FIELD,
+          "Unable to allocate local field in context of "
+                      "task %s (UID %lld) due to local field size "
+                      "fragmentation. This situation can be improved "
+                      "by increasing the maximum number of permitted "
+                      "local fields in a context with the -lg:local "
+                      "flag.", get_task_name(), get_unique_id())
 #ifdef DEBUG_LEGION
-      else if (fid >= MAX_APPLICATION_FIELD_ID)
-      {
-        REPORT_LEGION_ERROR(ERROR_TASK_ATTEMPTED_ALLOCATE_FILED,
-          "Task %s (ID %lld) attempted to allocate a field with "
-                       "ID %d which exceeds the MAX_APPLICATION_FIELD_ID bound "
-                       "set in legion_config.h", get_task_name(),
-                       get_unique_id(), fid);
-        assert(false);
-      }
+      assert(new_indexes.size() == resulting_fields.size());
 #endif
-
-      if (runtime->legion_spy_enabled)
-        LegionSpy::log_field_creation(space.id, fid, field_size);
-
-      std::set<RtEvent> done_events;
-      if (local)
+      // Only need the lock here when writing since we know all writes
+      // are serialized and we only need to worry about interfering readers
+      const unsigned offset = infos.size();
+      for (unsigned idx = 0; idx < resulting_fields.size(); idx++)
+        infos.push_back(LocalFieldInfo(resulting_fields[idx], 
+                   sizes[idx], serdez_id, new_indexes[idx], false));
+      // Have to send notifications to any remote nodes 
+      AutoLock rem_lock(remote_lock,1,false/*exclusive*/);
+      for (std::map<AddressSpaceID,RemoteContext*>::const_iterator it = 
+            remote_instances.begin(); it != remote_instances.end(); it++)
       {
-        // See if we've exceeded our local field allocations 
-        // for this field space
-        AutoLock local_lock(local_field_lock);
-        std::vector<LocalFieldInfo> &infos = local_fields[space];
-        if (infos.size() == runtime->max_local_fields)
-          REPORT_LEGION_ERROR(ERROR_EXCEEDED_MAXIMUM_NUMBER_LOCAL_FIELDS,
-            "Exceeded maximum number of local fields in "
-                        "context of task %s (UID %lld). The maximum "
-                        "is currently set to %d, but can be modified "
-                        "with the -lg:local flag.", get_task_name(),
-                        get_unique_id(), runtime->max_local_fields)
-        std::set<unsigned> current_indexes;
-        for (std::vector<LocalFieldInfo>::const_iterator it = 
-              infos.begin(); it != infos.end(); it++)
-          current_indexes.insert(it->index);
-        std::vector<FieldID> fields(1, fid);
-        std::vector<size_t> sizes(1, field_size);
-        std::vector<unsigned> new_indexes;
-        if (!forest->allocate_local_fields(space, fields, sizes, serdez_id, 
-                                           current_indexes, new_indexes))
-          REPORT_LEGION_ERROR(ERROR_UNABLE_ALLOCATE_LOCAL_FIELD,
-            "Unable to allocate local field in context of "
-                        "task %s (UID %lld) due to local field size "
-                        "fragmentation. This situation can be improved "
-                        "by increasing the maximum number of permitted "
-                        "local fields in a context with the -lg:local "
-                        "flag.", get_task_name(), get_unique_id())
-#ifdef DEBUG_LEGION
-        assert(new_indexes.size() == 1);
-#endif
-        // Only need the lock here when modifying since all writes
-        // to this data structure are serialized
-        infos.push_back(LocalFieldInfo(fid, field_size, serdez_id, 
-                                       new_indexes[0], false));
-        AutoLock rem_lock(remote_lock,1,false/*exclusive*/);
-        // Have to send notifications to any remote nodes
-        for (std::map<AddressSpaceID,RemoteContext*>::const_iterator it = 
-              remote_instances.begin(); it != remote_instances.end(); it++)
+        RtUserEvent done_event = Runtime::create_rt_user_event();
+        Serializer rez;
         {
-          RtUserEvent done_event = Runtime::create_rt_user_event();
-          Serializer rez;
-          {
-            RezCheck z(rez);
-            rez.serialize(it->second);
-            rez.serialize<size_t>(1); // field space count
-            rez.serialize(space);
-            rez.serialize<size_t>(1); // field count
-            rez.serialize(infos.back());
-            rez.serialize(done_event);
-          }
-          runtime->send_local_field_update(it->first, rez);
-          done_events.insert(done_event);
+          RezCheck z(rez);
+          rez.serialize(it->second);
+          rez.serialize<size_t>(1); // field space count
+          rez.serialize(space);
+          rez.serialize<size_t>(resulting_fields.size()); // field count
+          for (unsigned idx = 0; idx < resulting_fields.size(); idx++)
+            rez.serialize(infos[offset+idx]);
+          rez.serialize(done_event);
         }
+        runtime->send_local_field_update(it->first, rez);
+        done_events.insert(done_event);
       }
-      else
-        forest->allocate_field(space, field_size, fid, serdez_id);
-      register_field_creation(space, fid, local);
-      if (!done_events.empty())
-      {
-        RtEvent wait_on = Runtime::merge_events(done_events);
-        wait_on.wait();
-      }
-      return fid;
     }
 
     //--------------------------------------------------------------------------
@@ -3417,106 +3612,7 @@ namespace Legion {
       DeletionOp *op = runtime->get_available_deletion_op();
       op->initialize_field_deletion(this, space, fid);
       runtime->add_to_dependence_queue(this, executing_processor, op);
-    }
-
-    //--------------------------------------------------------------------------
-    void InnerContext::allocate_fields(RegionTreeForest *forest, 
-                                       FieldSpace space,
-                                       const std::vector<size_t> &sizes,
-                                       std::vector<FieldID> &resulting_fields,
-                                       bool local, CustomSerdezID serdez_id)
-    //--------------------------------------------------------------------------
-    {
-      AutoRuntimeCall call(this);
-      if (resulting_fields.size() < sizes.size())
-        resulting_fields.resize(sizes.size(), AUTO_GENERATE_ID);
-      for (unsigned idx = 0; idx < resulting_fields.size(); idx++)
-      {
-        if (resulting_fields[idx] == AUTO_GENERATE_ID)
-          resulting_fields[idx] = runtime->get_unique_field_id();
-#ifdef DEBUG_LEGION
-        else if (resulting_fields[idx] >= MAX_APPLICATION_FIELD_ID)
-        {
-          REPORT_LEGION_ERROR(ERROR_TASK_ATTEMPTED_ALLOCATE_FIELD,
-            "Task %s (ID %lld) attempted to allocate a field with "
-                         "ID %d which exceeds the MAX_APPLICATION_FIELD_ID "
-                         "bound set in legion_config.h", get_task_name(),
-                         get_unique_id(), resulting_fields[idx]);
-          assert(false);
-        }
-#endif
-
-        if (runtime->legion_spy_enabled)
-          LegionSpy::log_field_creation(space.id, 
-                                        resulting_fields[idx], sizes[idx]);
-      }
-      std::set<RtEvent> done_events;
-      if (local)
-      {
-        // See if we've exceeded our local field allocations 
-        // for this field space
-        AutoLock local_lock(local_field_lock);
-        std::vector<LocalFieldInfo> &infos = local_fields[space];
-        if ((infos.size() + sizes.size()) > runtime->max_local_fields)
-          REPORT_LEGION_ERROR(ERROR_EXCEEDED_MAXIMUM_NUMBER_LOCAL_FIELDS,
-            "Exceeded maximum number of local fields in "
-                        "context of task %s (UID %lld). The maximum "
-                        "is currently set to %d, but can be modified "
-                        "with the -lg:local flag.", get_task_name(),
-                        get_unique_id(), runtime->max_local_fields)
-        std::set<unsigned> current_indexes;
-        for (std::vector<LocalFieldInfo>::const_iterator it = 
-              infos.begin(); it != infos.end(); it++)
-          current_indexes.insert(it->index);
-        std::vector<unsigned> new_indexes;
-        if (!forest->allocate_local_fields(space, resulting_fields, sizes, 
-                                  serdez_id, current_indexes, new_indexes))
-          REPORT_LEGION_ERROR(ERROR_UNABLE_ALLOCATE_LOCAL_FIELD,
-            "Unable to allocate local field in context of "
-                        "task %s (UID %lld) due to local field size "
-                        "fragmentation. This situation can be improved "
-                        "by increasing the maximum number of permitted "
-                        "local fields in a context with the -lg:local "
-                        "flag.", get_task_name(), get_unique_id())
-#ifdef DEBUG_LEGION
-        assert(new_indexes.size() == resulting_fields.size());
-#endif
-        // Only need the lock here when writing since we know all writes
-        // are serialized and we only need to worry about interfering readers
-        const unsigned offset = infos.size();
-        for (unsigned idx = 0; idx < resulting_fields.size(); idx++)
-          infos.push_back(LocalFieldInfo(resulting_fields[idx], 
-                     sizes[idx], serdez_id, new_indexes[idx], false));
-        // Have to send notifications to any remote nodes 
-        AutoLock rem_lock(remote_lock,1,false/*exclusive*/);
-        for (std::map<AddressSpaceID,RemoteContext*>::const_iterator it = 
-              remote_instances.begin(); it != remote_instances.end(); it++)
-        {
-          RtUserEvent done_event = Runtime::create_rt_user_event();
-          Serializer rez;
-          {
-            RezCheck z(rez);
-            rez.serialize(it->second);
-            rez.serialize<size_t>(1); // field space count
-            rez.serialize(space);
-            rez.serialize<size_t>(resulting_fields.size()); // field count
-            for (unsigned idx = 0; idx < resulting_fields.size(); idx++)
-              rez.serialize(infos[offset+idx]);
-            rez.serialize(done_event);
-          }
-          runtime->send_local_field_update(it->first, rez);
-          done_events.insert(done_event);
-        }
-      }
-      else
-        forest->allocate_fields(space, sizes, resulting_fields, serdez_id);
-      register_field_creations(space, local, resulting_fields);
-      if (!done_events.empty())
-      {
-        RtEvent wait_on = Runtime::merge_events(done_events);
-        wait_on.wait();
-      }
-    }
+    } 
 
     //--------------------------------------------------------------------------
     void InnerContext::free_fields(FieldSpace space, 
@@ -3530,35 +3626,13 @@ namespace Legion {
     }
 
     //--------------------------------------------------------------------------
-    LogicalRegion InnerContext::create_logical_region(RegionTreeForest *forest,
-                                                      IndexSpace index_space,
-                                                      FieldSpace field_space,
-                                                      bool task_local)
+    void InnerContext::record_task_local_region(LogicalRegion region)
     //--------------------------------------------------------------------------
     {
-      AutoRuntimeCall call(this);
-      RegionTreeID tid = runtime->get_unique_region_tree_id();
-      LogicalRegion region(tid, index_space, field_space);
 #ifdef DEBUG_LEGION
-      log_region.debug("Creating logical region in task %s (ID %lld) with "
-                       "index space %x and field space %x in new tree %d",
-                       get_task_name(), get_unique_id(), 
-                       index_space.id, field_space.id, tid);
+      assert(local_regions.find(region) == local_regions.end());
 #endif
-      if (runtime->legion_spy_enabled)
-        LegionSpy::log_top_region(index_space.id, field_space.id, tid);
-
-      forest->create_logical_region(region);
-      // Register the creation of a top-level region with the context
-      register_region_creation(region, task_local);
-      if (task_local)
-      {
-#ifdef DEBUG_LEGION
-        assert(local_regions.find(region) == local_regions.end());
-#endif
-        local_regions.insert(region);
-      }
-      return region;
+      local_regions.insert(region);
     }
 
     //--------------------------------------------------------------------------
@@ -3593,16 +3667,7 @@ namespace Legion {
       DeletionOp *op = runtime->get_available_deletion_op();
       op->initialize_logical_partition_deletion(this, handle);
       runtime->add_to_dependence_queue(this, executing_processor, op);
-    }
-
-    //--------------------------------------------------------------------------
-    FieldAllocator InnerContext::create_field_allocator(
-                                   Legion::Runtime *external, FieldSpace handle)
-    //--------------------------------------------------------------------------
-    {
-      AutoRuntimeCall call(this);
-      return FieldAllocator(handle, this, external);
-    }
+    } 
 
     //--------------------------------------------------------------------------
     Future InnerContext::execute_task(const TaskLauncher &launcher)
@@ -3780,7 +3845,7 @@ namespace Legion {
 
     //--------------------------------------------------------------------------
     Future InnerContext::execute_index_space(const IndexTaskLauncher &launcher,
-                                             ReductionOpID redop)
+                                        ReductionOpID redop, bool deterministic)
     //--------------------------------------------------------------------------
     {
       if (launcher.must_parallelism)
@@ -3834,7 +3899,7 @@ namespace Legion {
 #ifdef DEBUG_LEGION
       Future result = 
         task->initialize_task(this, launcher, launch_space, redop, 
-                              runtime->check_privileges);
+                              deterministic, runtime->check_privileges);
       log_task.debug("Registering new index space task with unique id "
                      "%lld and task %s (ID %lld) with high level runtime in "
                      "address space %d",
@@ -3842,7 +3907,7 @@ namespace Legion {
                      task->get_unique_id(), runtime->address_space);
 #else
       Future result = task->initialize_task(this, launcher, launch_space, redop,
-                                            false/*check privileges*/);
+                                      deterministic, false/*check privileges*/);
 #endif
       execute_task_launch(task, true/*index*/, current_trace, 
                           launcher.silence_warnings, launcher.enable_inlining);
@@ -5036,8 +5101,8 @@ namespace Legion {
       // Periodically merge these to keep this data structure from exploding
       // when we have a long-running task, although don't do this for fence
       // operations in case we have to prune ourselves out of the set
-      if ((previous_completion_events.size() >= DEFAULT_MAX_TASK_WINDOW) &&
-          (op->get_operation_kind() != Operation::FENCE_OP_KIND))
+      if ((previous_completion_events.size() >= LEGION_DEFAULT_MAX_TASK_WINDOW) 
+          && (op->get_operation_kind() != Operation::FENCE_OP_KIND))
       {
         ApEvent merge = Runtime::merge_events(previous_completion_events);
         previous_completion_events.clear();
@@ -6942,7 +7007,7 @@ namespace Legion {
 
     //--------------------------------------------------------------------------
     TopLevelContext::TopLevelContext(Runtime *rt, UniqueID ctx_id)
-      : InnerContext(rt, NULL, false/*full inner*/, dummy_requirements, 
+      : InnerContext(rt, NULL, -1, false/*full inner*/, dummy_requirements, 
                      dummy_indexes, dummy_mapped, ctx_id)
     //--------------------------------------------------------------------------
     {
@@ -6950,7 +7015,7 @@ namespace Legion {
 
     //--------------------------------------------------------------------------
     TopLevelContext::TopLevelContext(const TopLevelContext &rhs)
-      : InnerContext(NULL, NULL, false,
+      : InnerContext(NULL, NULL, -1, false,
                      dummy_requirements, dummy_indexes, dummy_mapped, 0)
     //--------------------------------------------------------------------------
     {
@@ -6974,18 +7039,11 @@ namespace Legion {
     }
 
     //--------------------------------------------------------------------------
-    int TopLevelContext::get_depth(void) const
-    //--------------------------------------------------------------------------
-    {
-      return -1;
-    }
-
-    //--------------------------------------------------------------------------
     void TopLevelContext::pack_remote_context(Serializer &rez, 
                                               AddressSpaceID target)
     //--------------------------------------------------------------------------
     {
-      rez.serialize<bool>(true); // top level context, all we need to pack
+      rez.serialize(depth);
     }
 
     //--------------------------------------------------------------------------
@@ -7148,6 +7206,13 @@ namespace Legion {
     }
 
     //--------------------------------------------------------------------------
+    int RemoteTask::get_depth(void) const
+    //--------------------------------------------------------------------------
+    {
+      return owner->get_depth();
+    }
+
+    //--------------------------------------------------------------------------
     UniqueID RemoteTask::get_unique_id(void) const
     //--------------------------------------------------------------------------
     {
@@ -7169,13 +7234,6 @@ namespace Legion {
     }
     
     //--------------------------------------------------------------------------
-    int RemoteTask::get_depth(void) const
-    //--------------------------------------------------------------------------
-    {
-      return owner->get_depth();
-    }
-
-    //--------------------------------------------------------------------------
     const char* RemoteTask::get_task_name(void) const
     //--------------------------------------------------------------------------
     {
@@ -7196,10 +7254,10 @@ namespace Legion {
 
     //--------------------------------------------------------------------------
     RemoteContext::RemoteContext(Runtime *rt, UniqueID context_uid)
-      : InnerContext(rt, NULL, false/*full inner*/, remote_task.regions, 
+      : InnerContext(rt, NULL, -1, false/*full inner*/, remote_task.regions, 
           local_parent_req_indexes, local_virtual_mapped, 
           context_uid, true/*remote*/),
-        parent_ctx(NULL), depth(-1), top_level_context(false), 
+        parent_ctx(NULL), top_level_context(false), 
         remote_task(RemoteTask(this))
     //--------------------------------------------------------------------------
     {
@@ -7207,7 +7265,7 @@ namespace Legion {
 
     //--------------------------------------------------------------------------
     RemoteContext::RemoteContext(const RemoteContext &rhs)
-      : InnerContext(NULL, NULL, false, rhs.regions, local_parent_req_indexes,
+      : InnerContext(NULL, NULL, 0, false, rhs.regions,local_parent_req_indexes,
           local_virtual_mapped, 0, true), remote_task(RemoteTask(this))
     //--------------------------------------------------------------------------
     {
@@ -7249,13 +7307,6 @@ namespace Legion {
       // should never be called
       assert(false);
       return *this;
-    }
-
-    //--------------------------------------------------------------------------
-    int RemoteContext::get_depth(void) const
-    //--------------------------------------------------------------------------
-    {
-      return depth;
     }
 
     //--------------------------------------------------------------------------
@@ -7581,11 +7632,11 @@ namespace Legion {
     //--------------------------------------------------------------------------
     {
       DETAILED_PROFILER(runtime, REMOTE_UNPACK_CONTEXT_CALL);
-      derez.deserialize(top_level_context);
+      derez.deserialize(depth);
+      top_level_context = (depth < 0);
       // If we're the top-level context then we're already done
       if (top_level_context)
         return;
-      derez.deserialize(depth);
       WrapperReferenceMutator mutator(preconditions);
       remote_task.unpack_external_task(derez, runtime, &mutator);
       local_parent_req_indexes.resize(remote_task.regions.size()); 
@@ -7799,14 +7850,14 @@ namespace Legion {
 
     //--------------------------------------------------------------------------
     LeafContext::LeafContext(Runtime *rt, TaskOp *owner)
-      : TaskContext(rt, owner, owner->regions)
+      : TaskContext(rt, owner, owner->get_depth(), owner->regions)
     //--------------------------------------------------------------------------
     {
     }
 
     //--------------------------------------------------------------------------
     LeafContext::LeafContext(const LeafContext &rhs)
-      : TaskContext(NULL, NULL, rhs.regions)
+      : TaskContext(NULL, NULL, 0, rhs.regions)
     //--------------------------------------------------------------------------
     {
       // should never be called
@@ -7900,50 +7951,6 @@ namespace Legion {
     }
 
     //--------------------------------------------------------------------------
-    IndexSpace LeafContext::create_index_space(RegionTreeForest *forest,
-                                         const void *realm_is, TypeTag type_tag)
-    //--------------------------------------------------------------------------
-    {
-      REPORT_LEGION_ERROR(ERROR_ILLEGAL_INDEX_SPACE_CREATION,
-        "Illegal index space creation performed in leaf task %s "
-                     "(ID %lld)", get_task_name(), get_unique_id())
-      return IndexSpace::NO_SPACE;
-    }
-
-    //--------------------------------------------------------------------------
-    IndexSpace LeafContext::union_index_spaces(RegionTreeForest *forest,
-                                          const std::vector<IndexSpace> &spaces)
-    //--------------------------------------------------------------------------
-    {
-      REPORT_LEGION_ERROR(ERROR_ILLEGAL_UNION_INDEX_SPACES,
-        "Illegal union index spaces performed in leaf task %s "
-                     "(ID %lld)", get_task_name(), get_unique_id())
-      return IndexSpace::NO_SPACE;
-    }
-
-    //--------------------------------------------------------------------------
-    IndexSpace LeafContext::intersect_index_spaces(RegionTreeForest *forest,
-                                          const std::vector<IndexSpace> &spaces)
-    //--------------------------------------------------------------------------
-    {
-      REPORT_LEGION_ERROR(ERROR_ILLEGAL_INTERSECT_INDEX_SPACES,
-        "Illegal intersect index spaces performed in leaf task %s "
-                     "(ID %lld)", get_task_name(), get_unique_id())
-      return IndexSpace::NO_SPACE;
-    }
-
-    //--------------------------------------------------------------------------
-    IndexSpace LeafContext::subtract_index_spaces(RegionTreeForest *forest,
-                                              IndexSpace left, IndexSpace right)
-    //--------------------------------------------------------------------------
-    {
-      REPORT_LEGION_ERROR(ERROR_ILLEGAL_SUBTRACT_INDEX_SPACES,
-        "Illegal subtract index spaces performed in leaf task %s "
-                     "(ID %lld)", get_task_name(), get_unique_id())
-      return IndexSpace::NO_SPACE;
-    }
-
-    //--------------------------------------------------------------------------
     void LeafContext::destroy_index_space(IndexSpace handle)
     //--------------------------------------------------------------------------
     {
@@ -7998,6 +8005,21 @@ namespace Legion {
                                                 IndexPartition handle2,
                                                 IndexSpace color_space,
                                                 PartitionKind kind, Color color)
+    //--------------------------------------------------------------------------
+    {
+      REPORT_LEGION_ERROR(ERROR_ILLEGAL_INTERSECTION_PARTITION_CREATION,
+        "Illegal intersection partition creation performed in "
+                     "leaf task %s (ID %lld)", get_task_name(),get_unique_id())
+      return IndexPartition::NO_PART;
+    }
+
+    //--------------------------------------------------------------------------
+    IndexPartition LeafContext::create_partition_by_intersection(
+                                                RegionTreeForest *forest,
+                                                IndexSpace parent,
+                                                IndexPartition partition,
+                                                PartitionKind kind, Color color,
+                                                bool dominates)
     //--------------------------------------------------------------------------
     {
       REPORT_LEGION_ERROR(ERROR_ILLEGAL_INTERSECTION_PARTITION_CREATION,
@@ -8252,16 +8274,6 @@ namespace Legion {
     }
 
     //--------------------------------------------------------------------------
-    FieldSpace LeafContext::create_field_space(RegionTreeForest *forest)
-    //--------------------------------------------------------------------------
-    {
-      REPORT_LEGION_ERROR(ERROR_ILLEGAL_CREATE_FIELD_SPACE,
-        "Illegal create field space performed in leaf task %s "
-                     "(ID %lld)", get_task_name(), get_unique_id())
-      return FieldSpace::NO_SPACE;
-    }
-
-    //--------------------------------------------------------------------------
     void LeafContext::destroy_field_space(FieldSpace handle)
     //--------------------------------------------------------------------------
     {
@@ -8271,38 +8283,12 @@ namespace Legion {
     }
 
     //--------------------------------------------------------------------------
-    FieldID LeafContext::allocate_field(RegionTreeForest *forest,
-                                        FieldSpace space, size_t field_size,
-                                        FieldID fid, bool local,
-                                        CustomSerdezID serdez_id)
-    //--------------------------------------------------------------------------
-    {
-      REPORT_LEGION_ERROR(ERROR_ILLEGAL_NONLOCAL_FIELD_ALLOCATION,
-        "Illegal non-local field allocation performed in leaf "
-                     "task %s (ID %lld)", get_task_name(), get_unique_id())
-      return 0;
-    }
-
-    //--------------------------------------------------------------------------
     void LeafContext::free_field(FieldSpace space, FieldID fid)
     //--------------------------------------------------------------------------
     {
       REPORT_LEGION_ERROR(ERROR_ILLEGAL_FIELD_DESTRUCTION,
         "Illegal field destruction performed in leaf task %s "
                      "(ID %lld)", get_task_name(), get_unique_id())
-    }
-
-    //--------------------------------------------------------------------------
-    void LeafContext::allocate_fields(RegionTreeForest *forest,
-                                      FieldSpace space,
-                                      const std::vector<size_t> &sizes,
-                                      std::vector<FieldID> &resuling_fields,
-                                      bool local, CustomSerdezID serdez_id)
-    //--------------------------------------------------------------------------
-    {
-      REPORT_LEGION_ERROR(ERROR_ILLEGAL_NONLOCAL_FIELD_ALLOCATION2,
-        "Illegal non-local field allocation performed in leaf "
-                     "task %s (ID %lld)", get_task_name(), get_unique_id())
     }
 
     //--------------------------------------------------------------------------
@@ -8316,16 +8302,38 @@ namespace Legion {
     }
 
     //--------------------------------------------------------------------------
-    LogicalRegion LeafContext::create_logical_region(RegionTreeForest *forest,
-                                                     IndexSpace index_space,
-                                                     FieldSpace field_space,
-                                                     bool task_local)
+    void LeafContext::allocate_local_field(RegionTreeForest *forest,
+                                     FieldSpace space, size_t field_size,
+                                     FieldID fid, CustomSerdezID serdez_id,
+                                     std::set<RtEvent> &done_events)
+    //--------------------------------------------------------------------------
+    {
+      REPORT_LEGION_ERROR(ERROR_ILLEGAL_NONLOCAL_FIELD_ALLOCATION,
+          "Illegal local field allocation performed in leaf task %s (ID %lld)",
+          get_task_name(), get_unique_id())
+    }
+
+    //--------------------------------------------------------------------------
+    void LeafContext::allocate_local_fields(RegionTreeForest *forest,
+                                   FieldSpace space,
+                                   const std::vector<size_t> &sizes,
+                                   const std::vector<FieldID> &resuling_fields,
+                                   CustomSerdezID serdez_id,
+                                   std::set<RtEvent> &done_events)
+    //--------------------------------------------------------------------------
+    {
+      REPORT_LEGION_ERROR(ERROR_ILLEGAL_NONLOCAL_FIELD_ALLOCATION2,
+          "Illegal local field allocations performed in leaf task %s (ID %lld)",
+          get_task_name(), get_unique_id())
+    }
+
+    //--------------------------------------------------------------------------
+    void LeafContext::record_task_local_region(LogicalRegion region)
     //--------------------------------------------------------------------------
     {
       REPORT_LEGION_ERROR(ERROR_ILLEGAL_REGION_CREATION,
-        "Illegal region creation performed in leaf task %s "
+        "Illegal task-local region creation performed in leaf task %s "
                      "(ID %lld)", get_task_name(), get_unique_id())
-      return LogicalRegion::NO_REGION;
     }
 
     //--------------------------------------------------------------------------
@@ -8344,17 +8352,6 @@ namespace Legion {
       REPORT_LEGION_ERROR(ERROR_ILLEGAL_PARTITION_DESTRUCTION,
         "Illegal partition destruction performed in leaf task %s "
                      "(ID %lld)", get_task_name(), get_unique_id())
-    }
-
-    //--------------------------------------------------------------------------
-    FieldAllocator LeafContext::create_field_allocator(
-                                   Legion::Runtime *external, FieldSpace handle)
-    //--------------------------------------------------------------------------
-    {
-      REPORT_LEGION_ERROR(ERROR_ILLEGAL_CREATE_FIELD_ALLOCATION,
-        "Illegal create field allocation requested in leaf "
-                     "task %s (ID %lld)", get_task_name(), get_unique_id())
-      return FieldAllocator(handle, this, external);
     }
 
     //--------------------------------------------------------------------------
@@ -8380,7 +8377,7 @@ namespace Legion {
 
     //--------------------------------------------------------------------------
     Future LeafContext::execute_index_space(const IndexTaskLauncher &launcher,
-                                            ReductionOpID redop)
+                                        ReductionOpID redop, bool deterministic)
     //--------------------------------------------------------------------------
     {
       REPORT_LEGION_ERROR(ERROR_ILLEGAL_EXECUTE_INDEX_SPACE,
@@ -9104,7 +9101,7 @@ namespace Legion {
 
     //--------------------------------------------------------------------------
     InlineContext::InlineContext(Runtime *rt, TaskContext *enc, TaskOp *child)
-      : TaskContext(rt, child, child->regions), 
+      : TaskContext(rt, child, enc->get_depth(), child->regions), 
         enclosing(enc), inline_task(child)
     //--------------------------------------------------------------------------
     {
@@ -9135,7 +9132,8 @@ namespace Legion {
 
     //--------------------------------------------------------------------------
     InlineContext::InlineContext(const InlineContext &rhs)
-      : TaskContext(NULL, NULL, rhs.regions), enclosing(NULL), inline_task(NULL)
+      : TaskContext(NULL, NULL, 0, rhs.regions), 
+        enclosing(NULL), inline_task(NULL)
     //--------------------------------------------------------------------------
     {
       // should never be called
@@ -9176,13 +9174,6 @@ namespace Legion {
     //--------------------------------------------------------------------------
     {
       return owner_task->get_unique_id();
-    }
-
-    //--------------------------------------------------------------------------
-    int InlineContext::get_depth(void) const
-    //--------------------------------------------------------------------------
-    {
-      return owner_task->get_depth();
     }
 
     //--------------------------------------------------------------------------
@@ -9309,6 +9300,19 @@ namespace Legion {
       return enclosing->create_partition_by_intersection(forest, parent,
                                           handle1, handle2, color_space, 
                                           kind, color);
+    }
+
+    //--------------------------------------------------------------------------
+    IndexPartition InlineContext::create_partition_by_intersection(
+                                      RegionTreeForest *forest,
+                                      IndexSpace parent,
+                                      IndexPartition partition,
+                                      PartitionKind kind, Color color,
+                                      bool dominates)
+    //--------------------------------------------------------------------------
+    {
+      return enclosing->create_partition_by_intersection(forest, parent,
+                                        partition, kind, color, dominates);
     }
 
     //--------------------------------------------------------------------------
@@ -9592,6 +9596,30 @@ namespace Legion {
     }
 
     //--------------------------------------------------------------------------
+    void InlineContext::allocate_local_field(RegionTreeForest *forest,
+                                     FieldSpace space, size_t field_size,
+                                     FieldID fid, CustomSerdezID serdez_id,
+                                     std::set<RtEvent> &done_events)
+    //--------------------------------------------------------------------------
+    {
+      // Should never get here
+      assert(false);
+    }
+
+    //--------------------------------------------------------------------------
+    void InlineContext::allocate_local_fields(RegionTreeForest *forest,
+                                   FieldSpace space,
+                                   const std::vector<size_t> &sizes,
+                                   const std::vector<FieldID> &resuling_fields,
+                                   CustomSerdezID serdez_id,
+                                   std::set<RtEvent> &done_events)
+    //--------------------------------------------------------------------------
+    {
+      // Should never get here
+      assert(false);
+    }
+
+    //--------------------------------------------------------------------------
     LogicalRegion InlineContext::create_logical_region(RegionTreeForest *forest,
                                                        IndexSpace index_space,
                                                        FieldSpace field_space,
@@ -9600,6 +9628,14 @@ namespace Legion {
     {
       return enclosing->create_logical_region(forest, index_space, field_space,
                                               task_local);
+    }
+
+    //--------------------------------------------------------------------------
+    void InlineContext::record_task_local_region(LogicalRegion region)
+    //--------------------------------------------------------------------------
+    {
+      // Should never get here
+      assert(false);
     }
 
     //--------------------------------------------------------------------------
@@ -9641,10 +9677,10 @@ namespace Legion {
 
     //--------------------------------------------------------------------------
     Future InlineContext::execute_index_space(const IndexTaskLauncher &launcher,
-                                              ReductionOpID redop)
+                                        ReductionOpID redop, bool deterministic)
     //--------------------------------------------------------------------------
     {
-      return enclosing->execute_index_space(launcher, redop);
+      return enclosing->execute_index_space(launcher, redop, deterministic);
     }
 
     //--------------------------------------------------------------------------

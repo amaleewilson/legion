@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -298,8 +298,8 @@ namespace Realm {
       log_reservation.info() << "reservation destroyed: rsrv=" << *this;
 
       // a lock has to be destroyed on the node that created it
-      if(ID(*this).rsrv.creator_node != my_node_id) {
-	DestroyLockMessage::send_request(ID(*this).rsrv.creator_node, *this);
+      if(NodeID(ID(*this).rsrv_creator_node()) != my_node_id) {
+	DestroyLockMessage::send_request(ID(*this).rsrv_creator_node(), *this);
 	return;
       }
 
@@ -389,7 +389,7 @@ namespace Realm {
 
 	// it'd be bad if somebody tried to take a lock that had been 
 	//   deleted...  (info is only valid on a lock's home node)
-	assert((ID(impl->me).rsrv.creator_node != my_node_id) ||
+	assert((NodeID(ID(impl->me).rsrv_creator_node()) != my_node_id) ||
 	       impl->in_use);
 
 	// case 2: we're the owner, and nobody is holding the lock, so grant
@@ -559,7 +559,7 @@ namespace Realm {
 
 	// it'd be bad if somebody tried to take a lock that had been 
 	//   deleted...  (info is only valid on a lock's home node)
-	assert((ID(me).rsrv.creator_node != my_node_id) ||
+	assert((NodeID(ID(me).rsrv_creator_node()) != my_node_id) ||
 	       in_use);
 
 	// if this is just a placeholder nonblocking acquire, update the retry_count and
@@ -1128,6 +1128,8 @@ namespace Realm {
   //  thread-local
   static volatile int fallback_retry_count = 0;
 
+  // WARNING: make sure any changes to this code have corresponding changes made
+  //  to trywrlock_slow() below!
   Event FastReservation::wrlock_slow(WaitMode mode)
   {
     FastRsrvState& frs = *(FastRsrvState *)opaque;
@@ -1262,6 +1264,101 @@ namespace Realm {
     return Event::NO_EVENT;
   }
 
+  bool FastReservation::trywrlock_slow(void)
+  {
+    FastRsrvState& frs = *(FastRsrvState *)opaque;
+
+    if((frs.state & STATE_SLOW_FALLBACK) != 0) {
+      assert(frs.rsrv_impl != 0);
+      ReservationImpl::AcquireType acqtype;
+      int current_count;
+      do {
+	current_count = fallback_retry_count;
+	if(current_count == 0) {
+	  acqtype = ReservationImpl::ACQUIRE_NONBLOCKING;
+	  break;
+	} else
+	  acqtype = ReservationImpl::ACQUIRE_NONBLOCKING_RETRY;
+      } while(!__sync_bool_compare_and_swap(&fallback_retry_count,
+					    current_count,
+					    current_count - 1));
+      Event e = frs.rsrv_impl->acquire(0, true /*excl*/, acqtype);
+      if(e.exists()) {
+	// attempt failed, so we'll retry later - increment count
+	__sync_fetch_and_and(&fallback_retry_count, 1);
+      }
+      //log_reservation.print() << "wrlock " << (void *)this << " = " << e;
+      return false;  // forgetting the event here causes inefficiencies!
+    }
+
+    // repeat until we succeed
+    while(1) {
+      // attempt to change 0 -> STATE_WRITER
+      State cur_state = __sync_val_compare_and_swap(&frs.state, 0, STATE_WRITER);
+      if(cur_state == 0)
+	return true;
+
+      // simple contention just causes us to return
+      if((cur_state & (STATE_READER_COUNT_MASK |
+		       STATE_WRITER |
+		       STATE_WRITER_WAITING)) != 0)
+	return false;
+
+      // any other transition requires holding the fast reservation's mutex
+      {
+	pthread_mutex_lock(&frs.mutex);
+
+	// resample the state - since we hold the lock, exceptional bits
+	//  cannot change out from under us
+	cur_state = __sync_fetch_and_add(&frs.state, 0);
+
+	bool event_needed = false;
+
+	while(true) {
+	  // case 1: the base reservation still owns the lock
+	  if((cur_state & STATE_BASE_RSRV) != 0) {
+	    Event e = frs.request_base_rsrv();
+	    if(e.exists())
+	      event_needed = true;  // forgetting the event here causes inefficiencies!
+	    break;
+	  }
+
+	  // case 2: a current lock holder is sleeping
+	  if((cur_state & STATE_SLEEPER) != 0) {
+	    event_needed = true;  // forgetting the event here causes inefficiencies!
+	    break;
+	  }
+
+          // case 3: if we're back to normal readers/writers, don't sleep
+          //   after all
+          if((cur_state & ~(STATE_READER_COUNT_MASK | STATE_WRITER | STATE_WRITER_WAITING)) == 0) {
+            break;
+          }
+
+	  // other cases?
+	  log_reservation.fatal() << "wrlock_slow: unexpected state = "
+				  << std::hex << cur_state << std::dec;
+	  assert(0);
+	}
+
+	// now we're done messing with internal state
+	pthread_mutex_unlock(&frs.mutex);
+
+	// if an event trigger is required, fail the lock attempt
+	if(event_needed)
+	  return false;
+      }
+
+      // now retry acquisition
+      continue;
+    }
+    // not reachable
+    assert(0);
+    return false;
+  }
+
+  // WARNING: make sure any changes to this code have corresponding changes made
+  //  to trywrlock_slow() below!
   Event FastReservation::rdlock_slow(WaitMode mode)
   {
     FastRsrvState& frs = *(FastRsrvState *)opaque;
@@ -1417,6 +1514,84 @@ namespace Realm {
     return Event::NO_EVENT;
   }
 
+  bool FastReservation::tryrdlock_slow(void)
+  {
+    FastRsrvState& frs = *(FastRsrvState *)opaque;
+
+    if((frs.state & STATE_SLOW_FALLBACK) != 0) {
+      assert(frs.rsrv_impl != 0);
+      ReservationImpl::AcquireType acqtype;
+      int current_count;
+      do {
+	current_count = fallback_retry_count;
+	if(current_count == 0) {
+	  acqtype = ReservationImpl::ACQUIRE_NONBLOCKING;
+	  break;
+	} else
+	  acqtype = ReservationImpl::ACQUIRE_NONBLOCKING_RETRY;
+      } while(!__sync_bool_compare_and_swap(&fallback_retry_count,
+					    current_count,
+					    current_count - 1));
+      Event e = frs.rsrv_impl->acquire(1, false /*!excl*/, acqtype);
+      if(e.exists()) {
+	// attempt failed, so we'll retry later - increment count
+	__sync_fetch_and_and(&fallback_retry_count, 1);
+      }
+      //log_reservation.print() << "rdlock " << (void *)this << " = " << e;
+      return false;  // forgetting the event here causes inefficiencies!
+    }
+
+    // repeat until we succeed
+    while(1) {
+      // check the current state for things that might involve waiting
+      //  before trying to increment the count
+      State cur_state = __sync_fetch_and_add(&frs.state, 0);
+
+      // if the only thing present is (potentially sleeping) readers, attempt to
+      //  increment the count (this prevents cache-fighting with writers)
+      if((cur_state & ~(STATE_SLEEPER | STATE_READER_COUNT_MASK)) == 0) {
+	State prev_state = __sync_fetch_and_add(&frs.state, 1);
+	if((prev_state & ~(STATE_SLEEPER | STATE_READER_COUNT_MASK)) == 0) {
+	  // no conflicts - we have the lock
+	  return true;
+	}
+	// decrement the count again if we failed
+	cur_state = __sync_fetch_and_sub(&frs.state, 1);
+	// TODO: handle the case where BASE_RSRV_WAITING got set while
+	//  we had the (erroneous) reader count increase
+	assert((cur_state & STATE_BASE_RSRV_WAITING) == 0);
+	return false;
+      }
+
+      // if the BASE_RSRV bit appears to be set, we probably need to request it,
+      //  but take the lock first to be sure
+      if((cur_state & STATE_BASE_RSRV) != 0) {
+	pthread_mutex_lock(&frs.mutex);
+
+	// resample state
+	cur_state = __sync_fetch_and_add(&frs.state, 0);
+
+	bool retry = false;
+	if((cur_state & STATE_BASE_RSRV) != 0) {
+	  Event e = frs.request_base_rsrv();
+	  if(!e.exists()) {
+	    // we got the base reservation, so we can try the acquire again
+	    retry = true;
+	  }
+	}
+
+	pthread_mutex_unlock(&frs.mutex);
+
+	if(retry)
+	  continue;
+      }
+
+      // any other condition will have to sort itself out - return to caller
+      //  with a failure
+      return false;
+    }
+  }
+
   void FastReservation::unlock_slow(void)
   {
     FastRsrvState& frs = *(FastRsrvState *)opaque;
@@ -1519,7 +1694,7 @@ namespace Realm {
       State old_state = __sync_fetch_and_sub(&frs.state, STATE_SLEEPER);
       assert((old_state & STATE_SLEEPER) != 0);
       // double-check that WRITER_WAITING isn't set
-      assert((frs.state & STATE_WRITER_WAITING) == 0);
+      assert((old_state & STATE_WRITER_WAITING) == 0);
       frs.sleeper_count = 0;
       assert(frs.sleeper_event.exists());
       frs.sleeper_event = Event::NO_EVENT;

@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University, NVIDIA Corporation
+-- Copyright 2019 Stanford University, NVIDIA Corporation
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ local data = require("common/data")
 local ffi = require("ffi")
 local header_helper = require("regent/header_helper")
 local log = require("common/log")
+local regent_math = require("regent/math")
 local pretty = require("regent/pretty")
 local profile = require("regent/profile")
 local report = require("common/report")
@@ -30,8 +31,12 @@ local std = {}
 
 std.config, std.args = base.config, base.args
 
+local max_dim = std.config["legion-dim"]
+
 local c = base.c
 std.c = c
+
+std.replicable_whitelist = base.replicable_whitelist
 
 std.file_read_only = c.LEGION_FILE_READ_ONLY
 std.file_read_write = c.LEGION_FILE_READ_WRITE
@@ -44,9 +49,17 @@ std.check_cuda_available = cudahelper.check_cuda_available
 
 std.assert_error = base.assert_error
 std.assert = base.assert
-std.domain_from_bounds_1d = base.domain_from_bounds_1d
-std.domain_from_bounds_2d = base.domain_from_bounds_2d
-std.domain_from_bounds_3d = base.domain_from_bounds_3d
+for i = 1, max_dim do
+  std["domain_from_bounds_" .. tostring(i) .. "d"] = base["domain_from_bounds_" .. tostring(i) .. "d"]
+end
+
+-- #####################################
+-- ## Math functions
+-- #################
+
+for k, v in pairs(regent_math) do
+  std[k] = v
+end
 
 -- #####################################
 -- ## Kinds
@@ -66,7 +79,8 @@ function std.reduces(op)
 end
 
 function std.is_reduce(privilege)
-  return privilege:is(ast.privilege_kind.Reduces)
+  return privilege ~= nil and privilege ~= "reads_writes" and
+         privilege:is(ast.privilege_kind.Reduces)
 end
 
 -- Coherence Modes
@@ -456,8 +470,10 @@ end
 
 std.reduction_op_init = base.reduction_op_init
 std.reduction_op_ids = base.reduction_op_ids
+std.update_reduction_op = base.update_reduction_op
 std.is_reduction_op = base.is_reduction_op
 std.get_reduction_op = base.get_reduction_op
+std.get_reduction_op_name = base.get_reduction_op_name
 std.meet_privilege = base.meet_privilege
 std.meet_coherence = base.meet_coherence
 std.meet_flag = base.meet_flag
@@ -1248,6 +1264,10 @@ end
 -- ## Serialization Helpers
 -- #################
 
+local function need_dynamic_serialization(value_type)
+  return std.is_list(value_type) or std.is_string(value_type)
+end
+
 local function compute_serialized_size_inner(value_type, value)
   if std.is_list(value_type) then
     local result = terralib.newsymbol(c.size_t, "result")
@@ -1275,15 +1295,21 @@ end
 local compute_serialized_size_helper = terralib.memoize(function(value_type)
   local value = terralib.newsymbol(value_type, "value")
   local actions, result = compute_serialized_size_inner(value_type, value)
-  local terra compute_serialized_size([value]) : c.size_t
-    [actions];
-    return [result]
+  if actions then
+    local terra compute_serialized_size([value]) : c.size_t
+      [actions];
+      return [result]
+    end
+    compute_serialized_size:setinlined(false)
+    return compute_serialized_size
   end
-  compute_serialized_size:setinlined(false)
-  return compute_serialized_size
 end)
 
 function std.compute_serialized_size(value_type, value)
+  if not need_dynamic_serialization(value_type) then
+    return
+  end
+
   local helper = compute_serialized_size_helper(value_type)
   local result = terralib.newsymbol(c.size_t, "result")
   local actions = quote
@@ -1342,6 +1368,10 @@ local serialize_helper = terralib.memoize(function(value_type)
 end)
 
 function std.serialize(value_type, value, fixed_ptr, data_ptr)
+  if not need_dynamic_serialization(value_type) then
+    return serialize_inner(value_type, value, fixed_ptr, data_ptr)
+  end
+
   local helper = serialize_helper(value_type)
   local actions = quote
     helper([value], [fixed_ptr], [data_ptr])
@@ -1349,15 +1379,19 @@ function std.serialize(value_type, value, fixed_ptr, data_ptr)
   return actions
 end
 
-local function deserialize_inner(value_type, fixed_ptr, data_ptr)
+local function deserialize_simple(value_type, fixed_ptr, data_ptr)
   -- Force unaligned access because malloc does not provide
   -- blocks aligned for all purposes (e.g. SSE vectors).
   local value_type_alignment = 1 -- data.min(terralib.sizeof(value_type), 8)
+  return `terralib.attrload(
+    [&value_type]([fixed_ptr]),
+    { align = [value_type_alignment] })
+end
+
+local function deserialize_inner(value_type, fixed_ptr, data_ptr)
   local result = terralib.newsymbol(value_type, "result")
   local actions = quote
-    var [result] = terralib.attrload(
-      [&value_type]([fixed_ptr]),
-      { align = [value_type_alignment] })
+    var [result] = [deserialize_simple(value_type, fixed_ptr, data_ptr)]
   end
 
   if std.is_list(value_type) then
@@ -1410,6 +1444,10 @@ local deserialize_helper = terralib.memoize(function(value_type)
 end)
 
 function std.deserialize(value_type, fixed_ptr, data_ptr)
+  if not need_dynamic_serialization(value_type) then
+    return quote end, deserialize_simple(value_type, fixed_ptr, data_ptr)
+  end
+
   local helper = deserialize_helper(value_type)
   local result = terralib.newsymbol(value_type, "result")
   -- Force unaligned access because malloc does not provide
@@ -1490,6 +1528,15 @@ std.fmax = base.fmax
 std.fmin = base.fmin
 std.quote_unary_op = base.quote_unary_op
 std.quote_binary_op = base.quote_binary_op
+
+-- #####################################
+-- ## Inline Task Helpers
+-- #################
+
+function std.is_inline_task(node)
+  return (node:is(ast.specialized.top.Task) or node:is(ast.typed.top.Task)) and
+         node.annotations.inline:is(ast.annotation.Demand)
+end
 
 -- #####################################
 -- ## Types
@@ -1716,19 +1763,17 @@ local bounded_type = terralib.memoize(function(index_type, ...)
     -- TODO: Would be nice to compress smaller than one byte.
     local bitmask_type
     if terralib.llvmversion >= 38 then
-      if #bounds <= bit.lshift(1, 8) then
+      if #bounds <= 2 ^ 8 then
         bitmask_type = uint8
-      elseif #bounds <= bit.lshift(1, 16) then
+      elseif #bounds <= 2 ^ 16 then
         bitmask_type = uint16
-      -- XXX: What we really want here is bit.lshift(1ULL, 32),
-      --      which is supported only in LuaJIT 2.1 or higher
-      elseif #bounds <= bit.lshift(1, 30) then
+      elseif #bounds <= 2 ^ 32 then
         bitmask_type = uint32
       else
         assert(false) -- really?
       end
     else
-      assert(#bounds <= bit.lshift(1, 30))
+      assert(#bounds <= 2 ^ 32)
       bitmask_type = uint32
     end
     st.entries:insert({ "__index", bitmask_type })
@@ -1870,8 +1915,8 @@ local function validate_index_base_type(base_type)
     return base_type, 1, false, terralib.sizeof(base_type) * 8
   elseif base_type:isstruct() then
     local entries = base_type:getentries()
-    assert(#entries >= 1 and #entries <= 3,
-           "Multi-dimensional index type expected 1 to 3 fields, got " ..
+    assert(#entries >= 1 and #entries <= max_dim,
+           "Multi-dimensional index type expected 1 to " .. tostring(max_dim) .. " fields, got " ..
              tostring(#entries))
     local num_bits = nil
     for _, entry in ipairs(entries) do
@@ -1893,6 +1938,17 @@ local function validate_index_base_type(base_type)
   end
 end
 
+local function validate_transform_type(M, N)
+  assert(0 < M, "Row count for a transform type must be greater than 0")
+  assert(M <= max_dim, "Transform types having more than " .. tostring(max_dim) .. " rows are not supported yet.")
+  assert(0 < N, "Column count for a transform type must be greater than 0")
+  assert(N <= max_dim, "Transform types having more than " .. tostring(max_dim) .. " columns are not supported yet.")
+  local impl_type_name = "legion_transform_".. tostring(M) .. "x" .. tostring(N) .. "_t"
+  local impl_type = c[impl_type_name]
+  assert(impl_type ~= nil, impl_type_name .. " does not exist")
+  return impl_type
+end
+
 -- Hack: Terra uses getmetatable() in terralib.types.istype(), so
 -- setting a custom metatable on a type requires some trickery. The
 -- approach used here is to define __metatable() to return the
@@ -1908,6 +1964,36 @@ do
   index_type.__metatable = getmetatable(st)
 end
 
+std.transform = terralib.memoize(function(M, N)
+  local st = terralib.types.newstruct("transform(" .. tostring(M) .. "," ..tostring(N) .. ")")
+  local impl_type = validate_transform_type(M, N)
+  st.entries = terralib.newlist({
+      { "impl", impl_type },
+  })
+
+  st.is_transform_type = true
+  st.M = M
+  st.N = N
+  st.impl_type = impl_type
+
+  function st.metamethods.__cast(from, to, expr)
+    if std.is_transform_type(from) then
+      if std.type_eq(to, st.impl_type) then
+        return `([expr].impl)
+      elseif std.type_eq(to, c.legion_domain_transform_t) then
+        return `([expr]:to_domain_transform())
+      end
+    end
+    assert(false)
+  end
+
+  terra st:to_domain_transform()
+    return [c["legion_domain_transform_from_" .. tostring(st.M) ..
+              "x" .. tostring(st.N)]](@self)
+  end
+
+  return st
+end)
 std.rect_type = terralib.memoize(function(index_type)
   local st = terralib.types.newstruct("rect" .. tostring(index_type.dim) .. "d")
   assert(not index_type:is_opaque())
@@ -2061,7 +2147,7 @@ function std.index_type(base_type, displayname)
     else
       values = terralib.newlist({index})
     end
-    for _ = #values + 1, 3 do
+    for _ = #values + 1, max_dim do
       values:insert(0)
     end
 
@@ -2155,16 +2241,24 @@ function std.index_type(base_type, displayname)
   return setmetatable(st, index_type)
 end
 
-struct std.__int2d { x : int64, y : int64 }
-struct std.__int3d { x : int64, y : int64, z : int64 }
 std.ptr = std.index_type(opaque, "ptr")
-std.int1d = std.index_type(int64, "int1d")
-std.int2d = std.index_type(std.__int2d, "int2d")
-std.int3d = std.index_type(std.__int3d, "int3d")
-
-std.rect1d = std.rect_type(std.int1d)
-std.rect2d = std.rect_type(std.int2d)
-std.rect3d = std.rect_type(std.int3d)
+if max_dim >= 1 then
+  std.int1d = std.index_type(int64, "int1d")
+  std.rect1d = std.rect_type(std.int1d)
+end
+do
+  std.dim_names = {"x", "y", "z", "w", "v", "u", "t", "s", "r"}
+  for dim = 2, max_dim do
+    local st = terralib.types.newstruct("__int" .. dim .. "d")
+    st.entries = data.take(dim, std.dim_names):map(
+      function(name)
+        return { name, int64 }
+      end)
+    std["__int" .. dim .. "d"] = st
+    std["int" .. dim .. "d"] = std.index_type(st, "int" .. dim .. "d")
+    std["rect" .. dim .. "d"] = std.rect_type(std["int" .. dim .. "d"])
+  end
+end
 
 do
   local next_ispace_id = 1
@@ -2590,6 +2684,75 @@ function std.cross_product(...)
 end
 end
 
+do
+  local st = terralib.types.newstruct("complex32")
+  st.entries = terralib.newlist({
+      { "real", float },
+      { "imag", float },
+  })
+  std.complex = st
+  std.complex32 = st
+
+  terra st.metamethods.__add(a : st, b : st)
+    return st { real = a.real + b.real, imag = a.imag + b.imag }
+  end
+  terra st.metamethods.__sub(a : st, b : st)
+    return st { real = a.real - b.real, imag = a.imag - b.imag }
+  end
+  terra st.metamethods.__mul(a : st, b : st)
+    return st { real = a.real*b.real - a.imag*b.imag, imag = a.real*b.imag + a.imag*b.real }
+  end
+  terra st.metamethods.__div(a : st, b : st)
+    var denom = b.real * b.real + b.imag * b.imag
+    return st {
+      real = (a.real * b.real + a.imag * b.imag) / denom,
+      imag = (a.imag * b.real - a.real * b.imag) / denom
+    }
+  end
+
+  st.metamethods.__cast = function(from, to, expr)
+    if to == st and std.validate_implicit_cast(from, float) then
+      return `(st { real = [float](expr), imag = [float](0.0) })
+    end
+    assert(false)
+  end
+end
+
+do
+  local st = terralib.types.newstruct("complex64")
+  st.entries = terralib.newlist({
+      { "real", double },
+      { "imag", double },
+  })
+  std.complex = st
+  std.complex64 = st
+
+  terra st.metamethods.__add(a : st, b : st)
+    return st { real = a.real + b.real, imag = a.imag + b.imag }
+  end
+  terra st.metamethods.__sub(a : st, b : st)
+    return st { real = a.real - b.real, imag = a.imag - b.imag }
+  end
+  terra st.metamethods.__mul(a : st, b : st)
+    return st { real = a.real*b.real - a.imag*b.imag, imag = a.real*b.imag + a.imag*b.real }
+  end
+  terra st.metamethods.__div(a : st, b : st)
+    var denom = b.real * b.real + b.imag * b.imag
+    return st {
+      real = (a.real * b.real + a.imag * b.imag) / denom,
+      imag = (a.imag * b.real - a.real * b.imag) / denom
+    }
+  end
+
+  st.metamethods.__cast = function(from, to, expr)
+    if to == st and std.validate_implicit_cast(from, double) then
+      return `(st { real = [double](expr), imag = 0.0 })
+    end
+    assert(false)
+  end
+end
+
+
 std.vptr = terralib.memoize(function(width, points_to_type, ...)
   local bounds = data.newtuple(...)
 
@@ -2607,19 +2770,17 @@ std.vptr = terralib.memoize(function(width, points_to_type, ...)
     -- Find the smallest bitmask that will fit.
     -- TODO: Would be nice to compress smaller than one byte.
     if terralib.llvmversion >= 38 then
-      if #bounds <= bit.lshift(1, 8) then
+      if #bounds <= 1 ^ 8 then
         bitmask_type = vector(uint8, width)
-      elseif #bounds <= bit.lshift(1, 16) then
+      elseif #bounds <= 2 ^ 16 then
         bitmask_type = vector(uint16, width)
-      -- XXX: What we really want here is bit.lshift(1ULL, 32),
-      --      which is supported only in LuaJIT 2.1 or higher
-      elseif #bounds <= bit.lshift(1, 30) then
+      elseif #bounds <= 2 ^ 32 then
         bitmask_type = vector(uint32, width)
       else
         assert(false) -- really?
       end
     else
-      assert(#bounds <= bit.lshift(1, 30))
+      assert(#bounds <= 2 ^ 32)
       bitmask_type = vector(uint32, width)
     end
     st.entries:insert({ "__index", bitmask_type })
@@ -2631,6 +2792,7 @@ std.vptr = terralib.memoize(function(width, points_to_type, ...)
   st.N = width
   st.type = ptr(points_to_type, ...)
   st.impl_type = legion_vptr_t
+  st.vec_type = vec
 
   function st:bounds()
     local bounds = terralib.newlist()
@@ -2675,6 +2837,14 @@ std.sov = terralib.memoize(function(struct_type, width)
   assert(not std.is_ref(struct_type))
   assert(not std.is_rawref(struct_type))
 
+  local function make_array_of_vector_type(ty)
+    if ty:isprimitive() then
+      return vector(ty, width)
+    else
+      return make_array_of_vector_type(ty.type)[ty.N]
+    end
+  end
+
   local st = terralib.types.newstruct("sov")
   st.entries = terralib.newlist()
   for _, entry in pairs(struct_type:getentries()) do
@@ -2683,7 +2853,7 @@ std.sov = terralib.memoize(function(struct_type, width)
     if entry_type:isprimitive() then
       st.entries:insert{entry_field, vector(entry_type, width)}
     elseif entry_type:isarray() then
-      st.entries:insert{entry_field, vector(entry_type.type, width)[entry_type.N]}
+      st.entries:insert{entry_field, make_array_of_vector_type(entry_type)}
     else
       st.entries:insert{entry_field, std.sov(entry_type, width)}
     end
@@ -3297,11 +3467,13 @@ local projection_functors = terralib.newlist()
 
 do
   local next_id = 1
-  function std.register_projection_functor(depth, region_functor, partition_functor)
+  function std.register_projection_functor(exclusive, functional, depth,
+                                           region_functor, partition_functor)
     local id = next_id
     next_id = next_id + 1
 
-    projection_functors:insert(terralib.newlist({id, depth, region_functor, partition_functor}))
+    projection_functors:insert(terralib.newlist({id, exclusive, functional, depth,
+                                                 region_functor, partition_functor}))
 
     return id
   end
@@ -3314,12 +3486,7 @@ function std.register_variant(variant)
   variants:insert(variant)
 end
 
-local max_dim = 3 -- Maximum dimension of an index space supported in Regent
-
 local function make_ordering_constraint(layout, dim)
-  -- This code would need to be taught about higher dimensions if the
-  -- maximum dimension were ever increased.
-  assert(max_dim == 3)
   assert(dim >= 1 and dim <= max_dim)
 
   local result = terralib.newlist()
@@ -3327,9 +3494,9 @@ local function make_ordering_constraint(layout, dim)
   -- SOA, Fortran array order
   local dims = terralib.newsymbol(c.legion_dimension_kind_t[dim+1], "dims")
   result:insert(quote var [dims] end)
-  result:insert(quote dims[0] = c.DIM_X end)
-  if dim >= 2 then result:insert(quote dims[1] = c.DIM_Y end) end
-  if dim >= 3 then result:insert(quote dims[2] = c.DIM_Z end) end
+  for k, dim in pairs(data.take(dim, std.layout.spatial_dims)) do
+    result:insert(quote dims[ [k-1] ] = [dim.index] end)
+  end
   result:insert(quote dims[ [dim] ] = c.DIM_F end)
   result:insert(quote c.legion_layout_constraint_set_add_ordering_constraint([layout], [dims], [dim+1], true) end)
 
@@ -3515,6 +3682,77 @@ local function make_layout_constraints_from_annotations(variant)
   return layouts, layout_registrations
 end
 
+local function make_execution_constraints_from_annotations(variant, execution_constraints)
+  local actions = quote end
+  if variant:has_execution_constraints() then
+    local task = variant.task
+    local all_region_types = data.newmap()
+    local all_req_indices = data.new_recursive_map(1)
+    local fn_type = task:get_type()
+    local param_types = fn_type.parameters
+    local param_symbols = task:get_param_symbols()
+    local region_i = 0
+    for _, param_i in ipairs(std.fn_param_regions_by_index(fn_type)) do
+      local param_type = param_types[param_i]
+      local param_symbol = param_symbols[param_i]
+      all_region_types[param_symbol:getname()] = param_type
+      local privileges, privilege_field_paths, privilege_field_types, coherences, flags =
+        std.find_task_privileges(param_type, task)
+      for i, privilege in ipairs(privileges) do
+        privilege_field_paths[i]:map(function(field_path)
+          all_req_indices[param_symbol:getname()][field_path] = region_i
+        end)
+        region_i = region_i + 1
+      end
+    end
+
+    local colocations = data.filter(function(constraint)
+        return constraint:is(ast.layout.Colocation)
+      end, variant:get_execution_constraints())
+    colocations:map(function(colocation)
+      local req_indices = data.newmap()
+      local field_ids = data.newmap()
+      colocation.fields:map(function(field)
+        field.field_paths:map(function(field_path)
+          local req_idx = all_req_indices[field.region_name][field_path]
+          local all_field_ids =
+            generate_static_field_ids(all_region_types[field.region_name])
+          assert(req_idx ~= nil)
+          assert(all_field_ids ~= nil)
+          req_indices[req_idx] = true
+          field_ids[all_field_ids[field_path]] = true
+        end)
+      end)
+      local req_index_list = terralib.newlist()
+      for index, _ in req_indices:items() do req_index_list:insert(index) end
+      local field_id_list = terralib.newlist()
+      for id, _ in field_ids:items() do field_id_list:insert(id) end
+
+      local indices = terralib.newsymbol(uint[#req_index_list], "indices")
+      local fields = terralib.newsymbol(c.legion_field_id_t[#field_id_list], "fields")
+      actions = quote
+        [actions]
+        do
+          var [indices], [fields]
+          [data.zip(data.range(0, #req_index_list), req_index_list):map(function(pair)
+              local i, req_index = unpack(pair)
+              return quote [indices][ [i] ] = [req_index] end
+            end)];
+          [data.zip(data.range(0, #field_id_list), field_id_list):map(function(pair)
+              local i, field_id = unpack(pair)
+              return quote [fields][ [i] ] = [field_id] end
+            end)];
+          c.legion_execution_constraint_set_add_colocation_constraint(
+            [execution_constraints],
+            [&uint]([indices]), [#req_index_list],
+            [&c.legion_field_id_t]([fields]), [#field_id_list])
+        end
+      end
+    end)
+  end
+  return actions
+end
+
 function std.setup(main_task, extra_setup_thunk, task_wrappers, registration_name)
   assert(not main_task or std.is_task(main_task))
 
@@ -3523,14 +3761,22 @@ function std.setup(main_task, extra_setup_thunk, task_wrappers, registration_nam
   end
 
   local reduction_registrations = terralib.newlist()
-  for _, op in ipairs(base.reduction_ops) do
-    for _, op_type in ipairs(base.reduction_types) do
-      local register = c["register_reduction_" .. op.name .. "_" .. tostring(op_type)]
-      local op_id = std.reduction_op_ids[op.op][op_type]
-      reduction_registrations:insert(
-        quote
-          [register](op_id)
-        end)
+  for _, pair in ipairs(base.registered_reduction_ops) do
+    local op, op_type = unpack(pair)
+    local op_name = base.reduction_ops[op].name
+    local register = nil
+    if op_type:isprimitive() then
+      register = c["register_reduction_" .. op_name .. "_" .. tostring(op_type)]
+      reduction_registrations:insert(quote
+        [register]([ base.reduction_op_ids[op][op_type] ])
+      end)
+    elseif op_type:isarray() then
+      register = c["register_array_reduction_" .. op_name .. "_" .. tostring(op_type.type)]
+      reduction_registrations:insert(quote
+        [register]([ base.reduction_op_ids[op][op_type] ], [op_type.N])
+      end)
+    else
+      assert(false)
     end
   end
 
@@ -3560,39 +3806,42 @@ function std.setup(main_task, extra_setup_thunk, task_wrappers, registration_nam
 
   local layout_reduction = data.new_recursive_map(2)
   for dim = 1, max_dim do
-    for _, op in ipairs(base.reduction_ops) do
-      for _, op_type in ipairs(base.reduction_types) do
-        local op_id = std.reduction_op_ids[op.op][op_type]
-        local layout_id, layout_actions = make_reduction_layout(dim, op_id)
-        layout_registrations:insert(layout_actions)
-        layout_reduction[dim][op.op][op_type] = layout_id
-      end
+    for _, pair in ipairs(base.registered_reduction_ops) do
+      local op, op_type = unpack(pair)
+      local op_id = std.reduction_op_ids[op][op_type]
+      local layout_id, layout_actions = make_reduction_layout(dim, op_id)
+      layout_registrations:insert(layout_actions)
+      layout_reduction[dim][op][op_type] = layout_id
     end
   end
 
   local projection_functor_registrations = projection_functors:map(
     function(args)
-      local id, depth, region_functor, partition_functor = unpack(args)
+      local id, exclusive, functional, depth, region_functor, partition_functor = unpack(args)
+
       -- Hack: Work around Terra not wanting to escape nil.
-      if region_functor and partition_functor then
+      region_functor = region_functor or `nil
+      partition_functor = partition_functor or `nil
+
+      if functional then
         return quote
           c.legion_runtime_preregister_projection_functor(
-            id, depth, region_functor, partition_functor)
-        end
-      elseif region_functor then
-        return quote
-          c.legion_runtime_preregister_projection_functor(
-            id, depth, region_functor, nil)
-        end
-      elseif partition_functor then
-        return quote
-          c.legion_runtime_preregister_projection_functor(
-            id, depth, nil, partition_functor)
+            id, exclusive, depth,
+            region_functor, partition_functor)
         end
       else
-        assert(false)
+        return quote
+          c.legion_runtime_preregister_projection_functor_mappable(
+            id, exclusive, depth,
+            region_functor, partition_functor)
+        end
       end
     end)
+
+  -- We don't need to register tasks that are only inlined
+  local variants = data.filter(function(variant)
+    return not variant.task.is_inline
+  end, variants)
 
   local task_registrations = variants:map(
     function(variant)
@@ -3602,18 +3851,7 @@ function std.setup(main_task, extra_setup_thunk, task_wrappers, registration_nam
 
       local proc_types = {c.LOC_PROC, c.IO_PROC}
 
-      -- Check if this is an OpenMP task.
-      local openmp = false
-      ast.traverse_node_postorder(
-        function(node)
-          if node:is(ast.typed.stat) and
-            node.annotations.openmp:is(ast.annotation.Demand)
-          then
-            openmp = true
-          end
-        end,
-        variant:has_ast() and variant:get_ast())
-      if openmp then
+      if variant:is_openmp() then
         if std.config["openmp-strict"] then
           proc_types = {c.OMP_PROC}
         else
@@ -3667,27 +3905,33 @@ function std.setup(main_task, extra_setup_thunk, task_wrappers, registration_nam
         end
       end
 
+      local execution_constraints = terralib.newsymbol(
+        c.legion_execution_constraint_set_t, "execution_constraints")
+      local execution_constraint_actions =
+        make_execution_constraints_from_annotations(variant, execution_constraints)
       local registration_actions = terralib.newlist()
       for _, proc_type in ipairs(proc_types) do
         registration_actions:insert(quote
-          var execution_constraints = c.legion_execution_constraint_set_create()
-          c.legion_execution_constraint_set_add_processor_constraint(execution_constraints, proc_type)
+          var [execution_constraints] = c.legion_execution_constraint_set_create()
+          c.legion_execution_constraint_set_add_processor_constraint([execution_constraints], proc_type)
+          [execution_constraint_actions]
           var [layout_constraints] = c.legion_task_layout_constraint_set_create()
           [layout_constraint_actions]
           var options = c.legion_task_config_options_t {
             leaf = [ options.leaf and std.config["legion-leaf"] ],
             inner = [ options.inner and std.config["legion-inner"] ],
-            idempotent = options.idempotent,
+            idempotent = [ options.idempotent and std.config["legion-idempotent"] ],
+            replicable = [ options.replicable and std.config["legion-replicable"] ],
           }
 
           c.legion_runtime_preregister_task_variant_fnptr(
             [task:get_task_id()],
             [task:get_name():concat(".")],
             [variant:get_name()],
-            execution_constraints, layout_constraints, options,
+            [execution_constraints], [layout_constraints], options,
             [task_wrappers[variant:wrapper_name()]], nil, 0)
-          c.legion_execution_constraint_set_destroy(execution_constraints)
-          c.legion_task_layout_constraint_set_destroy(layout_constraints)
+          c.legion_execution_constraint_set_destroy([execution_constraints])
+          c.legion_task_layout_constraint_set_destroy([layout_constraints])
         end)
       end
 
@@ -3697,7 +3941,9 @@ function std.setup(main_task, extra_setup_thunk, task_wrappers, registration_nam
     end)
   local cuda_setup = quote end
   if std.config["cuda"] and cudahelper.check_cuda_available() then
-    cudahelper.link_driver_library()
+    if data.is_luajit() then
+      cudahelper.link_driver_library()
+    end
     local all_kernels = {}
     variants:map(function(variant)
       if variant:is_cuda() then
@@ -3709,6 +3955,10 @@ function std.setup(main_task, extra_setup_thunk, task_wrappers, registration_nam
         end
       end
     end)
+    for k, v in pairs(cudahelper.get_internal_kernels()) do
+      assert(all_kernels[k] == nil)
+      all_kernels[k] = v
+    end
     cuda_setup = cudahelper.jit_compile_kernels_and_register(all_kernels)
   end
 
@@ -3750,7 +4000,9 @@ end
 local function make_task_wrappers()
   local task_wrappers = {}
   for _,variant in ipairs(variants) do
-    task_wrappers[variant:wrapper_name()] = variant:make_wrapper()
+    if not variant.task.is_inline then
+      task_wrappers[variant:wrapper_name()] = variant:make_wrapper()
+    end
   end
   return task_wrappers
 end
@@ -3883,9 +4135,9 @@ local function incremental_compile_tasks()
 
       -- Now attempt to move the object file into place. Note: This is atomic,
       -- so we don't need to worry about races.
-      local ok, err = os.rename(objtmp, cache_filename)
-      if ok == nil then
-        assert(false, err)
+      local ok = os.execute("/bin/mv ".. objtmp .. " " .. cache_filename)
+      if ok ~= 0 then
+        assert(false, "failed to move cache file")
       end
     else
       -- Otherwise do nothing (will automatically reuse the cached object file).
@@ -3899,8 +4151,8 @@ local function incremental_compile_tasks()
   -- expect them to be linked-in later.
   local header = [[
 #include "legion.h"
-#include "legion_terra.h"
-#include "legion_terra_partitions.h"
+#include "regent.h"
+#include "regent_partitions.h"
 ]] ..
   table.concat(
     variants:map(function(variant) return variant:wrapper_sig() .. '\n' end)
@@ -4014,8 +4266,8 @@ local function compile_tasks_in_parallel()
   -- expect them to be linked-in later.
   local header = [[
 #include "legion.h"
-#include "legion_terra.h"
-#include "legion_terra_partitions.h"
+#include "regent.h"
+#include "regent_partitions.h"
 ]] ..
   table.concat(
     variants:map(function(variant) return variant:wrapper_sig() .. '\n' end)
@@ -4274,77 +4526,6 @@ end
 -- ## Vector Operators
 -- #################
 do
-  local to_math_op_name = {}
-  local function math_op_factory(fname)
-    return terralib.memoize(function(arg_type)
-      local intrinsic_name = "llvm." .. fname .. "."
-      local elmt_type = arg_type
-      if arg_type:isvector() then
-        intrinsic_name = intrinsic_name .. "v" .. arg_type.N
-        elmt_type = elmt_type.type
-      end
-      assert(elmt_type == float or elmt_type == double)
-      intrinsic_name = intrinsic_name .. "f" .. (sizeof(elmt_type) * 8)
-      local op = terralib.intrinsic(intrinsic_name, arg_type -> arg_type)
-      to_math_op_name[op] = fname
-      return op
-    end)
-  end
-
-  local supported_math_ops = { -- math operators supported by ISA
-    "ceil",
-    "cos",
-    "exp",
-    "exp2",
-    "fabs",
-    "floor",
-    "log",
-    "log2",
-    "log10",
-    "sin",
-    "sqrt",
-    "trunc"
-  }
-
-  local cmath_ops = { -- math operators backed by standard library
-    "acos",
-    "asin",
-    "atan",
-    "cbrt",
-    "tan",
-    "pow",
-    "fmod",
-  }
-
-  for _, fname in pairs(supported_math_ops) do
-    std[fname] = math_op_factory(fname)
-    if std.config["cuda"] and cudahelper.check_cuda_available() then
-      cudahelper.register_builtin(fname, std[fname](double))
-    end
-  end
-
-  local cmath = terralib.includec("math.h")
-  for _, fname in pairs(cmath_ops) do
-    std[fname] = function(arg_type) return cmath[fname] end
-    if std.config["cuda"] and cudahelper.check_cuda_available() then
-      cudahelper.register_builtin(fname, std[fname](double))
-    end
-  end
-
-  function std.is_math_op(op)
-    return to_math_op_name[op] ~= nil
-  end
-
-  function std.convert_math_op(op, arg_type)
-    return std[to_math_op_name[op]](arg_type)
-  end
-
-  function std.get_math_op_name(op, arg_type)
-    return '[regentlib.' .. to_math_op_name[op] .. '(' .. tostring(arg_type) .. ')]'
-  end
-end
-
-do
   local intrinsic_names = {}
   if os.execute("bash -c \"[ `uname` == 'Linux' ]\"") == 0 and
     os.execute("grep altivec /proc/cpuinfo > /dev/null") == 0
@@ -4374,18 +4555,6 @@ do
   for _, fname in pairs(supported_math_binary_ops) do
     std["v" .. fname] = math_binary_op_factory(fname)
   end
-
-  function std.is_minmax_supported(arg_type)
-    assert(not (std.is_ref(arg_type) or std.is_rawref(arg_type)))
-    if not arg_type:isvector() then return false end
-    if not ((arg_type.type == float and
-             4 <= arg_type.N and arg_type.N <= 8) or
-            (arg_type.type == double and
-             2 <= arg_type.N and arg_type.N <= 4)) then
-      return false
-    end
-    return true
-  end
 end
 
 -- #####################################
@@ -4393,9 +4562,17 @@ end
 -- #################
 
 std.layout = {}
-std.layout.dimx = ast.layout.Dim { index = c.DIM_X }
-std.layout.dimy = ast.layout.Dim { index = c.DIM_Y }
-std.layout.dimz = ast.layout.Dim { index = c.DIM_Z }
+std.layout.spatial_dims = terralib.newlist()
+std.layout.spatial_dims_map = {}
+do
+  for k, name in ipairs(data.take(max_dim, std.dim_names)) do
+    local regent_name = "dim" .. name
+    local legion_name = "DIM_" .. string.upper(name)
+    std.layout[regent_name] = ast.layout.Dim { index = c[legion_name] }
+    std.layout.spatial_dims:insert(std.layout[regent_name])
+    std.layout.spatial_dims_map[std.layout[regent_name]] = k
+  end
+end
 std.layout.dimf = ast.layout.Dim { index = c.DIM_F }
 
 function std.layout.field_path(...)
@@ -4415,30 +4592,23 @@ end
 
 function std.layout.make_index_ordering_from_constraint(constraint)
   assert(constraint:is(ast.layout.Ordering))
-  local ordering = terralib.newlist()
-  constraint.dimensions:map(function(dimension)
-      if dimension == std.layout.dimx then
-        ordering:insert(1)
-      elseif dimension == std.layout.dimy then
-        ordering:insert(2)
-      elseif dimension == std.layout.dimz then
-        ordering:insert(3)
-      end
-    end)
+  local ordering = data.filter(function(dimension)
+    return std.layout.spatial_dims_map[dimension]
+  end, constraint.dimensions):map(function(dimension)
+    return std.layout.spatial_dims_map[dimension]
+  end)
   assert(#ordering == #constraint.dimensions - 1)
   return ordering
 end
 
 std.layout.default_layout = terralib.memoize(function(index_type)
-  local dimensions = terralib.newlist { std.layout.dimx }
-  if index_type.dim > 1 then
-    dimensions:insert(std.layout.dimy)
-  end
-  if index_type.dim > 2 then
-    dimensions:insert(std.layout.dimz)
-  end
+  local dimensions = data.take(index_type.dim, std.layout.spatial_dims)
   dimensions:insert(std.layout.dimf)
   return std.layout.ordering_constraint(dimensions)
 end)
+
+function std.layout.colocation_constraint(fields)
+  return ast.layout.Colocation { fields = fields }
+end
 
 return std

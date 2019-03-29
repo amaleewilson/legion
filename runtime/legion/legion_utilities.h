@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,6 +130,7 @@ namespace Legion {
       inline size_t get_buffer_size(void) const { return total_bytes; }
       inline size_t get_used_bytes(void) const { return index; }
       inline void* reserve_bytes(size_t size);
+      inline void reset(void);
     private:
       inline void resize(void);
     private:
@@ -1637,6 +1638,16 @@ namespace Legion {
       context_bytes += bytes;
 #endif
       return result;
+    }
+
+    //--------------------------------------------------------------------------
+    inline void Serializer::reset(void)
+    //--------------------------------------------------------------------------
+    {
+      index = 0;
+#ifdef DEBUG_LEGION
+      context_bytes = 0;
+#endif
     }
 
     //--------------------------------------------------------------------------

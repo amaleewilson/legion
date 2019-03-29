@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University
+-- Copyright 2019 Stanford University
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -79,7 +79,7 @@ f:set_calling_convention(regentlib.convention.manual())
 
 task main()
   var r = region(ispace(ptr, 5), s)
-  fill(r.{a, b}, 1.0)
+  fill(r.{a, b, c, d}, 1.0)
 
   f(r, 2.0)
 end

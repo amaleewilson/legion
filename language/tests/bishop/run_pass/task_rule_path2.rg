@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University, NVIDIA Corporation
+-- Copyright 2019 Stanford University, NVIDIA Corporation
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -61,6 +61,7 @@ end
 
 task toplevel()
   var r = region(ispace(ptr, 10), fs)
+  fill(r.{x, y}, 0)
   ta(1, r)
 end
 

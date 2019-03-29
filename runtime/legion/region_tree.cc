@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -461,6 +461,18 @@ namespace Legion {
       IndexPartNode *node1 = get_node(handle1);
       IndexPartNode *node2 = get_node(handle2);
       return new_part->create_by_intersection(op, node1, node2);
+    }
+
+    //--------------------------------------------------------------------------
+    ApEvent RegionTreeForest::create_partition_by_intersection(Operation *op,
+                                                           IndexPartition pid,
+                                                           IndexPartition part,
+                                                           const bool dominates)
+    //--------------------------------------------------------------------------
+    {
+      IndexPartNode *new_part = get_node(pid);
+      IndexPartNode *node = get_node(part);
+      return new_part->create_by_intersection(op, node, dominates); 
     }
 
     //--------------------------------------------------------------------------
@@ -1149,8 +1161,7 @@ namespace Legion {
     {
       PartitionNode *parent_node = get_node(parent);
       IndexSpaceNode *color_space = parent_node->row_source->color_space;
-      LegionColor color = color_space->linearize_color(realm_color, type_tag);
-      return parent_node->has_color(color);
+      return color_space->contains_point(realm_color, type_tag);
     }
 
     //--------------------------------------------------------------------------
@@ -1830,6 +1841,7 @@ namespace Legion {
         // Try ot match it first
         if ((*it)->matches(op, node, released_fields))
         {
+          delete (*it);
           it = restrictions.erase(it);
           if (!released_fields)
             return true;
@@ -2997,7 +3009,7 @@ namespace Legion {
     {
       FieldSpaceNode *node = get_node(handle);
       const FieldMask coloc_mask = node->get_field_mask(fields);
-      std::map<PhysicalManager*,FieldMask> colocate_instances;
+      LegionMap<PhysicalManager*,FieldMask>::aligned colocate_instances;
       // Figure out the first set
       InstanceSet &first_set = *(instances[0]);
       for (unsigned idx = 0; idx < first_set.size(); idx++)
@@ -3027,17 +3039,17 @@ namespace Legion {
           PhysicalManager *manager = next_set[idx2].get_manager();
           if (manager->is_virtual_manager())
           {
-            bad1 = idx2;
-            bad2 = idx2;
+            bad1 = idx1;
+            bad2 = idx1;
             return false;
           }
-          std::map<PhysicalManager*,FieldMask>::const_iterator finder = 
-            colocate_instances.find(manager);
+          LegionMap<PhysicalManager*,FieldMask>::aligned::const_iterator 
+            finder = colocate_instances.find(manager);
           if ((finder == colocate_instances.end()) ||
               (!!(overlap - finder->second)))
           {
             bad1 = 0;
-            bad2 = idx2;
+            bad2 = idx1;
             return false;
           }
         }
@@ -3139,7 +3151,8 @@ namespace Legion {
                                                  const RegionRequirement &req,
                                                  InstanceManager *ext_instance,
                                                  VersionInfo &version_info,
-                                                 std::set<RtEvent> &map_applied)
+                                                 std::set<RtEvent> &map_applied,
+                                                 PhysicalTraceInfo &trace_info)
     //--------------------------------------------------------------------------
     {
       DETAILED_PROFILER(runtime, REGION_TREE_PHYSICAL_ATTACH_EXTERNAL_CALL);
@@ -3151,10 +3164,11 @@ namespace Legion {
       RegionNode *attach_node = get_node(req.region);
       UniqueID logical_ctx_uid = attach_op->get_context()->get_context_uid();
       // Perform the attachment
-      return attach_node->attach_external(ctx.get_id(), context,logical_ctx_uid,
+      return attach_node->attach_external(ctx.get_id(), attach_op, index,
+                                        context,logical_ctx_uid,
                                         ext_instance->layout->allocated_fields, 
-                                        req, ext_instance, 
-                                        version_info, map_applied);
+                                        req, ext_instance, version_info, 
+                                        map_applied, trace_info);
     }
 
     //--------------------------------------------------------------------------
@@ -3163,7 +3177,8 @@ namespace Legion {
                                           unsigned index,
                                           VersionInfo &version_info,
                                           const InstanceRef &ref,
-                                          std::set<RtEvent> &map_applied_events)
+                                          std::set<RtEvent> &map_applied_events,
+                                          PhysicalTraceInfo &trace_info)
     //--------------------------------------------------------------------------
     {
       DETAILED_PROFILER(runtime, REGION_TREE_PHYSICAL_DETACH_EXTERNAL_CALL);
@@ -3175,8 +3190,10 @@ namespace Legion {
       RegionNode *detach_node = get_node(req.region);
       UniqueID logical_ctx_uid = detach_op->get_context()->get_context_uid();
       // Perform the detachment
-      return detach_node->detach_external(ctx.get_id(), context,logical_ctx_uid,
-                                          version_info, ref,map_applied_events);
+      return detach_node->detach_external(ctx.get_id(), detach_op, index,
+                                          context, logical_ctx_uid, req,
+                                          version_info, ref, map_applied_events,
+                                          trace_info);
     }
 
     //--------------------------------------------------------------------------
@@ -3186,6 +3203,10 @@ namespace Legion {
       std::map<RegionTreeID,RegionNode*> trees;
       {
         AutoLock l_lock(lookup_lock,1,false/*exclusive*/);
+        // Need to hold references to prevent deletion race
+        for (std::map<RegionTreeID,RegionNode*>::const_iterator it = 
+              tree_nodes.begin(); it != tree_nodes.end(); it++)
+          it->second->add_base_resource_ref(REGION_TREE_REF);
         trees = tree_nodes;
       }
       CurrentInitializer init(ctx.get_id());
@@ -3193,6 +3214,8 @@ namespace Legion {
             trees.begin(); it != trees.end(); it++)
       {
         it->second->visit_node(&init);
+        if (it->second->remove_base_resource_ref(REGION_TREE_REF))
+          delete it->second;
       }
     }
 
@@ -6309,6 +6332,14 @@ namespace Legion {
     }
 
     //--------------------------------------------------------------------------
+    void IndexPartNode::RemoteDisjointnessFunctor::apply(AddressSpaceID target)
+    //--------------------------------------------------------------------------
+    {
+      if (target != runtime->address_space)
+        runtime->send_index_partition_disjoint_update(target, rez);
+    }
+
+    //--------------------------------------------------------------------------
     void IndexPartNode::compute_disjointness(RtUserEvent ready_event)
     //--------------------------------------------------------------------------
     {
@@ -6327,8 +6358,13 @@ namespace Legion {
                 (c2 < max_linearized_color); c2++)
           {
             if (!are_disjoint(c1, c2, true/*force compute*/))
+            {
               disjoint = false;
+              break;
+            }
           }
+          if (!disjoint)
+            break;
         }
       }
       else
@@ -6344,8 +6380,37 @@ namespace Legion {
             if (!color_space->contains_color(c2))
               continue;
             if (!are_disjoint(c1, c2, true/*force compute*/))
+            {
               disjoint = false;
+              break;
+            }
           }
+          if (!disjoint)
+            break;
+        }
+      }
+      // Make sure the write of disjoint propagates before 
+      // we do the trigger of the event
+      __sync_synchronize();
+      {
+        AutoLock n_lock(node_lock);
+#ifdef DEBUG_LEGION
+        assert(disjoint_ready == ready_event);
+#endif
+        disjoint_ready = RtEvent::NO_RT_EVENT;
+        // We have to send notifications before any other remote
+        // requests can record themselves so we need to do it 
+        // while we are holding the lock
+        if (!remote_instances.empty())
+        {
+          Serializer rez;
+          {
+            RezCheck z(rez);
+            rez.serialize(handle);
+            rez.serialize<bool>(disjoint);
+          }
+          RemoteDisjointnessFunctor functor(rez, context->runtime);
+          remote_instances.map(functor);
         }
       }
       // Once we get here, we know the disjointness result so we can
@@ -6361,7 +6426,9 @@ namespace Legion {
     bool IndexPartNode::is_disjoint(bool app_query)
     //--------------------------------------------------------------------------
     {
-      if (!disjoint_ready.has_triggered())
+      // Assuming 64-bit reads/write are atomic operations here
+      // since we're not using the lock to protect these reads
+      if (disjoint_ready.exists() && !disjoint_ready.has_triggered())
         disjoint_ready.wait();
       return disjoint;
     }
@@ -6513,6 +6580,29 @@ namespace Legion {
     }
 
     //--------------------------------------------------------------------------
+    void IndexPartNode::record_remote_disjoint_ready(RtUserEvent ready)
+    //--------------------------------------------------------------------------
+    {
+#ifdef DEBUG_LEGION
+      assert(ready.exists());
+      assert(!remote_disjoint_ready.exists());
+#endif
+      remote_disjoint_ready = ready;
+    }
+
+    //--------------------------------------------------------------------------
+    void IndexPartNode::record_remote_disjoint_result(const bool result)
+    //--------------------------------------------------------------------------
+    {
+#ifdef DEBUG_LEGION
+      assert(remote_disjoint_ready.exists());
+#endif
+      disjoint = result;
+      __sync_synchronize();
+      Runtime::trigger_event(remote_disjoint_ready);
+    }
+
+    //--------------------------------------------------------------------------
     void IndexPartNode::get_colors(std::vector<LegionColor> &colors)
     //--------------------------------------------------------------------------
     {
@@ -6641,6 +6731,15 @@ namespace Legion {
     }
 
     //--------------------------------------------------------------------------
+    ApEvent IndexPartNode::create_by_intersection(Operation *op,
+                                                  IndexPartNode *other,
+                                                  const bool dominates)
+    //--------------------------------------------------------------------------
+    {
+      return parent->create_by_intersection(op, this, other, dominates);
+    }
+
+    //--------------------------------------------------------------------------
     ApEvent IndexPartNode::create_by_difference(Operation *op,
                                                 IndexPartNode *left,
                                                 IndexPartNode *right)
@@ -6680,9 +6779,13 @@ namespace Legion {
       color_space->send_node(target, false/*up*/);
       std::map<LegionColor,IndexSpaceNode*> valid_copy;
       {
-        // Make sure we know if this is disjoint or not yet
-        bool disjoint_result = is_disjoint();
         AutoLock n_lock(node_lock);
+        // Check to see if we have computed the disjointness result
+        // If not we'll record that we need to do it and then when it 
+        // is computed we'll send out the result to all the remote copies
+        const bool has_disjoint = 
+          (!disjoint_ready.exists() || disjoint_ready.has_triggered());
+        const bool disjoint_result = has_disjoint ? is_disjoint() : false;
         if (!remote_instances.contains(target))
         {
           Serializer rez;
@@ -6693,6 +6796,7 @@ namespace Legion {
             rez.serialize(parent->handle); 
             rez.serialize(color_space->handle);
             rez.serialize(color);
+            rez.serialize<bool>(has_disjoint);
             rez.serialize<bool>(disjoint_result);
             rez.serialize(partition_ready);
             rez.serialize(partial_pending);
@@ -6735,7 +6839,8 @@ namespace Legion {
       derez.deserialize(color_space);
       LegionColor color;
       derez.deserialize(color);
-      bool disjoint;
+      bool has_disjoint, disjoint;
+      derez.deserialize(has_disjoint);
       derez.deserialize(disjoint);
       ApEvent ready_event;
       derez.deserialize(ready_event);
@@ -6747,8 +6852,16 @@ namespace Legion {
       assert(parent_node != NULL);
       assert(color_space_node != NULL);
 #endif
-      IndexPartNode *node = context->create_node(handle, parent_node, 
-        color_space_node, color, disjoint, did, ready_event, partial_pending);
+      RtUserEvent dis_ready;
+      if (!has_disjoint)
+        dis_ready = Runtime::create_rt_user_event();
+      IndexPartNode *node = has_disjoint ? 
+        context->create_node(handle, parent_node, color_space_node, color, 
+                             disjoint, did, ready_event, partial_pending) :
+        context->create_node(handle, parent_node, color_space_node, color,
+                             dis_ready, did, ready_event, partial_pending);
+      if (!has_disjoint)
+        node->record_remote_disjoint_ready(dis_ready);
 #ifdef DEBUG_LEGION
       assert(node != NULL);
 #endif
@@ -6873,6 +6986,20 @@ namespace Legion {
       derez.deserialize(to_trigger);
       (*target) = handle;
       Runtime::trigger_event(to_trigger);
+    }
+
+    //--------------------------------------------------------------------------
+    /*static*/ void IndexPartNode::handle_node_disjoint_update(
+                                  RegionTreeForest *forest, Deserializer &derez)
+    //--------------------------------------------------------------------------
+    {
+      DerezCheck z(derez);
+      IndexPartition handle;
+      derez.deserialize(handle);
+      bool disjoint_result;
+      derez.deserialize(disjoint_result);
+      IndexPartNode *node = forest->get_node(handle);
+      node->record_remote_disjoint_result(disjoint_result);
     }
 
     //--------------------------------------------------------------------------
@@ -7727,9 +7854,9 @@ namespace Legion {
         if (result < 0)
           REPORT_LEGION_ERROR(ERROR_EXCEEDED_MAXIMUM_NUMBER_ALLOCATED_FIELDS,
             "Exceeded maximum number of allocated fields for "
-                          "field space %x. Change MAX_FIELDS from %d and "
-                          "related macros at the top of legion_config.h and "
-                          "recompile.", handle.id, MAX_FIELDS)
+                          "field space %x. Change LEGION_MAX_FIELDS from %d and"
+                          " related macros at the top of legion_config.h and "
+                          "recompile.", handle.id, LEGION_MAX_FIELDS)
         index = result;
         fields[fid] = FieldInfo(size, index, serdez_id);
         if (!!remote_instances)
@@ -7810,9 +7937,9 @@ namespace Legion {
           if (result < 0)
             REPORT_LEGION_ERROR(ERROR_EXCEEDED_MAXIMUM_NUMBER_ALLOCATED_FIELDS,
               "Exceeded maximum number of allocated fields for "
-                            "field space %x. Change MAX_FIELDS from %d and "
-                            "related macros at the top of legion_config.h and "
-                            "recompile.", handle.id, MAX_FIELDS)
+                            "field space %x. Change LEGION_MAX_FIELDS from %d "
+                            "and related macros at the top of legion_config.h "
+                            "and recompile.", handle.id, LEGION_MAX_FIELDS)
           unsigned index = result;
           fields[fid] = FieldInfo(sizes[idx], index, serdez_id);
           indexes[idx] = index;
@@ -8611,10 +8738,11 @@ namespace Legion {
                            mask_index_map, serdez, file_mask);
       // Now make the instance, this should always succeed
       ApEvent ready_event;
+      size_t instance_footprint;
       LayoutConstraintSet constraints;
       PhysicalInstance inst = 
         attach_op->create_instance(node->row_source, field_set, field_sizes, 
-                                   constraints, ready_event);
+                                   constraints, ready_event,instance_footprint);
       // Pull out the pointer constraint so that we can use it separately
       // and not have it included in the layout constraints
       PointerConstraint pointer_constraint = constraints.pointer_constraint;
@@ -8644,7 +8772,9 @@ namespace Legion {
                                          memory, inst, node->row_source, 
                                          false/*own*/, node, layout, 
                                          pointer_constraint,
-                                         true/*register now*/, ready_event,
+                                         true/*register now*/, 
+                                         instance_footprint,
+                                         ready_event,
                                          true/*external instance*/,
                                          Reservation::create_reservation());
 #ifdef DEBUG_LEGION
@@ -8901,7 +9031,7 @@ namespace Legion {
 #ifdef DEBUG_LEGION
       assert(!!mask);
 #endif
-      char *result = (char*)malloc(MAX_FIELDS*4); 
+      char *result = (char*)malloc(LEGION_MAX_FIELDS*4); 
       bool first = true;
       for (std::map<FieldID,FieldInfo>::const_iterator it = fields.begin();
             it != fields.end(); it++)
@@ -8960,7 +9090,7 @@ namespace Legion {
       if (result >= 0)
       {
         // If we have slots for local fields then we can't use those
-        if (result >= int(MAX_FIELDS - runtime->max_local_fields))
+        if (result >= int(LEGION_MAX_FIELDS - runtime->max_local_fields))
           return -1;
         available_indexes.unset_bit(result);
       }
@@ -9034,7 +9164,7 @@ namespace Legion {
       {
         const size_t field_size = sizes[fidx];
         int chosen_index = -1;
-        unsigned global_idx = MAX_FIELDS - runtime->max_local_fields;
+        unsigned global_idx = LEGION_MAX_FIELDS - runtime->max_local_fields;
         for (unsigned local_idx = 0; 
               local_idx < local_field_infos.size(); local_idx++, global_idx++)
         {
@@ -9087,10 +9217,10 @@ namespace Legion {
       {
         // Translate back to a local field index
 #ifdef DEBUG_LEGION
-        assert(indexes[idx] >= (MAX_FIELDS - runtime->max_local_fields));
+        assert(indexes[idx] >= (LEGION_MAX_FIELDS - runtime->max_local_fields));
 #endif
         const unsigned local_index = 
-          indexes[idx] - (MAX_FIELDS - runtime->max_local_fields);
+          indexes[idx] - (LEGION_MAX_FIELDS - runtime->max_local_fields);
 #ifdef DEBUG_LEGION
         assert(local_index < local_field_infos.size());
 #endif
@@ -13487,6 +13617,8 @@ namespace Legion {
       {
         if (HAS_SKIP && (to_skip == it->op) && (skip_gen == it->gen))
         {
+          if (TRACK_DOM)
+            dominator_mask -= it->field_mask;
           it++;
           continue;
         }
@@ -15173,13 +15305,15 @@ namespace Legion {
 
     //--------------------------------------------------------------------------
     InstanceRef RegionNode::attach_external(ContextID ctx, 
+                                          AttachOp *attach_op, unsigned index, 
                                           InnerContext *parent_ctx, 
                                           const UniqueID logical_ctx_uid,
                                           const FieldMask &attach_mask,
                                           const RegionRequirement &req,
                                           InstanceManager *instance_manager,
                                           VersionInfo &version_info,
-                                          std::set<RtEvent> &map_applied_events)
+                                          std::set<RtEvent> &map_applied_events,
+                                          PhysicalTraceInfo &trace_info)
     //--------------------------------------------------------------------------
     {
       // We're effectively writing to this region by doing the attach
@@ -15200,16 +15334,25 @@ namespace Legion {
       // We need to invalidate all other instances for these fields since
       // we are now making this the only valid copy of the data
       update_valid_views(state, attach_mask, true/*dirty*/, view);
+      const RegionUsage usage(req);
+      const ApEvent term_event = attach_op->get_completion_event();
+      ApEvent ready = view->add_user_fused(usage, term_event, attach_mask,
+                                           attach_op, index, &version_info,
+                                           context->runtime->address_space,
+                                           map_applied_events, trace_info);
       // Return the resulting instance
-      return InstanceRef(instance_manager,attach_mask,ApUserEvent::NO_AP_EVENT);
+      return InstanceRef(instance_manager, attach_mask, ready);
     }
 
     //--------------------------------------------------------------------------
-    ApEvent RegionNode::detach_external(ContextID ctx, InnerContext *context, 
+    ApEvent RegionNode::detach_external(ContextID ctx, DetachOp *detach_op,
+                                        unsigned index, InnerContext *context, 
                                         const UniqueID logical_ctx_uid,  
+                                        const RegionRequirement &req,
                                         VersionInfo &version_info, 
                                         const InstanceRef &ref,
-                                        std::set<RtEvent> &map_applied_events)
+                                        std::set<RtEvent> &map_applied_events,
+                                        PhysicalTraceInfo &trace_info)
     //--------------------------------------------------------------------------
     {
       InstanceView *view = convert_reference(ref, context);
@@ -15225,10 +15368,17 @@ namespace Legion {
       const bool update_parent_state = !version_info.is_upper_bound_node(this);
       manager.advance_versions(detach_mask, logical_ctx_uid, context,
                                update_parent_state, map_applied_events);
-      // First remove this view from the set of valid views
+      // Get the event for when the view is done being used
+      const RegionUsage usage(req);
+      const ApEvent term_event = detach_op->get_completion_event();
+      ApEvent done = detach_view->add_user_fused(usage, term_event, detach_mask,
+                                                detach_op, index, &version_info,
+                                                context->runtime->address_space,
+                                                map_applied_events, trace_info);
+      // Next remove this view from the set of valid views
       PhysicalState *state = get_physical_state(version_info);
       filter_valid_views(state, detach_view);
-      return ApEvent::NO_AP_EVENT;
+      return done;
     }
 
     //--------------------------------------------------------------------------
@@ -15552,6 +15702,7 @@ namespace Legion {
               color[0], get_depth());
             break;
           }
+#if LEGION_MAX_DIM >= 2
         case 2:
           {
             logger->log("Region Node (%x,%d,%d) Color (%d,%d) at "
@@ -15560,6 +15711,8 @@ namespace Legion {
               color[0], color[1], get_depth());
             break;
           }
+#endif
+#if LEGION_MAX_DIM >= 3
         case 3:
           {
             logger->log("Region Node (%x,%d,%d) Color (%d,%d,%d) at "
@@ -15568,6 +15721,71 @@ namespace Legion {
               color[0], color[2], color[2], get_depth());
             break;
           }
+#endif
+#if LEGION_MAX_DIM >= 4
+        case 4:
+          {
+            logger->log("Region Node (%x,%d,%d) Color (%d,%d,%d,%d) at "
+                        "depth %d", 
+              handle.index_space.id, handle.field_space.id,handle.tree_id,
+              color[0], color[2], color[2], color[3], get_depth());
+            break;
+          }
+#endif
+#if LEGION_MAX_DIM >= 5
+        case 5:
+          {
+            logger->log("Region Node (%x,%d,%d) Color (%d,%d,%d,%d,%d) "
+                        "at depth %d", 
+              handle.index_space.id, handle.field_space.id,handle.tree_id,
+              color[0], color[2], color[2], color[3], color[4], get_depth());
+            break;
+          }
+#endif
+#if LEGION_MAX_DIM >= 6
+        case 6:
+          {
+            logger->log("Region Node (%x,%d,%d) Color (%d,%d,%d,%d,%d,%d) "
+                        "at depth %d", 
+              handle.index_space.id, handle.field_space.id,handle.tree_id,
+              color[0], color[2], color[2], color[3], color[4], 
+              color[5], get_depth());
+            break;
+          }
+#endif
+#if LEGION_MAX_DIM >= 7
+        case 7:
+          {
+            logger->log("Region Node (%x,%d,%d) Color (%d,%d,%d,%d,%d,%d,%d) "
+                        "at depth %d", 
+              handle.index_space.id, handle.field_space.id,handle.tree_id,
+              color[0], color[2], color[2], color[3], color[4], 
+              color[5], color[6], get_depth());
+            break;
+          }
+#endif
+#if LEGION_MAX_DIM >= 8
+        case 8:
+          {
+            logger->log("Region Node (%x,%d,%d) Color (%d,%d,%d,%d,%d,%d,%d,%d)"
+                        " at depth %d", 
+              handle.index_space.id, handle.field_space.id,handle.tree_id,
+              color[0], color[2], color[2], color[3], color[4], 
+              color[5], color[6], color[7], get_depth());
+            break;
+          }
+#endif
+#if LEGION_MAX_DIM >= 9
+        case 9:
+          {
+            logger->log("Region Node (%x,%d,%d) Color "
+                        "(%d,%d,%d,%d,%d,%d,%d,%d) at depth %d", 
+              handle.index_space.id, handle.field_space.id,handle.tree_id,
+              color[0], color[2], color[2], color[3], color[4], 
+              color[5], color[6], color[7], color[8], get_depth());
+            break;
+          }
+#endif
         default:
           assert(false);
       }
@@ -15651,12 +15869,12 @@ namespace Legion {
       {
         case 1:
           {
-            logger->log("Region Node (%x,%d,%d) Color %d at "
-                        "depth %d (%p)", 
+            logger->log("Region Node (%x,%d,%d) Color %d at depth %d (%p)",
               handle.index_space.id, handle.field_space.id,handle.tree_id,
               color[0], logger->get_depth(), this);
             break;
           }
+#if LEGION_MAX_DIM >= 2
         case 2:
           {
             logger->log("Region Node (%x,%d,%d) Color (%d,%d) at "
@@ -15665,14 +15883,83 @@ namespace Legion {
               color[0], color[1], logger->get_depth(), this);
             break;
           }
+#endif
+#if LEGION_MAX_DIM >= 3
         case 3:
           {
             logger->log("Region Node (%x,%d,%d) Color (%d,%d,%d) at "
                         "depth %d (%p)", 
               handle.index_space.id, handle.field_space.id,handle.tree_id,
-              color[0], color[1], color[2], logger->get_depth(), this);
+              color[0], color[2], color[2], logger->get_depth(), this);
             break;
           }
+#endif
+#if LEGION_MAX_DIM >= 4
+        case 4:
+          {
+            logger->log("Region Node (%x,%d,%d) Color (%d,%d,%d,%d) at "
+                        "depth %d (%p)", 
+              handle.index_space.id, handle.field_space.id,handle.tree_id,
+              color[0], color[2], color[2], color[3], logger->get_depth(),this);
+            break;
+          }
+#endif
+#if LEGION_MAX_DIM >= 5
+        case 5:
+          {
+            logger->log("Region Node (%x,%d,%d) Color (%d,%d,%d,%d,%d) "
+                        "at depth %d (%p)", 
+              handle.index_space.id, handle.field_space.id,handle.tree_id,
+              color[0], color[2], color[2], color[3], color[4], 
+              logger->get_depth(), this);
+            break;
+          }
+#endif
+#if LEGION_MAX_DIM >= 6
+        case 6:
+          {
+            logger->log("Region Node (%x,%d,%d) Color (%d,%d,%d,%d,%d,%d) "
+                        "at depth %d (%p)", 
+              handle.index_space.id, handle.field_space.id,handle.tree_id,
+              color[0], color[2], color[2], color[3], color[4], 
+              color[5], logger->get_depth(), this);
+            break;
+          }
+#endif
+#if LEGION_MAX_DIM >= 7
+        case 7:
+          {
+            logger->log("Region Node (%x,%d,%d) Color (%d,%d,%d,%d,%d,%d,%d) "
+                        "at depth %d (%p)", 
+              handle.index_space.id, handle.field_space.id,handle.tree_id,
+              color[0], color[2], color[2], color[3], color[4], 
+              color[5], color[6], logger->get_depth(), this);
+            break;
+          }
+#endif
+#if LEGION_MAX_DIM >= 8
+        case 8:
+          {
+            logger->log("Region Node (%x,%d,%d) Color (%d,%d,%d,%d,%d,%d,%d,%d)"
+                        " at depth %d (%p)", 
+              handle.index_space.id, handle.field_space.id,handle.tree_id,
+              color[0], color[2], color[2], color[3], color[4], 
+              color[5], color[6], color[7], logger->get_depth(), this);
+            break;
+          }
+#endif
+#if LEGION_MAX_DIM >= 9
+        case 9:
+          {
+            logger->log("Region Node (%x,%d,%d) Color "
+                        "(%d,%d,%d,%d,%d,%d,%d,%d) at depth %d (%p)", 
+              handle.index_space.id, handle.field_space.id,handle.tree_id,
+              color[0], color[2], color[2], color[3], color[4], 
+              color[5], color[6], color[7], color[8], 
+              logger->get_depth(), this);
+            break;
+          }
+#endif
         default:
           assert(false);
       }
@@ -15709,12 +15996,12 @@ namespace Legion {
       {
         case 1:
           {
-            logger->log("Region Node (%x,%d,%d) Color %d at "
-                        "depth %d (%p)", 
+            logger->log("Region Node (%x,%d,%d) Color %d at depth %d (%p)",
               handle.index_space.id, handle.field_space.id,handle.tree_id,
               color[0], logger->get_depth(), this);
             break;
           }
+#if LEGION_MAX_DIM >= 2
         case 2:
           {
             logger->log("Region Node (%x,%d,%d) Color (%d,%d) at "
@@ -15723,14 +16010,83 @@ namespace Legion {
               color[0], color[1], logger->get_depth(), this);
             break;
           }
+#endif
+#if LEGION_MAX_DIM >= 3
         case 3:
           {
             logger->log("Region Node (%x,%d,%d) Color (%d,%d,%d) at "
                         "depth %d (%p)", 
               handle.index_space.id, handle.field_space.id,handle.tree_id,
-              color[0], color[1], color[2], logger->get_depth(), this);
+              color[0], color[2], color[2], logger->get_depth(), this);
             break;
           }
+#endif
+#if LEGION_MAX_DIM >= 4
+        case 4:
+          {
+            logger->log("Region Node (%x,%d,%d) Color (%d,%d,%d,%d) at "
+                        "depth %d (%p)", 
+              handle.index_space.id, handle.field_space.id,handle.tree_id,
+              color[0], color[2], color[2], color[3], logger->get_depth(),this);
+            break;
+          }
+#endif
+#if LEGION_MAX_DIM >= 5
+        case 5:
+          {
+            logger->log("Region Node (%x,%d,%d) Color (%d,%d,%d,%d,%d) "
+                        "at depth %d (%p)", 
+              handle.index_space.id, handle.field_space.id,handle.tree_id,
+              color[0], color[2], color[2], color[3], color[4], 
+              logger->get_depth(), this);
+            break;
+          }
+#endif
+#if LEGION_MAX_DIM >= 6
+        case 6:
+          {
+            logger->log("Region Node (%x,%d,%d) Color (%d,%d,%d,%d,%d,%d) "
+                        "at depth %d (%p)", 
+              handle.index_space.id, handle.field_space.id,handle.tree_id,
+              color[0], color[2], color[2], color[3], color[4], 
+              color[5], logger->get_depth(), this);
+            break;
+          }
+#endif
+#if LEGION_MAX_DIM >= 7
+        case 7:
+          {
+            logger->log("Region Node (%x,%d,%d) Color (%d,%d,%d,%d,%d,%d,%d) "
+                        "at depth %d (%p)", 
+              handle.index_space.id, handle.field_space.id,handle.tree_id,
+              color[0], color[2], color[2], color[3], color[4], 
+              color[5], color[6], logger->get_depth(), this);
+            break;
+          }
+#endif
+#if LEGION_MAX_DIM >= 8
+        case 8:
+          {
+            logger->log("Region Node (%x,%d,%d) Color (%d,%d,%d,%d,%d,%d,%d,%d)"
+                        " at depth %d (%p)", 
+              handle.index_space.id, handle.field_space.id,handle.tree_id,
+              color[0], color[2], color[2], color[3], color[4], 
+              color[5], color[6], color[7], logger->get_depth(), this);
+            break;
+          }
+#endif
+#if LEGION_MAX_DIM >= 9
+        case 9:
+          {
+            logger->log("Region Node (%x,%d,%d) Color "
+                        "(%d,%d,%d,%d,%d,%d,%d,%d) at depth %d (%p)", 
+              handle.index_space.id, handle.field_space.id,handle.tree_id,
+              color[0], color[2], color[2], color[3], color[4], 
+              color[5], color[6], color[7], color[8], 
+              logger->get_depth(), this);
+            break;
+          }
+#endif
         default:
           assert(false);
       }

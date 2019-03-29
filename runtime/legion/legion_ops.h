@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1834,6 +1834,7 @@ namespace Legion {
       virtual const Partition* as_partition(void) const { return NULL; }
       virtual const DynamicCollective* as_dynamic_collective(void) const
         { return &collective; }
+      virtual const MustEpoch* as_must_epoch(void) const { return NULL; }
     public:
       // From MemoizableOp
       virtual void replay_analysis(void);
@@ -2240,6 +2241,7 @@ namespace Legion {
         EQUAL_PARTITION = 0,
         UNION_PARTITION,
         INTERSECTION_PARTITION,
+        INTERSECTION_WITH_REGION,
         DIFFERENCE_PARTITION,
         RESTRICTED_PARTITION,
       };
@@ -2298,6 +2300,22 @@ namespace Legion {
         IndexPartition pid;
         IndexPartition handle1;
         IndexPartition handle2;
+      };
+      class IntersectionWithRegionThunk: public PendingPartitionThunk {
+      public:
+        IntersectionWithRegionThunk(IndexPartition id, IndexPartition p, bool d)
+          : pid(id), part(p), dominates(d) { }
+        virtual ~IntersectionWithRegionThunk(void) { }
+      public:
+        virtual ApEvent perform(PendingPartitionOp *op,
+                                RegionTreeForest *forest)
+        { return forest->create_partition_by_intersection(op, pid, 
+                                                          part, dominates); }
+        virtual void perform_logging(PendingPartitionOp* op);
+      protected:
+        IndexPartition pid;
+        IndexPartition part;
+        const bool dominates;
       };
       class DifferencePartitionThunk : public PendingPartitionThunk {
       public:
@@ -2406,6 +2424,10 @@ namespace Legion {
                                              IndexPartition pid, 
                                              IndexPartition handle1,
                                              IndexPartition handle2);
+      void initialize_intersection_partition(TaskContext *ctx,
+                                             IndexPartition pid, 
+                                             IndexPartition part,
+                                             const bool dominates);
       void initialize_difference_partition(TaskContext *ctx,
                                            IndexPartition pid, 
                                            IndexPartition handle1,
@@ -2878,7 +2900,8 @@ namespace Legion {
                                        const std::vector<FieldID> &field_set,
                                        const std::vector<size_t> &field_sizes,
                                              LayoutConstraintSet &cons,
-                                             ApEvent &ready_event);
+                                             ApEvent &ready_event,
+                                             size_t &instance_footprint);
     protected:
       void check_privilege(void);
       void compute_parent_index(void);
@@ -2897,6 +2920,7 @@ namespace Legion {
       std::set<RtEvent> map_applied_conditions;
       InstanceManager *external_instance;
       LayoutConstraintSet layout_constraint_set;
+      size_t footprint;
     };
 
     /**

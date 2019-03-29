@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University, NVIDIA Corporation
+-- Copyright 2019 Stanford University, NVIDIA Corporation
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -101,6 +101,7 @@ task toplevel()
   var proc = [get_proc()]
   var procs = c.bishop_all_processors()
   var r = region(ispace(ptr, 10), fs)
+  fill(r.{x, y}, 0)
   ta(1, r)
   tb(2, r)
   tc(3, r)

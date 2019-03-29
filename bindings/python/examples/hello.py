@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2018 Stanford University
+# Copyright 2019 Stanford University
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,6 +19,9 @@ from __future__ import print_function
 
 from legion import task
 
-@task(top_level=True)
+@task
 def main():
     print("Hello, Legion!")
+
+if __name__ == '__legion_main__':
+    main()

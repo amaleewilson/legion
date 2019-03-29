@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -122,6 +122,10 @@ namespace Legion {
                                                IndexPartition pid,
                                                IndexPartition handle1,
                                                IndexPartition handle2);
+      ApEvent create_partition_by_intersection(Operation *op,
+                                               IndexPartition pid,
+                                               IndexPartition part,
+                                               const bool dominates);
       ApEvent create_partition_by_difference(Operation *op,
                                            IndexPartition pid,
                                            IndexPartition handle1,
@@ -486,11 +490,13 @@ namespace Legion {
                                   const RegionRequirement &req,
                                   InstanceManager *ext_instance,
                                   VersionInfo &version_info,
-                                  std::set<RtEvent> &map_applied_events);
+                                  std::set<RtEvent> &map_applied_events,
+                                  PhysicalTraceInfo &trace_info);
       ApEvent detach_external(const RegionRequirement &req, DetachOp *detach_op,
                               unsigned index, VersionInfo &version_info, 
                               const InstanceRef &ref, 
-                              std::set<RtEvent> &map_applied_events);
+                              std::set<RtEvent> &map_applied_events,
+                              PhysicalTraceInfo &trace_info);
     public:
       // Debugging method for checking context state
       void check_context_state(RegionTreeContext ctx);
@@ -931,7 +937,8 @@ namespace Legion {
       virtual ApEvent create_by_intersection(Operation *op,
                                              IndexPartNode *partition,
                                              // Left is implicit "this"
-                                             IndexPartNode *right) = 0;
+                                             IndexPartNode *right,
+                                             const bool dominates = false) = 0;
       virtual ApEvent create_by_difference(Operation *op,
                                            IndexPartNode *partition,
                                            IndexPartNode *left,
@@ -1131,7 +1138,8 @@ namespace Legion {
       virtual ApEvent create_by_intersection(Operation *op,
                                              IndexPartNode *partition,
                                              // Left is implicit "this"
-                                             IndexPartNode *right);
+                                             IndexPartNode *right,
+                                             const bool dominates = false);
       virtual ApEvent create_by_difference(Operation *op,
                                            IndexPartNode *partition,
                                            IndexPartNode *left,
@@ -1502,6 +1510,16 @@ namespace Legion {
         const RtUserEvent to_trigger;
         const AddressSpaceID source;
       };
+      class RemoteDisjointnessFunctor {
+      public:
+        RemoteDisjointnessFunctor(Serializer &r, Runtime *rt)
+          : rez(r), runtime(rt) { }
+      public:
+        void apply(AddressSpaceID target);
+      public:
+        Serializer &rez;
+        Runtime *const runtime;
+      };
       class DestructionFunctor {
       public:
         DestructionFunctor(IndexPartNode *n, ReferenceMutator *m)
@@ -1566,6 +1584,8 @@ namespace Legion {
       void record_disjointness(bool disjoint,
                                const LegionColor c1, const LegionColor c2);
       bool is_complete(bool from_app = false);
+      void record_remote_disjoint_ready(RtUserEvent ready);
+      void record_remote_disjoint_result(const bool disjoint_result);
     public:
       void add_instance(PartitionNode *inst);
       bool has_instance(RegionTreeID tid);
@@ -1583,6 +1603,8 @@ namespace Legion {
                               IndexPartNode *left, IndexPartNode *right);
       ApEvent create_by_intersection(Operation *op,
                               IndexPartNode *left, IndexPartNode *right);
+      ApEvent create_by_intersection(Operation *op, IndexPartNode *original,
+                                     const bool dominates);
       ApEvent create_by_difference(Operation *op,
                               IndexPartNode *left, IndexPartNode *right);
       ApEvent create_by_restriction(const void *transform, const void *extent);
@@ -1613,6 +1635,8 @@ namespace Legion {
           RegionTreeForest *forest, Deserializer &derez, AddressSpaceID source);
       static void defer_node_child_request(const void *args);
       static void handle_node_child_response(Deserializer &derez);
+      static void handle_node_disjoint_update(RegionTreeForest *forest,
+                                              Deserializer &derez);
       static void handle_notification(RegionTreeForest *context, 
                                       Deserializer &derez);
     public:
@@ -1639,7 +1663,9 @@ namespace Legion {
     protected:
       // Support for pending child spaces that still need to be computed
       std::map<LegionColor,ApUserEvent> pending_children;
-    }; 
+      // Support for remote disjoint events being stored
+      RtUserEvent remote_disjoint_ready;
+    };
 
     /**
      * \class IndexPartNodeT
@@ -2631,18 +2657,23 @@ namespace Legion {
                               ApEvent precondition, PredEvent true_guard,
                               std::set<RtEvent> &map_applied_events,
                               PhysicalTraceInfo &trace_info);
-      InstanceRef attach_external(ContextID ctx, InnerContext *parent_ctx,
+      InstanceRef attach_external(ContextID ctx, AttachOp *attach_op,
+                                  unsigned index, InnerContext *parent_ctx,
                                   const UniqueID logical_ctx_uid,
                                   const FieldMask &attach_mask,
                                   const RegionRequirement &req, 
                                   InstanceManager *manager, 
                                   VersionInfo &version_info,
-                                  std::set<RtEvent> &map_applied_events);
-      ApEvent detach_external(ContextID ctx, InnerContext *context, 
+                                  std::set<RtEvent> &map_applied_events,
+                                  PhysicalTraceInfo &trace_info);
+      ApEvent detach_external(ContextID ctx, DetachOp *detach_op,
+                              unsigned index, InnerContext *context, 
                               const UniqueID logical_ctx_uid,
+                              const RegionRequirement &req,
                               VersionInfo &version_info, 
                               const InstanceRef &ref,
-                              std::set<RtEvent> &map_applied_events);
+                              std::set<RtEvent> &map_applied_events,
+                              PhysicalTraceInfo &trace_info);
     public:
       virtual InstanceView* find_context_view(PhysicalManager *manager,
                                               InnerContext *context);

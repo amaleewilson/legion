@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University, NVIDIA Corporation
+-- Copyright 2019 Stanford University, NVIDIA Corporation
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -91,7 +91,8 @@ local function convert_lua_value(cx, node, value, allow_lists)
   elseif terralib.isfunction(value) or
     terralib.isoverloadedfunction(value) or
     terralib.ismacro(value) or
-    terralib.types.istype(value) or std.is_task(value)
+    terralib.types.istype(value) or
+    std.is_task(value) or std.is_math_fn(value)
   then
     return ast.specialized.expr.Function {
       value = value,
@@ -587,6 +588,7 @@ function specialize.expr_call(cx, node, allow_lists)
     terralib.isoverloadedfunction(fn.value) or
     terralib.ismacro(fn.value) or
     std.is_task(fn.value) or
+    std.is_math_fn(fn.value) or
     type(fn.value) == "cdata"
   then
     if not std.is_task(fn.value) and #node.conditions > 0 then
@@ -699,7 +701,7 @@ end
 
 function specialize.expr_raw_fields(cx, node, allow_lists)
   return ast.specialized.expr.RawFields {
-    region = specialize.expr(cx, node.region),
+    region = specialize.expr_region_root(cx, node.region),
     annotations = node.annotations,
     span = node.span,
   }
@@ -707,7 +709,7 @@ end
 
 function specialize.expr_raw_physical(cx, node, allow_lists)
   return ast.specialized.expr.RawPhysical {
-    region = specialize.expr(cx, node.region),
+    region = specialize.expr_region_root(cx, node.region),
     annotations = node.annotations,
     span = node.span,
   }
@@ -847,6 +849,17 @@ end
 function specialize.expr_partition_by_field(cx, node, allow_lists)
   return ast.specialized.expr.PartitionByField {
     region = specialize.expr_region_root(cx, node.region),
+    colors = specialize.expr(cx, node.colors),
+    annotations = node.annotations,
+    span = node.span,
+  }
+end
+
+function specialize.expr_partition_by_restriction(cx, node, allow_lists)
+  return ast.specialized.expr.PartitionByRestriction {
+    region = specialize.expr(cx, node.region),
+    transform = specialize.expr(cx, node.transform),
+    extent = specialize.expr(cx, node.extent),
     colors = specialize.expr(cx, node.colors),
     annotations = node.annotations,
     span = node.span,
@@ -1135,6 +1148,38 @@ function specialize.expr_deref(cx, node, allow_lists)
   }
 end
 
+function specialize.expr_import_ispace(cx, node)
+  return ast.specialized.expr.ImportIspace {
+    index_type = node.index_type_expr(cx.env:env()),
+    value = specialize.expr(cx, node.value),
+    annotations = node.annotations,
+    span = node.span,
+  }
+end
+
+function specialize.expr_import_region(cx, node)
+  local fspace_type = node.fspace_type_expr(cx.env:env())
+  return ast.specialized.expr.ImportRegion {
+    ispace = specialize.expr(cx, node.ispace),
+    fspace_type = fspace_type,
+    value = specialize.expr(cx, node.value),
+    field_ids = specialize.expr(cx, node.field_ids),
+    annotations = node.annotations,
+    span = node.span,
+  }
+end
+
+function specialize.expr_import_partition(cx, node)
+  return ast.specialized.expr.ImportPartition {
+    disjointness = node.disjointness,
+    region = specialize.expr(cx, node.region),
+    colors = specialize.expr(cx, node.colors),
+    value = specialize.expr(cx, node.value),
+    annotations = node.annotations,
+    span = node.span,
+  }
+end
+
 function specialize.expr(cx, node, allow_lists)
   if node:is(ast.unspecialized.expr.ID) then
     return specialize.expr_id(cx, node, allow_lists)
@@ -1207,6 +1252,9 @@ function specialize.expr(cx, node, allow_lists)
 
   elseif node:is(ast.unspecialized.expr.PartitionByField) then
     return specialize.expr_partition_by_field(cx, node, allow_lists)
+
+  elseif node:is(ast.unspecialized.expr.PartitionByRestriction) then
+    return specialize.expr_partition_by_restriction(cx, node, allow_lists)
 
   elseif node:is(ast.unspecialized.expr.Image) then
     return specialize.expr_image(cx, node, allow_lists)
@@ -1300,6 +1348,15 @@ function specialize.expr(cx, node, allow_lists)
 
   elseif node:is(ast.unspecialized.expr.Deref) then
     return specialize.expr_deref(cx, node, allow_lists)
+
+  elseif node:is(ast.unspecialized.expr.ImportIspace) then
+    return specialize.expr_import_ispace(cx, node)
+
+  elseif node:is(ast.unspecialized.expr.ImportRegion) then
+    return specialize.expr_import_region(cx, node)
+
+  elseif node:is(ast.unspecialized.expr.ImportPartition) then
+    return specialize.expr_import_partition(cx, node)
 
   else
     assert(false, "unexpected node type " .. tostring(node.node_type))
@@ -1674,6 +1731,8 @@ function specialize.stat_parallelize_with(cx, node)
     end
     return hint
   end)
+
+  local cx = cx:new_local_scope()
   return ast.specialized.stat.ParallelizeWith {
     hints = hints,
     block = specialize.block(cx, node.block),
@@ -1947,20 +2006,20 @@ end
 
 function specialize.top_quote_expr(cx, node)
   local cx = cx:new_local_scope(true)
-  return ast.specialized.top.QuoteExpr {
+  return std.newrquote(ast.specialized.top.QuoteExpr {
     expr = specialize.expr(cx, node.expr),
     annotations = node.annotations,
     span = node.span,
-  }
+  })
 end
 
 function specialize.top_quote_stat(cx, node)
   local cx = cx:new_local_scope(true)
-  return ast.specialized.top.QuoteStat {
+  return std.newrquote(ast.specialized.top.QuoteStat {
     block = specialize.block(cx, node.block),
     annotations = node.annotations,
     span = node.span,
-  }
+  })
 end
 
 function specialize.top(cx, node)

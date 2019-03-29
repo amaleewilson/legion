@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -665,6 +665,9 @@ namespace Legion {
           strides[idx] = 0;
         }
       }
+      // Need a memory fence here to make sure that writes propagate on 
+      // non-total-store-ordered memory consistency machines like PowerPC
+      __sync_synchronize();
       linearization_ready = true;
     }
 
@@ -1389,7 +1392,8 @@ namespace Legion {
     ApEvent IndexSpaceNodeT<DIM,T>::create_by_intersection(Operation *op,
                                                       IndexPartNode *partition,
                                                       // Left is implicit "this"
-                                                      IndexPartNode *right)
+                                                      IndexPartNode *right,
+                                                      const bool dominates)
     //--------------------------------------------------------------------------
     {
 #ifdef DEBUG_LEGION
@@ -1435,20 +1439,31 @@ namespace Legion {
             preconditions.insert(right_ready);
         }
       }
+      ApEvent result, precondition;
       std::vector<Realm::IndexSpace<DIM,T> > subspaces;
-      Realm::ProfilingRequestSet requests;
-      if (context->runtime->profiler != NULL)
-        context->runtime->profiler->add_partition_request(requests,
-                                        op, DEP_PART_INTERSECTIONS);
-      Realm::IndexSpace<DIM,T> lhs_space;
-      ApEvent left_ready = get_realm_index_space(lhs_space, false/*tight*/);
-      if (left_ready.exists())
-        preconditions.insert(left_ready);
-      if (op->has_execution_fence_event())
-        preconditions.insert(op->get_execution_fence_event());
-      ApEvent precondition = Runtime::merge_events(preconditions);
-      ApEvent result(Realm::IndexSpace<DIM,T>::compute_intersections(
-            lhs_space, rhs_spaces, subspaces, requests, precondition));
+      if (dominates)
+      {
+        // If we've been told that we dominate then there is no
+        // need to event do the intersection tests at all
+        subspaces.swap(rhs_spaces);
+        result = Runtime::merge_events(preconditions);
+      }
+      else
+      {
+        Realm::ProfilingRequestSet requests;
+        if (context->runtime->profiler != NULL)
+          context->runtime->profiler->add_partition_request(requests,
+                                          op, DEP_PART_INTERSECTIONS);
+        Realm::IndexSpace<DIM,T> lhs_space;
+        ApEvent left_ready = get_realm_index_space(lhs_space, false/*tight*/);
+        if (left_ready.exists())
+          preconditions.insert(left_ready);
+        if (op->has_execution_fence_event())
+          preconditions.insert(op->get_execution_fence_event());
+        precondition = Runtime::merge_events(preconditions);
+        result = ApEvent(Realm::IndexSpace<DIM,T>::compute_intersections(
+              lhs_space, rhs_spaces, subspaces, requests, precondition));
+      }
 #ifdef LEGION_SPY
       if (!result.exists() || (result == precondition))
       {
@@ -1628,33 +1643,18 @@ namespace Legion {
 #endif
       switch (partition_dim)
       {
-        case 1:
-          {
-            const Realm::Matrix<1,DIM,T> *transform = 
-              static_cast<const Realm::Matrix<1,DIM,T>*>(tran);
-            const Realm::Rect<1,T> *extent = 
-              static_cast<const Realm::Rect<1,T>*>(ext);
-            return create_by_restriction_helper<1>(partition, 
-                                                   *transform, *extent);
+#define DIMFUNC(D2) \
+        case D2: \
+          { \
+            const Realm::Matrix<D2,DIM,T> *transform = \
+              static_cast<const Realm::Matrix<D2,DIM,T>*>(tran); \
+            const Realm::Rect<D2,T> *extent = \
+              static_cast<const Realm::Rect<D2,T>*>(ext); \
+            return create_by_restriction_helper<D2>(partition, \
+                                                   *transform, *extent); \
           }
-        case 2:
-          {
-            const Realm::Matrix<2,DIM,T> *transform = 
-              static_cast<const Realm::Matrix<2,DIM,T>*>(tran);
-            const Realm::Rect<2,T> *extent = 
-              static_cast<const Realm::Rect<2,T>*>(ext);
-            return create_by_restriction_helper<2>(partition, 
-                                                   *transform, *extent);
-          }
-        case 3:
-          {
-            const Realm::Matrix<3,DIM,T> *transform = 
-              static_cast<const Realm::Matrix<3,DIM,T>*>(tran);
-            const Realm::Rect<3,T> *extent = 
-              static_cast<const Realm::Rect<3,T>*>(ext);
-            return create_by_restriction_helper<3>(partition, 
-                                                   *transform, *extent);
-          }
+        LEGION_FOREACH_N(DIMFUNC)
+#undef DIMFUNC
         default:
           assert(false);
       }
@@ -3326,7 +3326,7 @@ namespace Legion {
           }
           else
           {
-            for (LegionColor color = 0; color < total_children; color++)
+            for (LegionColor color = 0; color < max_linearized_color; color++)
             {
               if (!color_space->contains_color(color))
                 continue;

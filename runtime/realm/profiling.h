@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -171,10 +171,11 @@ namespace Realm {
     };
 
     // Simple boolean indicating whether or not allocation is expected to
-    //  succeed
+    //  succeed and footprint size of the allocation required in bytes
     struct InstanceAllocResult {
       static const ProfilingMeasurementID ID = PMID_INST_ALLOCRESULT;
-      
+     
+      size_t footprint;
       bool success;
     };
 

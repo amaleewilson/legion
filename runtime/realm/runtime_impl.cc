@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,6 +63,14 @@ static const void *ignore_gasnet_warning2 __attribute__((unused)) = (void *)_gas
 
 #include <fstream>
 
+#define CHECK_LIBC(cmd) do { \
+  int ret = (cmd); \
+  if(ret != 0) { \
+    fprintf(stderr, "error: %s = %d (%s)\n", #cmd, ret, strerror(ret)); \
+    exit(1); \
+  } \
+} while(0)
+
 #define CHECK_PTHREAD(cmd) do { \
   int ret = (cmd); \
   if(ret != 0) { \
@@ -114,6 +122,37 @@ namespace Realm {
   // signal handlers
   //
 
+  static void register_error_signal_handler(void (*handler)(int))
+  {
+    // register our handler for the standard error signals - set SA_ONSTACK
+    //  so that any thread with an alt stack uses it
+    struct sigaction action;
+    action.sa_handler = handler;
+    sigemptyset(&action.sa_mask);
+    action.sa_flags = SA_ONSTACK;
+
+    CHECK_LIBC( sigaction(SIGINT, &action, 0) );
+    CHECK_LIBC( sigaction(SIGABRT, &action, 0) );
+    CHECK_LIBC( sigaction(SIGSEGV, &action, 0) );
+    CHECK_LIBC( sigaction(SIGFPE, &action, 0) );
+    CHECK_LIBC( sigaction(SIGBUS, &action, 0) );
+  }
+
+  static void unregister_error_signal_handler(void)
+  {
+    // set standard error signals back to default handler
+    struct sigaction action;
+    action.sa_handler = SIG_DFL;
+    sigemptyset(&action.sa_mask);
+    action.sa_flags = 0;
+
+    CHECK_LIBC( sigaction(SIGINT, &action, 0) );
+    CHECK_LIBC( sigaction(SIGABRT, &action, 0) );
+    CHECK_LIBC( sigaction(SIGSEGV, &action, 0) );
+    CHECK_LIBC( sigaction(SIGFPE, &action, 0) );
+    CHECK_LIBC( sigaction(SIGBUS, &action, 0) );
+  }
+
     static void realm_freeze(int signal)
     {
       assert((signal == SIGINT) || (signal == SIGABRT) ||
@@ -127,6 +166,15 @@ namespace Realm {
       fprintf(stderr,"Process %d on node %s is frozen!\n", 
                       process_id, hostname);
       fflush(stderr);
+
+      // now that we've stopped, don't catch any further SIGINTs
+      struct sigaction action;
+      action.sa_handler = SIG_DFL;
+      sigemptyset(&action.sa_mask);
+      action.sa_flags = 0;
+
+      CHECK_LIBC( sigaction(SIGINT, &action, 0) );
+
       while (true)
         sleep(1);
     }
@@ -842,8 +890,8 @@ namespace Realm {
     {
       // right now expect this to always be for the current node and the next memory ID
       ID id(m->me);
-      assert(id.memory.owner_node == my_node_id);
-      assert(id.memory.mem_idx == nodes[my_node_id].memories.size());
+      assert(NodeID(id.memory_owner_node()) == my_node_id);
+      assert(id.memory_mem_idx() == nodes[my_node_id].memories.size());
 
       nodes[my_node_id].memories.push_back(m);
     }
@@ -852,8 +900,8 @@ namespace Realm {
     {
       // right now expect this to always be for the current node and the next memory ID
       ID id(m->me);
-      assert(id.memory.owner_node == my_node_id);
-      assert(id.memory.mem_idx == nodes[my_node_id].ib_memories.size());
+      assert(NodeID(id.memory_owner_node()) == my_node_id);
+      assert(id.memory_mem_idx() == nodes[my_node_id].ib_memories.size());
 
       nodes[my_node_id].ib_memories.push_back(m);
     }
@@ -862,8 +910,8 @@ namespace Realm {
     {
       // right now expect this to always be for the current node and the next processor ID
       ID id(p->me);
-      assert(id.proc.owner_node == my_node_id);
-      assert(id.proc.proc_idx == nodes[my_node_id].processors.size());
+      assert(NodeID(id.proc_owner_node()) == my_node_id);
+      assert(id.proc_proc_idx() == nodes[my_node_id].processors.size());
 
       nodes[my_node_id].processors.push_back(p);
     }
@@ -1200,13 +1248,6 @@ namespace Realm {
 #endif
 
       // Check that we have enough resources for the number of nodes we are using
-      if (max_node_id >= MAX_NUM_NODES)
-      {
-        fprintf(stderr,"ERROR: Launched %d nodes, but runtime is configured "
-                       "for at most %d nodes. Update the 'MAX_NUM_NODES' macro "
-                       "in legion_config.h", max_node_id+1, MAX_NUM_NODES);
-        exit(1);
-      }
       if (max_node_id > (NodeID)(ID::MAX_NODE_ID))
       {
         fprintf(stderr,"ERROR: Launched %d nodes, but low-level IDs are only "
@@ -1295,6 +1336,7 @@ namespace Realm {
       MemStorageAllocResponse::Message::add_handler_entries("Memory Storage Alloc Response");
       MemStorageReleaseRequest::Message::add_handler_entries("Memory Storage Release Request");
       MemStorageReleaseResponse::Message::add_handler_entries("Memory Storage Release Response");
+      CancelOperationMessage::Message::add_handler_entries("Cancel Operation AM");
       //TestMessage::add_handler_entries("Test AM");
       //TestMessage2::add_handler_entries("Test 2 AM");
 
@@ -1354,20 +1396,17 @@ namespace Realm {
       signal(SIGTERM, deadlock_catch);
       signal(SIGINT, deadlock_catch);
 #endif
-      if ((getenv("LEGION_FREEZE_ON_ERROR") != NULL) ||
-          (getenv("REALM_FREEZE_ON_ERROR") != NULL)) {
-        signal(SIGSEGV, realm_freeze);
-        signal(SIGABRT, realm_freeze);
-        signal(SIGFPE,  realm_freeze);
-        signal(SIGILL,  realm_freeze);
-        signal(SIGBUS,  realm_freeze);
-      } else if ((getenv("REALM_BACKTRACE") != NULL) ||
-                 (getenv("LEGION_BACKTRACE") != NULL)) {
-        signal(SIGSEGV, realm_backtrace);
-        signal(SIGABRT, realm_backtrace);
-        signal(SIGFPE,  realm_backtrace);
-        signal(SIGILL,  realm_backtrace);
-        signal(SIGBUS,  realm_backtrace);
+      const char *realm_freeze_env = getenv("REALM_FREEZE_ON_ERROR");
+      const char *legion_freeze_env = getenv("LEGION_FREEZE_ON_ERROR"); 
+      if (((legion_freeze_env != NULL) && (atoi(legion_freeze_env) != 0)) ||
+          ((realm_freeze_env != NULL) && (atoi(realm_freeze_env) != 0))) {
+	register_error_signal_handler(realm_freeze);
+      } else {
+        const char *realm_backtrace_env = getenv("REALM_BACKTRACE");
+        const char *legion_backtrace_env = getenv("LEGION_BACKTRACE"); 
+        if (((realm_backtrace_env != NULL) && (atoi(realm_backtrace_env) != 0)) ||
+            ((legion_backtrace_env != NULL) && (atoi(legion_backtrace_env) != 0)))
+          register_error_signal_handler(realm_backtrace);
       }
 
       // debugging tool to dump realm event graphs after a fixed delay
@@ -1868,9 +1907,9 @@ namespace Realm {
 #endif
 
       // root node will be whoever owns the target proc
-      int root = ID(target_proc).proc.owner_node;
+      NodeID root = ID(target_proc).proc_owner_node();
 
-      if((int)my_node_id == root) {
+      if(my_node_id == root) {
 	// ROOT NODE
 
 	// step 1: receive wait_on from every node
@@ -2265,7 +2304,7 @@ namespace Realm {
         show_event_waiters(/*log_file*/);
       }
 #endif
-
+      cleanup_query_caches();
       // delete processors, memories, nodes, etc.
       {
 	for(NodeID i = 0; i <= max_node_id; i++) {
@@ -2308,6 +2347,9 @@ namespace Realm {
 
       if(!Threading::cleanup()) exit(1);
 
+      // very last step - unregister our signal handlers
+      unregister_error_signal_handler();
+
       return shutdown_result_code;
     }
 
@@ -2329,12 +2371,13 @@ namespace Realm {
       ID id(e);
       assert(id.is_event());
 
-      Node *n = &nodes[id.event.creator_node];
-      GenEventImpl *impl = n->events.lookup_entry(id.event.gen_event_idx, id.event.creator_node);
+      Node *n = &nodes[id.event_creator_node()];
+      GenEventImpl *impl = n->events.lookup_entry(id.event_gen_event_idx(),
+						  id.event_creator_node());
       {
 	ID check(impl->me);
-	assert(check.event.creator_node == id.event.creator_node);
-	assert(check.event.gen_event_idx == id.event.gen_event_idx);
+	assert(check.event_creator_node() == id.event_creator_node());
+	assert(check.event_gen_event_idx() == id.event_gen_event_idx());
       }
       return impl;
     }
@@ -2344,12 +2387,13 @@ namespace Realm {
       ID id(e);
       assert(id.is_barrier());
 
-      Node *n = &nodes[id.barrier.creator_node];
-      BarrierImpl *impl = n->barriers.lookup_entry(id.barrier.barrier_idx, id.barrier.creator_node);
+      Node *n = &nodes[id.barrier_creator_node()];
+      BarrierImpl *impl = n->barriers.lookup_entry(id.barrier_barrier_idx(),
+						   id.barrier_creator_node());
       {
 	ID check(impl->me);
-	assert(check.barrier.creator_node == id.barrier.creator_node);
-	assert(check.barrier.barrier_idx == id.barrier.barrier_idx);
+	assert(check.barrier_creator_node() == id.barrier_creator_node());
+	assert(check.barrier_barrier_idx() == id.barrier_barrier_idx());
       }
       return impl;
     }
@@ -2361,8 +2405,8 @@ namespace Realm {
 	assert(0 && "invalid index space sparsity handle");
       }
 
-      Node *n = &nodes[id.sparsity.owner_node];
-      DynamicTable<SparsityMapTableAllocator> *& m = n->sparsity_maps[id.sparsity.creator_node];
+      Node *n = &nodes[id.sparsity_owner_node()];
+      DynamicTable<SparsityMapTableAllocator> *& m = n->sparsity_maps[id.sparsity_creator_node()];
       // might need to construct this (in a lock-free way)
       if(m == 0) {
 	// construct one and try to swap it in
@@ -2370,12 +2414,12 @@ namespace Realm {
 	if(!__sync_bool_compare_and_swap(&m, 0, newm))
 	  delete newm;  // somebody else made it faster
       }
-      SparsityMapImplWrapper *impl = m->lookup_entry(id.sparsity.sparsity_idx,
-						     id.sparsity.owner_node);
+      SparsityMapImplWrapper *impl = m->lookup_entry(id.sparsity_sparsity_idx(),
+						     id.sparsity_owner_node());
       // creator node isn't always right, so try to fix it
       if(impl->me != id) {
-	if(impl->me.sparsity.creator_node == 0)
-	  impl->me.sparsity.creator_node = id.sparsity.creator_node;
+	if(impl->me.sparsity_creator_node() == 0)
+	  impl->me.sparsity_creator_node() = NodeID(id.sparsity_creator_node());
 	assert(impl->me == id);
       }
       return impl;
@@ -2384,15 +2428,16 @@ namespace Realm {
     SparsityMapImplWrapper *RuntimeImpl::get_available_sparsity_impl(NodeID target_node)
     {
       SparsityMapImplWrapper *wrap = local_sparsity_map_free_lists[target_node]->alloc_entry();
-      wrap->me.sparsity.creator_node = my_node_id;
+      wrap->me.sparsity_creator_node() = my_node_id;
       return wrap;
     }
 
     ReservationImpl *RuntimeImpl::get_lock_impl(ID id)
     {
       if(id.is_reservation()) {
-	Node *n = &nodes[id.rsrv.creator_node];
-	ReservationImpl *impl = n->reservations.lookup_entry(id.rsrv.rsrv_idx, id.rsrv.creator_node);
+	Node *n = &nodes[id.rsrv_creator_node()];
+	ReservationImpl *impl = n->reservations.lookup_entry(id.rsrv_rsrv_idx(),
+							     id.rsrv_creator_node());
 	assert(impl->me == id.convert<Reservation>());
 	return impl;
       }
@@ -2419,14 +2464,14 @@ namespace Realm {
     {
       if(id.is_memory()) {
         // support old encoding for global memory too
-	if((id.memory.owner_node > ID::MAX_NODE_ID) || (id.memory.mem_idx == ((1U << 12) - 1)))
+	if((id.memory_owner_node() > ID::MAX_NODE_ID) || (id.memory_mem_idx() == ((1U << 12) - 1)))
 	  return global_memory;
 	else
-	  return null_check(nodes[id.memory.owner_node].memories[id.memory.mem_idx]);
+	  return null_check(nodes[id.memory_owner_node()].memories[id.memory_mem_idx()]);
       }
 
       if(id.is_ib_memory()) {
-        return null_check(nodes[id.ib_memory.owner_node].ib_memories[id.ib_memory.mem_idx]);
+        return null_check(nodes[id.memory_owner_node()].ib_memories[id.memory_mem_idx()]);
       }
 #ifdef TODO
       if(id.is_allocator()) {
@@ -2439,10 +2484,10 @@ namespace Realm {
 
       if(id.is_instance()) {
         // support old encoding for global memory too
-	if((id.instance.owner_node > ID::MAX_NODE_ID) || (id.instance.mem_idx == ((1U << 12) - 1)))
+	if((id.instance_owner_node() > ID::MAX_NODE_ID) || (id.instance_mem_idx() == ((1U << 12) - 1)))
 	  return global_memory;
 	else
-	  return null_check(nodes[id.instance.owner_node].memories[id.instance.mem_idx]);
+	  return null_check(nodes[id.instance_owner_node()].memories[id.instance_mem_idx()]);
       }
 
       log_runtime.fatal() << "invalid memory handle: id=" << id;
@@ -2460,7 +2505,7 @@ namespace Realm {
 	assert(0 && "invalid processor handle");
       }
 
-      return null_check(nodes[id.proc.owner_node].processors[id.proc.proc_idx]);
+      return null_check(nodes[id.proc_owner_node()].processors[id.proc_proc_idx()]);
     }
 
     ProcessorGroup *RuntimeImpl::get_procgroup_impl(ID id)
@@ -2470,9 +2515,9 @@ namespace Realm {
 	assert(0 && "invalid processor group handle");
       }
 
-      Node *n = &nodes[id.pgroup.owner_node];
-      ProcessorGroup *impl = n->proc_groups.lookup_entry(id.pgroup.pgroup_idx,
-							 id.pgroup.owner_node);
+      Node *n = &nodes[id.pgroup_owner_node()];
+      ProcessorGroup *impl = n->proc_groups.lookup_entry(id.pgroup_pgroup_idx(),
+							 id.pgroup_owner_node());
       assert(impl->me == id.convert<Processor>());
       return impl;
     }

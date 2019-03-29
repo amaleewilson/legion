@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ namespace Realm {
   //  to have to somehow know which ones to instantiate - this is controlled by the
   //  following type lists, using a bunch of helper stuff from dynamic_templates.h
 
-  typedef DynamicTemplates::IntList<1, 3> DIMCOUNTS;
+  typedef DynamicTemplates::IntList<1, REALM_MAX_DIM> DIMCOUNTS;
   typedef DynamicTemplates::TypeList<int, unsigned int, long long>::TL DIMTYPES;
   typedef DynamicTemplates::TypeList<int, bool>::TL FLDTYPES;
 
@@ -53,6 +53,8 @@ namespace Realm {
   struct CopySrcDstField {
   public:
     CopySrcDstField(void);
+    CopySrcDstField(const CopySrcDstField& copy_from);
+    CopySrcDstField& operator=(const CopySrcDstField& copy_from);
     ~CopySrcDstField(void);
     CopySrcDstField &set_field(RegionInstance _inst, FieldID _field_id,
 			       size_t _size, size_t _subfield_offset = 0);
@@ -84,6 +86,7 @@ namespace Realm {
 
   template <int N, typename T = int> struct Point;
   template <int N, typename T = int> struct Rect;
+  template <int N, typename T = int> class PointInRectIterator;
   template <int M, int N, typename T = int> struct Matrix;
   template <int N, typename T = int> struct IndexSpace;
   template <int N, typename T = int> struct IndexSpaceIterator;
@@ -287,6 +290,8 @@ namespace Realm {
 
   template <int M, int N, typename T, typename T2> __CUDA_HD__
   Point<M, T> operator*(const Matrix<M, N, T>& m, const Point<N, T2>& p);
+  template <int M, int P, int N, typename T, typename T2> __CUDA_HD__
+  Matrix<M, N, T> operator*(const Matrix<M, P, T>& m, const Matrix<P, N, T2>& n);
 
   template <int N, typename T>
   class PointInRectIterator {

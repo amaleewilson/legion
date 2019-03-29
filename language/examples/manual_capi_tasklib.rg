@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University
+-- Copyright 2019 Stanford University
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ terralib.linklibrary("libregent.so")
 
 local c = terralib.includecstring([[
 #include "legion.h"
-#include "legion_terra.h"
+#include "regent.h"
 #include <stdio.h>
 #include <stdlib.h>
 ]])

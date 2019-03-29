@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University
+-- Copyright 2019 Stanford University
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -28,6 +28,10 @@ task main()
   var r = region(ispace(ptr, 5), int)
   var s = region(ispace(ptr, 5), int)
   var t = region(ispace(ptr, 10), ptr(int, r, s))
+
+  fill(r, 0)
+  fill(s, 0)
+  fill(t, dynamic_cast(ptr(int, r, s), 0))
 
   f(r, s, t)
 end

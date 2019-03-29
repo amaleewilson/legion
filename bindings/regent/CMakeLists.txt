@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------#
-# Copyright 2018 Stanford University
+# Copyright 2019 Stanford University
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,15 +24,15 @@ endif()
 
 # Regent bindings
 list(APPEND REGENT_SRC
-  legion_terra.h                legion_terra.cc
-  legion_terra_partitions.h     legion_terra_partitions.cc
-  legion_terra_partitions_cxx.h
-  legion_terra_util.h
+  regent.h                regent.cc
+  regent_partitions.h     regent_partitions.cc
+  regent_partitions_cxx.h
+  regent_util.h
 )
 
 if(Legion_USE_CUDA)
   list(APPEND REGENT_SRC
-    legion_terra_cudart_hijack.h legion_terra_cudart_hijack.cc
+    regent_cudart_hijack.h regent_cudart_hijack.cc
   )
 endif()
 
@@ -49,6 +49,11 @@ list(APPEND REGENT_SRC
 
 add_library(Regent ${REGENT_SRC})
 target_link_libraries(Regent PUBLIC Legion::Legion)
+
+if(Legion_USE_CUDA)
+  target_include_directories(Regent PRIVATE ${CUDA_INCLUDE_DIRS})
+endif()
+
 set_target_properties(Regent PROPERTIES POSITION_INDEPENDENT_CODE ON)
 set_target_properties(Regent PROPERTIES OUTPUT_NAME "regent${INSTALL_SUFFIX}")
 set_target_properties(Regent PROPERTIES SOVERSION ${SOVERSION})

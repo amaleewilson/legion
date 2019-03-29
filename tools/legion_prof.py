@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2018 Stanford University, NVIDIA Corporation
+# Copyright 2019 Stanford University, NVIDIA Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,14 +19,20 @@ from __future__ import print_function
 import tempfile
 import legion_spy
 import argparse
-import sys, os, shutil
-import string, re, json, heapq, time, itertools
-from collections import defaultdict
-from math import sqrt, log
-from cgi import escape
-from operator import itemgetter
-from os.path import dirname, exists, basename
+import sys
+import os
+import shutil
+import math
+import collections
+import string
+import re
+import json
+import heapq
+import time
+import itertools
 from legion_serializer import LegionProfASCIIDeserializer, LegionProfBinaryDeserializer, GetFileTypeInfo
+
+root_dir = os.path.dirname(os.path.realpath(__file__))
 
 # Make sure this is up to date with lowlevel.h
 processor_kinds = {
@@ -261,6 +267,8 @@ class TimeRange(object):
         self.ready = ready
         self.start = start
         self.stop = stop
+        self.trimmed = False
+        self.was_removed = False
 
     def __cmp__(self, other):
         # The order chosen here is critical for sort_range. Ranges are
@@ -282,7 +290,6 @@ class TimeRange(object):
         return "Start: %d us  Stop: %d us  Total: %d us" % (
                 self.start, self.end, self.total_time())
 
-
     def total_time(self):
         return self.stop - self.start
 
@@ -298,6 +305,130 @@ class TimeRange(object):
 
     def meta_time(self):
         pass
+
+    def is_trimmed(self):
+        return self.was_removed
+
+    def trim_time_range(self, start, stop):
+        if self.trimmed:
+            return not self.was_removed
+        self.trimmed = True
+        if start is not None and stop is not None:
+            if self.stop < start:
+                self.was_removed = True
+                return False
+            if self.start > stop:
+                self.was_removed = True
+                return False
+            # Either we span or we're contained inside
+            # Clip our boundaries down to the border
+            if self.start < start:
+                self.start = 0
+            else:
+                self.start -= start
+            if self.stop > stop:
+                self.stop = stop - start
+            else:
+                self.stop -= start
+            if self.create is not None:
+                if self.create < start:
+                    self.create = 0
+                elif self.create > stop:
+                    self.create = stop - start
+                else:
+                    self.create -= start
+            if self.ready is not None:
+                if self.ready < start:
+                    self.ready = 0
+                elif self.ready > stop:
+                    self.ready = stop - start
+                else:
+                    self.ready -= start
+            # See if we need to filter the waits
+            if isinstance(self, HasWaiters):
+                trimmed_intervals = list()
+                for wait_interval in self.wait_intervals:
+                    if wait_interval.end < start:
+                        continue
+                    if wait_interval.start > stop:
+                        continue
+                    # Adjust the start location
+                    if wait_interval.start < start:
+                        wait_interval.start = 0
+                    else:
+                        wait_interval.start -= start
+                    # Adjust the ready location
+                    if wait_interval.ready < start:
+                        wait_interval.ready = 0
+                    elif wait_interval.ready > stop:
+                        wait_interval.ready = stop - start
+                    else:
+                        wait_interval.ready -= start
+                    # Adjust the end location
+                    if wait_interval.end > stop:
+                        wait_interval.end = stop - start
+                    else:
+                        wait_interval.end -= start
+                    trimmed_intervals.append(wait_interval)
+                self.wait_intervals = trimmed_intervals
+        elif start is not None:
+            if self.stop < start:
+                self.was_removed = True
+                return False
+            if self.start < start:
+                self.start = 0
+            else:
+                self.start -= start
+            self.stop -= start
+            if self.create is not None:
+                if self.create < start:
+                    self.create = 0
+                else:
+                    self.create -= start
+            if self.ready is not None:
+                if self.ready < start:
+                    self.ready = 0
+                else:
+                    self.ready -= start
+            if isinstance(self, HasWaiters):
+                trimmed_intervals = list()
+                for wait_interval in self.wait_intervals:
+                    if wait_interval.end < start:
+                        continue
+                    if wait_interval.start < start:
+                        wait_interval.start = 0
+                    else:
+                        wait_interval.start -= start
+                    if wait_interval.ready < start:
+                        wait_interval.ready = 0
+                    else:
+                        wait_interval.ready -= start
+                    wait_interval.end -= start
+                    trimmed_intervals.append(wait_interval)
+                self.wait_intervals = trimmed_intervals
+        else:
+            assert stop is not None
+            if self.start > stop:
+                self.was_removed = True
+                return False
+            if self.stop > stop:
+                self.stop = stop
+            if self.create is not None and self.create > stop:
+                self.create = stop
+            if self.ready is not None and self.ready > stop:
+                self.ready = stop
+            if isinstance(self, HasWaiters):
+                trimmed_intervals = list()
+                for wait_interval in self.wait_intervals:
+                    if wait_interval.start > stop:
+                        continue
+                    if wait_interval.ready > stop:
+                        wait_interval.ready = stop
+                    if wait_interval.end > stop:
+                        wait_interval.end = stop
+                    trimmed_intervals.append(wait_interval)
+                self.wait_intervals = trimmed_intervals
+        return True
 
 class Processor(object):
     def __init__(self, proc_id, kind):
@@ -336,6 +467,13 @@ class Processor(object):
         # treating runtime calls like any other task
         call.proc = self
         self.tasks.append(call)
+
+    def trim_time_range(self, start, stop):
+        trimmed_tasks = list()
+        for task in self.tasks:
+            if task.trim_time_range(start, stop):
+                trimmed_tasks.append(task)
+        self.tasks = trimmed_tasks 
 
     def sort_time_range(self):
         for task in self.tasks:
@@ -488,6 +626,13 @@ class Memory(object):
                 inst.stop = last_time
         self.last_time = last_time 
 
+    def trim_time_range(self, start, stop):
+        trimmed_instances = set()
+        for inst in self.instances:
+            if inst.trim_time_range(start, stop):
+                trimmed_instances.add(inst)
+        self.instances = trimmed_instances
+
     def sort_time_range(self):
         self.max_live_instances = 0
         for inst in self.instances:
@@ -595,6 +740,13 @@ class Channel(object):
     def init_time_range(self, last_time):
         self.last_time = last_time
 
+    def trim_time_range(self, start, stop):
+        trimmed_copies = set()
+        for copy in self.copies:
+            if copy.trim_time_range(start, stop):
+                trimmed_copies.add(copy)
+        self.copies = trimmed_copies 
+
     def sort_time_range(self):
         self.max_live_copies = 0 
         for copy in self.copies:
@@ -701,11 +853,11 @@ class TaskKind(object):
 
 class StatObject(object):
     def __init__(self):
-        self.total_calls = defaultdict(int)
-        self.total_execution_time = defaultdict(int)
-        self.all_calls = defaultdict(list)
-        self.max_call = defaultdict(int)
-        self.min_call = defaultdict(lambda: sys.maxsize)
+        self.total_calls = collections.defaultdict(int)
+        self.total_execution_time = collections.defaultdict(int)
+        self.all_calls = collections.defaultdict(list)
+        self.max_call = collections.defaultdict(int)
+        self.min_call = collections.defaultdict(lambda: sys.maxsize)
 
     def get_total_execution_time(self):
         total_execution_time = 0
@@ -750,9 +902,9 @@ class StatObject(object):
         for proc_calls in self.all_calls.values():
             for call in proc_calls:
                 diff = float(call) - avg
-                stddev += sqrt(diff * diff)
+                stddev += math.sqrt(diff * diff)
         stddev /= float(total_calls)
-        stddev = sqrt(stddev)
+        stddev = math.sqrt(stddev)
         max_dev = (float(max_call) - avg) / stddev if stddev != 0.0 else 0.0
         min_dev = (float(min_call) - avg) / stddev if stddev != 0.0 else 0.0
 
@@ -768,9 +920,9 @@ class StatObject(object):
                 stddev = 0
                 for call in self.all_calls[proc]:
                     diff = float(call) - avg
-                    stddev += sqrt(diff * diff)
+                    stddev += math.sqrt(diff * diff)
                 stddev /= float(self.total_calls[proc])
-                stddev = sqrt(stddev)
+                stddev = math.sqrt(stddev)
                 max_dev = (float(self.max_call[proc]) - avg) / stddev if stddev != 0.0 else 0.0
                 min_dev = (float(self.min_call[proc]) - avg) / stddev if stddev != 0.0 else 0.0
 
@@ -868,6 +1020,11 @@ class Operation(Base):
     def get_info(self):
         info = '<'+str(self.op_id)+">"
         return info
+
+    def is_trimmed(self):
+        if isinstance(self, TimeRange):
+            return TimeRange.is_trimmed(self)
+        return False
 
     def __repr__(self):
         if self.is_task:
@@ -1560,7 +1717,7 @@ class LFSR(object):
     def __init__(self, size):
         self.register = ''
         # Initialize the register with all zeros
-        needed_bits = int(log(size,2))+1
+        needed_bits = int(math.log(size,2))+1
         self.max_value = pow(2,needed_bits)
         # We'll use a deterministic seed here so that
         # our results are repeatable
@@ -2040,6 +2197,27 @@ class State(object):
         self.prof_uid_map[user.prof_uid] = user
         return user
 
+    def trim_time_ranges(self, start, stop):
+        assert self.last_time is not None
+        if start < 0:
+            start = None
+        if stop > self.last_time:
+            stop = None
+        if start is None and stop is None:
+            return
+        for proc in self.processors.itervalues():
+            proc.trim_time_range(start, stop)
+        for mem in self.memories.itervalues():
+            mem.trim_time_range(start, stop)
+        for channel in self.channels.itervalues():
+            channel.trim_time_range(start, stop)
+        if start is not None and stop is not None:
+            self.last_time = stop - start
+        elif stop is not None:
+            self.last_time = stop
+        else:
+            self.last_time -= start
+
     def sort_time_ranges(self):
         assert self.last_time is not None 
         # Processors first
@@ -2130,8 +2308,7 @@ class State(object):
                 kind.assign_color(color_helper(lsfr.get_next(), num_colors))
 
     def show_copy_matrix(self, output_prefix):
-        template_file_name = os.path.join(dirname(sys.argv[0]),
-                "legion_prof_copy.html.template")
+        template_file_name = os.path.join(root_dir, "legion_prof_copy.html.template")
         tsv_file_name = output_prefix + ".tsv"
         html_file_name = output_prefix + ".html"
         print('Generating copy visualization files %s and %s' % (tsv_file_name,html_file_name))
@@ -2173,14 +2350,14 @@ class State(object):
         html_file.close()
 
     def find_unique_dirname(self, dirname):
-        if (not exists(dirname)):
+        if (not os.path.exists(dirname)):
             return dirname
         # if the dirname exists, loop through dirname.i until we
         # find one that doesn't exist
         i = 1
         while (True):
             potential_dir = dirname + "." + str(i)
-            if (not exists(potential_dir)):
+            if (not os.path.exists(potential_dir)):
                 return potential_dir
             i += 1
 
@@ -2668,14 +2845,14 @@ class State(object):
         self.assign_colors()
         # the output directory will either be overwritten, or we will find
         # a new unique name to create new logs
-        if force and exists(output_dirname):
+        if force and os.path.exists(output_dirname):
             print("forcing removal of " + output_dirname)
             shutil.rmtree(output_dirname)
         else:
             output_dirname = self.find_unique_dirname(output_dirname)
 
         print('Generating interactive visualization files in directory ' + output_dirname)
-        src_directory = os.path.join(dirname(sys.argv[0]), "legion_prof_files")
+        src_directory = os.path.join(root_dir, "legion_prof_files")
 
         shutil.copytree(src_directory, output_dirname)
 
@@ -2705,7 +2882,7 @@ class State(object):
         tsv_dir = os.path.join(output_dirname, "tsv")
         json_dir = os.path.join(output_dirname, "json")
         os.mkdir(tsv_dir)
-        if not exists(json_dir):
+        if not os.path.exists(json_dir):
             os.mkdir(json_dir)
         
         op_dependencies, transitive_map = None, None
@@ -2718,6 +2895,8 @@ class State(object):
         ops_file = open(ops_file_name, "w")
         ops_file.write("op_id\tdesc\tproc\tlevel\n")
         for op_id, operation in self.operations.iteritems():
+            if operation.is_trimmed():
+                continue
             proc = ""
             level = ""
             if (operation.proc is not None):
@@ -2863,6 +3042,14 @@ def main():
         '-f', '--force', dest='force', action='store_true',
         help='overwrite output directory if it exists')
     parser.add_argument(
+        '--start-trim', dest='start_trim', action='store',
+        type=int, default=-1,
+        help='start time in micro-seconds to trim the profile')
+    parser.add_argument(
+        '--stop-trim', dest='stop_trim', action='store',
+        type=int, default=-1,
+        help='stop time in micro-seconds to trim the profile')
+    parser.add_argument(
         dest='filenames', nargs='+',
         help='input Legion Prof log filenames')
     args = parser.parse_args()
@@ -2878,6 +3065,8 @@ def main():
     copy_output_prefix = output_dirname + "_copy"
     print_stats = args.print_stats
     verbose = args.verbose
+    start_trim = args.start_trim
+    stop_trim = args.stop_trim
 
     state = State()
     has_matches = False
@@ -2916,6 +3105,17 @@ def main():
     if not has_matches:
         print('No matches found! Exiting...')
         return
+
+    # See if we need to trim out any boxes before we build the profile
+    if not print_stats and ((start_trim > 0) or (stop_trim > 0)):
+        if start_trim > 0 and stop_trim > 0:
+            if stop_trim > start_trim:
+                state.trim_time_ranges(start_trim, stop_trim)
+            else:
+                print('WARNING: Ignoring invalid trim ranges because stop trim time ('+
+                    str(stop_trim)+') comes before start trim time ('+str(start_trim)+')')
+        else:
+            state.trim_time_ranges(start_trim, stop_trim)
 
     # Once we are done loading everything, do the sorting
     state.sort_time_ranges()

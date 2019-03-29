@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University
+-- Copyright 2019 Stanford University
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -77,6 +77,8 @@ task main()
   var p_right = image(r, p, halo_right)
 
   var bounds = r.bounds
+
+  fill(r.{a, b}, 0)
 
   __demand(__spmd)
   do

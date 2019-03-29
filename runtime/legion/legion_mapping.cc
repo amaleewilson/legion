@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -491,18 +491,22 @@ namespace Legion {
 
     //--------------------------------------------------------------------------
     bool MapperRuntime::do_constraints_conflict(MapperContext ctx,
-        LayoutConstraintID set1, LayoutConstraintID set2) const
+                             LayoutConstraintID set1, LayoutConstraintID set2,
+                             const LayoutConstraint **conflict_constraint) const
     //--------------------------------------------------------------------------
     {
-      return ctx->manager->do_constraints_conflict(ctx, set1, set2);
+      return ctx->manager->do_constraints_conflict(ctx, set1, set2,
+                                                   conflict_constraint);
     }
 
     //--------------------------------------------------------------------------
     bool MapperRuntime::do_constraints_entail(MapperContext ctx,
-        LayoutConstraintID source, LayoutConstraintID target) const
+                           LayoutConstraintID source, LayoutConstraintID target,
+                           const LayoutConstraint **failed_constraint) const
     //--------------------------------------------------------------------------
     {
-      return ctx->manager->do_constraints_entail(ctx, source, target);
+      return ctx->manager->do_constraints_entail(ctx, source, target, 
+                                                 failed_constraint);
     }
 
     //--------------------------------------------------------------------------
@@ -511,7 +515,7 @@ namespace Legion {
                                          Processor::Kind kind) const
     //--------------------------------------------------------------------------
     {
-      ctx->manager->find_valid_variants(ctx,task_id,valid_variants,kind);
+      ctx->manager->find_valid_variants(ctx, task_id, valid_variants, kind);
     }
 
     //--------------------------------------------------------------------------
@@ -544,6 +548,15 @@ namespace Legion {
     //--------------------------------------------------------------------------
     {
       return ctx->manager->is_idempotent_variant(ctx, task_id, variant_id);
+    }
+
+    //--------------------------------------------------------------------------
+    bool MapperRuntime::is_replicable_variant(MapperContext ctx, 
+                                     TaskID task_id, VariantID variant_id) const
+    //--------------------------------------------------------------------------
+    {
+      // Will be implemented in the control replication branch
+      return false;
     }
 
     //--------------------------------------------------------------------------
@@ -583,11 +596,13 @@ namespace Legion {
                                     const LayoutConstraintSet &constraints, 
                                     const std::vector<LogicalRegion> &regions,
                                     PhysicalInstance &result, 
-                                    bool acquire, GCPriority priority) const
+                                    bool acquire, GCPriority priority,
+                                    bool tight_bounds, size_t *footprint) const
     //--------------------------------------------------------------------------
     {
       return ctx->manager->create_physical_instance(ctx, target_memory, 
-                      constraints, regions, result, acquire, priority);
+                                 constraints, regions, result, acquire, 
+                                 priority, tight_bounds, footprint);
     }
 
     //--------------------------------------------------------------------------
@@ -596,11 +611,13 @@ namespace Legion {
                                     LayoutConstraintID layout_id,
                                     const std::vector<LogicalRegion> &regions,
                                     PhysicalInstance &result,
-                                    bool acquire, GCPriority priority) const
+                                    bool acquire, GCPriority priority,
+                                    bool tight_bounds, size_t *footprint) const
     //--------------------------------------------------------------------------
     {
       return ctx->manager->create_physical_instance(ctx, target_memory, 
-                        layout_id, regions, result, acquire, priority);
+                                   layout_id, regions, result, acquire, 
+                                   priority, tight_bounds, footprint);
     }
 
     //--------------------------------------------------------------------------
@@ -610,11 +627,12 @@ namespace Legion {
                                     const std::vector<LogicalRegion> &regions, 
                                     PhysicalInstance &result, bool &created, 
                                     bool acquire, GCPriority priority,
-                                    bool tight_bounds) const
+                                    bool tight_bounds, size_t *footprint) const
     //--------------------------------------------------------------------------
     {
       return ctx->manager->find_or_create_physical_instance(ctx, target_memory, 
-       constraints, regions, result, created, acquire, priority, tight_bounds);
+                                       constraints, regions, result, created, 
+                                       acquire,priority,tight_bounds,footprint);
     }
 
     //--------------------------------------------------------------------------
@@ -624,11 +642,12 @@ namespace Legion {
                                     const std::vector<LogicalRegion> &regions,
                                     PhysicalInstance &result, bool &created, 
                                     bool acquire, GCPriority priority,
-                                    bool tight_bounds) const
+                                    bool tight_bounds, size_t *footprint) const
     //--------------------------------------------------------------------------
     {
       return ctx->manager->find_or_create_physical_instance(ctx, target_memory,
-         layout_id, regions, result, created, acquire, priority, tight_bounds);
+                                  layout_id, regions, result, created, acquire, 
+                                  priority, tight_bounds, footprint);
     }
 
     //--------------------------------------------------------------------------
@@ -736,24 +755,15 @@ namespace Legion {
     {
       switch (bounds.get_dim())
       {
-        case 1:
-          {
-            DomainT<1,coord_t> realm_is = bounds;
-            return ctx->manager->create_index_space(ctx, bounds, &realm_is,
-                Legion::Internal::NT_TemplateHelper::encode_tag<1,coord_t>());
+#define DIMFUNC(DIM) \
+        case DIM: \
+          { \
+            DomainT<DIM,coord_t> realm_is = bounds; \
+            return ctx->manager->create_index_space(ctx, bounds, &realm_is, \
+              Legion::Internal::NT_TemplateHelper::encode_tag<DIM,coord_t>()); \
           }
-        case 2:
-          {
-            DomainT<2,coord_t> realm_is = bounds;
-            return ctx->manager->create_index_space(ctx, bounds, &realm_is,
-                Legion::Internal::NT_TemplateHelper::encode_tag<2,coord_t>());
-          }
-        case 3:
-          {
-            DomainT<3,coord_t> realm_is = bounds;
-            return ctx->manager->create_index_space(ctx, bounds, &realm_is,
-                Legion::Internal::NT_TemplateHelper::encode_tag<3,coord_t>());
-          }
+        LEGION_FOREACH_N(DIMFUNC)
+#undef DIMFUNC
         default:
           assert(false);
       }
@@ -767,39 +777,20 @@ namespace Legion {
     {
       switch (points[0].get_dim())
       {
-        case 1:
-          {
-            std::vector<Realm::Point<1,coord_t> > realm_points(points.size());
-            for (unsigned idx = 0; idx < points.size(); idx++)
-              realm_points[idx] = Point<1,coord_t>(points[idx]);
-            DomainT<1,coord_t> realm_is(
-                (Realm::IndexSpace<1,coord_t>(realm_points)));
-            const Domain domain(realm_is);
-            return ctx->manager->create_index_space(ctx, domain, &realm_is,
-                      Internal::NT_TemplateHelper::encode_tag<1,coord_t>());
-          }
-        case 2:
-          {
-            std::vector<Realm::Point<2,coord_t> > realm_points(points.size());
-            for (unsigned idx = 0; idx < points.size(); idx++)
-              realm_points[idx] = Point<2,coord_t>(points[idx]);
-            DomainT<2,coord_t> realm_is(
-                (Realm::IndexSpace<2,coord_t>(realm_points)));
-            const Domain domain(realm_is);
-            return ctx->manager->create_index_space(ctx, domain, &realm_is,
-                      Internal::NT_TemplateHelper::encode_tag<2,coord_t>());
-          }
-        case 3:
-          {
-            std::vector<Realm::Point<3,coord_t> > realm_points(points.size());
-            for (unsigned idx = 0; idx < points.size(); idx++)
-              realm_points[idx] = Point<3,coord_t>(points[idx]);
-            DomainT<3,coord_t> realm_is(
-                (Realm::IndexSpace<3,coord_t>(realm_points)));
-            const Domain domain(realm_is);
-            return ctx->manager->create_index_space(ctx, domain, &realm_is,
-                      Internal::NT_TemplateHelper::encode_tag<3,coord_t>());
-          }
+#define DIMFUNC(DIM) \
+      case DIM: \
+        { \
+          std::vector<Realm::Point<DIM,coord_t> > realm_points(points.size()); \
+          for (unsigned idx = 0; idx < points.size(); idx++) \
+            realm_points[idx] = Point<DIM,coord_t>(points[idx]); \
+          DomainT<DIM,coord_t> realm_is( \
+              (Realm::IndexSpace<DIM,coord_t>(realm_points))); \
+          const Domain domain(realm_is); \
+          return ctx->manager->create_index_space(ctx, domain, &realm_is, \
+                    Internal::NT_TemplateHelper::encode_tag<DIM,coord_t>()); \
+        }
+        LEGION_FOREACH_N(DIMFUNC)
+#undef DIMFUNC
         default:
           assert(false);
       }
@@ -813,39 +804,20 @@ namespace Legion {
     {
       switch (rects[0].get_dim())
       {
-        case 1:
-          {
-            std::vector<Realm::Rect<1,coord_t> > realm_rects(rects.size());
-            for (unsigned idx = 0; idx < rects.size(); idx++)
-              realm_rects[idx] = Rect<1,coord_t>(rects[idx]);
-            DomainT<1,coord_t> realm_is(
-                (Realm::IndexSpace<1,coord_t>(realm_rects)));
-            const Domain domain(realm_is);
-            return ctx->manager->create_index_space(ctx, domain, &realm_is,
-                      Internal::NT_TemplateHelper::encode_tag<1,coord_t>());
+#define DIMFUNC(DIM) \
+        case DIM: \
+          { \
+            std::vector<Realm::Rect<DIM,coord_t> > realm_rects(rects.size()); \
+            for (unsigned idx = 0; idx < rects.size(); idx++) \
+              realm_rects[idx] = Rect<DIM,coord_t>(rects[idx]); \
+            DomainT<DIM,coord_t> realm_is( \
+                (Realm::IndexSpace<DIM,coord_t>(realm_rects))); \
+            const Domain domain(realm_is); \
+            return ctx->manager->create_index_space(ctx, domain, &realm_is, \
+                      Internal::NT_TemplateHelper::encode_tag<DIM,coord_t>()); \
           }
-        case 2:
-          {
-            std::vector<Realm::Rect<2,coord_t> > realm_rects(rects.size());
-            for (unsigned idx = 0; idx < rects.size(); idx++)
-              realm_rects[idx] = Rect<2,coord_t>(rects[idx]);
-            DomainT<2,coord_t> realm_is(
-                (Realm::IndexSpace<2,coord_t>(realm_rects)));
-            const Domain domain(realm_is);
-            return ctx->manager->create_index_space(ctx, domain, &realm_is,
-                      Internal::NT_TemplateHelper::encode_tag<2,coord_t>());
-          }
-        case 3:
-          {
-            std::vector<Realm::Rect<3,coord_t> > realm_rects(rects.size());
-            for (unsigned idx = 0; idx < rects.size(); idx++)
-              realm_rects[idx] = Rect<3,coord_t>(rects[idx]);
-            DomainT<3,coord_t> realm_is(
-                (Realm::IndexSpace<3,coord_t>(realm_rects)));
-            const Domain domain(realm_is);
-            return ctx->manager->create_index_space(ctx, domain, &realm_is,
-                      Internal::NT_TemplateHelper::encode_tag<3,coord_t>());
-          }
+        LEGION_FOREACH_N(DIMFUNC)
+#undef DIMFUNC
         default:
           assert(false);
       }

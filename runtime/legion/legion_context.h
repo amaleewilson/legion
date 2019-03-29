@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ namespace Legion {
         TaskContext *const ctx;
       };
     public:
-      TaskContext(Runtime *runtime, TaskOp *owner,
+      TaskContext(Runtime *runtime, TaskOp *owner, int depth,
                   const std::vector<RegionRequirement> &reqs);
       TaskContext(const TaskContext &rhs);
       virtual ~TaskContext(void);
@@ -66,12 +66,12 @@ namespace Legion {
         { return !created_requirements.empty(); }
       inline TaskOp* get_owner_task(void) const { return owner_task; }
       inline bool is_priority_mutable(void) const { return mutable_priority; }
+      inline int get_depth(void) const { return depth; }
     public:
       // Interface for task contexts
       virtual RegionTreeContext get_context(void) const = 0;
       virtual ContextID get_context_id(void) const = 0;
       virtual UniqueID get_context_uid(void) const;
-      virtual int get_depth(void) const;
       virtual Task* get_task(void); 
       virtual TaskContext* find_parent_context(void);
       virtual void pack_remote_context(Serializer &rez, 
@@ -86,13 +86,13 @@ namespace Legion {
       // Interface to operations performed by a context
       virtual IndexSpace create_index_space(RegionTreeForest *forest,
                                             const void *realm_is, 
-                                            TypeTag type_tag) = 0;
+                                            TypeTag type_tag);
       virtual IndexSpace union_index_spaces(RegionTreeForest *forest,
-                           const std::vector<IndexSpace> &spaces) = 0;
+                           const std::vector<IndexSpace> &spaces);
       virtual IndexSpace intersect_index_spaces(RegionTreeForest *forest,
-                           const std::vector<IndexSpace> &spaces) = 0;
+                           const std::vector<IndexSpace> &spaces);
       virtual IndexSpace subtract_index_spaces(RegionTreeForest *forest,
-                           IndexSpace left, IndexSpace right) = 0;
+                           IndexSpace left, IndexSpace right);
       virtual void destroy_index_space(IndexSpace handle) = 0;
       virtual void destroy_index_partition(IndexPartition handle) = 0;
       virtual IndexPartition create_equal_partition(RegionTreeForest *forest,
@@ -115,6 +115,13 @@ namespace Legion {
                                             IndexSpace color_space,
                                             PartitionKind kind,
                                             Color color) = 0;
+      virtual IndexPartition create_partition_by_intersection(
+                                            RegionTreeForest *forest,
+                                            IndexSpace parent,
+                                            IndexPartition partition,
+                                            PartitionKind kind,
+                                            Color color, 
+                                            bool dominates) = 0;
       virtual IndexPartition create_partition_by_difference(
                                             RegionTreeForest *forest,
                                             IndexSpace parent,
@@ -230,34 +237,45 @@ namespace Legion {
                                             TypeTag type_tag,
                                             IndexSpace initial,
                                 const std::vector<IndexSpace> &handles) = 0;
-      virtual FieldSpace create_field_space(RegionTreeForest *forest) = 0;
+      virtual FieldSpace create_field_space(RegionTreeForest *forest);
       virtual void destroy_field_space(FieldSpace handle) = 0;
       virtual FieldID allocate_field(RegionTreeForest *forest,
                                      FieldSpace space, size_t field_size,
                                      FieldID fid, bool local,
-                                     CustomSerdezID serdez_id) = 0;
+                                     CustomSerdezID serdez_id);
+      virtual void allocate_local_field(RegionTreeForest *forest,
+                                     FieldSpace space, size_t field_size,
+                                     FieldID fid, CustomSerdezID serdez_id,
+                                     std::set<RtEvent> &done_events) = 0;
       virtual void free_field(FieldSpace space, FieldID fid) = 0;
       virtual void allocate_fields(RegionTreeForest *forest,
                                    FieldSpace space,
                                    const std::vector<size_t> &sizes,
                                    std::vector<FieldID> &resuling_fields,
-                                   bool local, CustomSerdezID serdez_id) = 0;
+                                   bool local, CustomSerdezID serdez_id);
+      virtual void allocate_local_fields(RegionTreeForest *forest,
+                                   FieldSpace space,
+                                   const std::vector<size_t> &sizes,
+                                   const std::vector<FieldID> &resuling_fields,
+                                   CustomSerdezID serdez_id,
+                                   std::set<RtEvent> &done_events) = 0;
       virtual void free_fields(FieldSpace space, 
                                const std::set<FieldID> &to_free) = 0; 
       virtual LogicalRegion create_logical_region(RegionTreeForest *forest,
                                             IndexSpace index_space,
                                             FieldSpace field_space,
-                                            bool task_local) = 0;
+                                            bool task_local);
+      virtual void record_task_local_region(LogicalRegion region) = 0;
       virtual void destroy_logical_region(LogicalRegion handle) = 0;
       virtual void destroy_logical_partition(LogicalPartition handle) = 0;
       virtual FieldAllocator create_field_allocator(Legion::Runtime *external,
-                                                    FieldSpace handle) = 0;
+                                                    FieldSpace handle);
     public:
       virtual Future execute_task(const TaskLauncher &launcher) = 0;
       virtual FutureMap execute_index_space(
                                          const IndexTaskLauncher &launcher) = 0;
       virtual Future execute_index_space(const IndexTaskLauncher &launcher,
-                                         ReductionOpID redop) = 0; 
+                                   ReductionOpID redop, bool deterministic) = 0; 
       virtual PhysicalRegion map_region(const InlineLauncher &launcher) = 0;
       virtual ApEvent remap_region(PhysicalRegion region) = 0;
       virtual void unmap_region(PhysicalRegion region) = 0;
@@ -530,6 +548,7 @@ namespace Legion {
       friend class SingleTask;
     protected:
       mutable LocalLock                         privilege_lock;
+      int                                       depth;
       // Application tasks can manipulate these next two data
       // structures by creating regions and fields, make sure you are
       // holding the operation lock when you are accessing them
@@ -698,7 +717,7 @@ namespace Legion {
         bool ancestor;
       };
     public:
-      InnerContext(Runtime *runtime, TaskOp *owner, bool full_inner,
+      InnerContext(Runtime *runtime, TaskOp *owner, int depth, bool full_inner,
                    const std::vector<RegionRequirement> &reqs,
                    const std::vector<unsigned> &parent_indexes,
                    const std::vector<bool> &virt_mapped,
@@ -715,7 +734,6 @@ namespace Legion {
       virtual RegionTreeContext get_context(void) const;
       virtual ContextID get_context_id(void) const;
       virtual UniqueID get_context_uid(void) const;
-      virtual int get_depth(void) const;
       virtual bool is_inner_context(void) const;
       virtual void pack_remote_context(Serializer &rez, AddressSpaceID target);
       virtual void unpack_remote_context(Deserializer &derez,
@@ -729,15 +747,6 @@ namespace Legion {
       virtual VariantImpl* select_inline_variant(TaskOp *child) const;
     public:
       // Interface to operations performed by a context
-      virtual IndexSpace create_index_space(RegionTreeForest *forest,
-                                            const void *realm_is, 
-                                            TypeTag type_tag);
-      virtual IndexSpace union_index_spaces(RegionTreeForest *forest,
-                           const std::vector<IndexSpace> &spaces);
-      virtual IndexSpace intersect_index_spaces(RegionTreeForest *forest,
-                           const std::vector<IndexSpace> &spaces);
-      virtual IndexSpace subtract_index_spaces(RegionTreeForest *forest,
-                           IndexSpace left, IndexSpace right);
       virtual void destroy_index_space(IndexSpace handle);
       virtual void destroy_index_partition(IndexPartition handle);
       virtual IndexPartition create_equal_partition(RegionTreeForest *forest,
@@ -760,6 +769,13 @@ namespace Legion {
                                             IndexSpace color_space,
                                             PartitionKind kind,
                                             Color color);
+      virtual IndexPartition create_partition_by_intersection(
+                                            RegionTreeForest *forest,
+                                            IndexSpace parent,
+                                            IndexPartition partition,
+                                            PartitionKind kind,
+                                            Color color,
+                                            bool dominates);
       virtual IndexPartition create_partition_by_difference(
                                             RegionTreeForest *forest,
                                             IndexSpace parent,
@@ -875,33 +891,28 @@ namespace Legion {
                                             TypeTag type_tag,
                                             IndexSpace initial,
                                 const std::vector<IndexSpace> &handles);
-      virtual FieldSpace create_field_space(RegionTreeForest *forest);
       virtual void destroy_field_space(FieldSpace handle);
-      virtual FieldID allocate_field(RegionTreeForest *forest,
+      virtual void allocate_local_field(RegionTreeForest *forest,
                                      FieldSpace space, size_t field_size,
-                                     FieldID fid, bool local,
-                                     CustomSerdezID serdez_id);
-      virtual void free_field(FieldSpace space, FieldID fid);
-      virtual void allocate_fields(RegionTreeForest *forest,
+                                     FieldID fid, CustomSerdezID serdez_id,
+                                     std::set<RtEvent> &done_events);
+      virtual void allocate_local_fields(RegionTreeForest *forest,
                                    FieldSpace space,
                                    const std::vector<size_t> &sizes,
-                                   std::vector<FieldID> &resuling_fields,
-                                   bool local, CustomSerdezID serdez_id);
+                                   const std::vector<FieldID> &resuling_fields,
+                                   CustomSerdezID serdez_id,
+                                   std::set<RtEvent> &done_events);
+      virtual void free_field(FieldSpace space, FieldID fid);
       virtual void free_fields(FieldSpace space, 
                                const std::set<FieldID> &to_free);
-      virtual LogicalRegion create_logical_region(RegionTreeForest *forest,
-                                            IndexSpace index_space,
-                                            FieldSpace field_space,
-                                            bool task_local);
+      virtual void record_task_local_region(LogicalRegion region);
       virtual void destroy_logical_region(LogicalRegion handle);
       virtual void destroy_logical_partition(LogicalPartition handle);
-      virtual FieldAllocator create_field_allocator(Legion::Runtime *external,
-                                                    FieldSpace handle);
     public:
       virtual Future execute_task(const TaskLauncher &launcher);
       virtual FutureMap execute_index_space(const IndexTaskLauncher &launcher);
       virtual Future execute_index_space(const IndexTaskLauncher &launcher,
-                                         ReductionOpID redop);
+                                      ReductionOpID redop, bool deterministic);
       virtual PhysicalRegion map_region(const InlineLauncher &launcher);
       virtual ApEvent remap_region(PhysicalRegion region);
       virtual void unmap_region(PhysicalRegion region);
@@ -1184,7 +1195,6 @@ namespace Legion {
     public:
       TopLevelContext& operator=(const TopLevelContext &rhs);
     public:
-      virtual int get_depth(void) const;
       virtual void pack_remote_context(Serializer &rez, AddressSpaceID target);
       virtual TaskContext* find_parent_context(void);
     public:
@@ -1218,10 +1228,10 @@ namespace Legion {
     public:
       RemoteTask& operator=(const RemoteTask &rhs);
     public:
+      virtual int get_depth(void) const;
       virtual UniqueID get_unique_id(void) const;
       virtual unsigned get_context_index(void) const; 
       virtual void set_context_index(unsigned index);
-      virtual int get_depth(void) const;
       virtual const char* get_task_name(void) const;
       virtual bool has_trace(void) const;
     public:
@@ -1278,7 +1288,6 @@ namespace Legion {
     public:
       RemoteContext& operator=(const RemoteContext &rhs);
     public:
-      virtual int get_depth(void) const;
       virtual Task* get_task(void);
       virtual void unpack_remote_context(Deserializer &derez,
                                          std::set<RtEvent> &preconditions);
@@ -1317,7 +1326,6 @@ namespace Legion {
       UniqueID parent_context_uid;
       TaskContext *parent_ctx;
     protected:
-      int depth;
       ApEvent remote_completion_event;
       std::vector<VersionInfo> version_infos;
       bool top_level_context;
@@ -1357,15 +1365,6 @@ namespace Legion {
       virtual bool is_leaf_context(void) const;
     public:
       // Interface to operations performed by a context
-      virtual IndexSpace create_index_space(RegionTreeForest *forest,
-                                            const void *realm_is, 
-                                            TypeTag type_tag);
-      virtual IndexSpace union_index_spaces(RegionTreeForest *forest,
-                           const std::vector<IndexSpace> &spaces);
-      virtual IndexSpace intersect_index_spaces(RegionTreeForest *forest,
-                           const std::vector<IndexSpace> &spaces);
-      virtual IndexSpace subtract_index_spaces(RegionTreeForest *forest,
-                           IndexSpace left, IndexSpace right);
       virtual void destroy_index_space(IndexSpace handle);
       virtual void destroy_index_partition(IndexPartition handle);
       virtual IndexPartition create_equal_partition(RegionTreeForest *forest,
@@ -1388,6 +1387,13 @@ namespace Legion {
                                             IndexSpace color_space,
                                             PartitionKind kind,
                                             Color color);
+      virtual IndexPartition create_partition_by_intersection(
+                                            RegionTreeForest *forest,
+                                            IndexSpace parent,
+                                            IndexPartition partition,
+                                            PartitionKind kind,
+                                            Color color,
+                                            bool dominates);
       virtual IndexPartition create_partition_by_difference(
                                             RegionTreeForest *forest,
                                             IndexSpace parent,
@@ -1503,33 +1509,28 @@ namespace Legion {
                                             TypeTag type_tag,
                                             IndexSpace initial,
                                 const std::vector<IndexSpace> &handles);
-      virtual FieldSpace create_field_space(RegionTreeForest *forest);
       virtual void destroy_field_space(FieldSpace handle);
-      virtual FieldID allocate_field(RegionTreeForest *forest,
+      virtual void allocate_local_field(RegionTreeForest *forest,
                                      FieldSpace space, size_t field_size,
-                                     FieldID fid, bool local,
-                                     CustomSerdezID serdez_id);
-      virtual void free_field(FieldSpace space, FieldID fid);
-      virtual void allocate_fields(RegionTreeForest *forest,
+                                     FieldID fid, CustomSerdezID serdez_id,
+                                     std::set<RtEvent> &done_events);
+      virtual void allocate_local_fields(RegionTreeForest *forest,
                                    FieldSpace space,
                                    const std::vector<size_t> &sizes,
-                                   std::vector<FieldID> &resuling_fields,
-                                   bool local, CustomSerdezID serdez_id);
+                                   const std::vector<FieldID> &resuling_fields,
+                                   CustomSerdezID serdez_id,
+                                   std::set<RtEvent> &done_events);
+      virtual void free_field(FieldSpace space, FieldID fid);
       virtual void free_fields(FieldSpace space, 
                                const std::set<FieldID> &to_free);
-      virtual LogicalRegion create_logical_region(RegionTreeForest *forest,
-                                            IndexSpace index_space,
-                                            FieldSpace field_space,
-                                            bool task_local);
+      virtual void record_task_local_region(LogicalRegion region);
       virtual void destroy_logical_region(LogicalRegion handle);
       virtual void destroy_logical_partition(LogicalPartition handle);
-      virtual FieldAllocator create_field_allocator(Legion::Runtime *external,
-                                                    FieldSpace handle);
     public:
       virtual Future execute_task(const TaskLauncher &launcher);
       virtual FutureMap execute_index_space(const IndexTaskLauncher &launcher);
       virtual Future execute_index_space(const IndexTaskLauncher &launcher,
-                                         ReductionOpID redop);
+                                      ReductionOpID redop, bool deterministic);
       virtual PhysicalRegion map_region(const InlineLauncher &launcher);
       virtual ApEvent remap_region(PhysicalRegion region);
       virtual void unmap_region(PhysicalRegion region);
@@ -1666,7 +1667,6 @@ namespace Legion {
       virtual RegionTreeContext get_context(void) const;
       virtual ContextID get_context_id(void) const;
       virtual UniqueID get_context_uid(void) const;
-      virtual int get_depth(void) const;
       virtual void pack_remote_context(Serializer &rez, 
                                        AddressSpaceID target);
       virtual bool attempt_children_complete(void);
@@ -1706,6 +1706,13 @@ namespace Legion {
                                             IndexSpace color_space,
                                             PartitionKind kind,
                                             Color color);
+      virtual IndexPartition create_partition_by_intersection(
+                                            RegionTreeForest *forest,
+                                            IndexSpace parent,
+                                            IndexPartition partition,
+                                            PartitionKind kind,
+                                            Color color,
+                                            bool dominates);
       virtual IndexPartition create_partition_by_difference(
                                             RegionTreeForest *forest,
                                             IndexSpace parent,
@@ -1835,10 +1842,21 @@ namespace Legion {
                                    bool local, CustomSerdezID serdez_id);
       virtual void free_fields(FieldSpace space, 
                                const std::set<FieldID> &to_free);
+      virtual void allocate_local_field(RegionTreeForest *forest,
+                                     FieldSpace space, size_t field_size,
+                                     FieldID fid, CustomSerdezID serdez_id,
+                                     std::set<RtEvent> &done_events);
+      virtual void allocate_local_fields(RegionTreeForest *forest,
+                                   FieldSpace space,
+                                   const std::vector<size_t> &sizes,
+                                   const std::vector<FieldID> &resuling_fields,
+                                   CustomSerdezID serdez_id,
+                                   std::set<RtEvent> &done_events);
       virtual LogicalRegion create_logical_region(RegionTreeForest *forest,
                                             IndexSpace index_space,
                                             FieldSpace field_space,
                                             bool task_local);
+      virtual void record_task_local_region(LogicalRegion region);
       virtual void destroy_logical_region(LogicalRegion handle);
       virtual void destroy_logical_partition(LogicalPartition handle);
       virtual FieldAllocator create_field_allocator(Legion::Runtime *external,
@@ -1847,7 +1865,7 @@ namespace Legion {
       virtual Future execute_task(const TaskLauncher &launcher);
       virtual FutureMap execute_index_space(const IndexTaskLauncher &launcher);
       virtual Future execute_index_space(const IndexTaskLauncher &launcher,
-                                         ReductionOpID redop);
+                                      ReductionOpID redop, bool deterministic);
       virtual PhysicalRegion map_region(const InlineLauncher &launcher);
       virtual ApEvent remap_region(PhysicalRegion region);
       virtual void unmap_region(PhysicalRegion region);

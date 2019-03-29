@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University, NVIDIA Corporation
+-- Copyright 2019 Stanford University, NVIDIA Corporation
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -319,393 +319,532 @@ local function flatten_multifield_accesses(node)
   end
 end
 
-local function has_reference(node, symbols)
-  if node == nil then return false end
-  local found = false
-  ast.traverse_node_postorder(function(node)
-    if not found and node:is(ast.specialized.expr.ID) then
-      found = symbols[node.value:hasname()] ~= nil
-    end
-  end, node)
-  return found
-end
+-- Normalization for Expressions
 
-function normalize.stat_var(node)
-  if #node.symbols == 1 then return node
-  else
-    local symbols = {}
-    local needs_temporary = terralib.newlist()
-    local temporaries = {}
-    for idx = 1, #node.symbols do
-      if has_reference(node.values[idx], symbols) then
-        needs_temporary:insert(idx)
-        temporaries[idx] = std.newsymbol()
-      end
-      symbols[node.symbols[idx]:hasname()] = true
-    end
+local function pass_through_expr(stats, expr) return expr end
 
-    local flattened = terralib.newlist()
-    for idx = 1, #needs_temporary do
-      flattened:insert(node {
-        symbols = terralib.newlist {temporaries[needs_temporary[idx]]},
-        values = terralib.newlist {node.values[needs_temporary[idx]]},
-      })
-    end
+local function unreachable(stats, node) assert(false) end
 
-    for idx = 1, #node.symbols do
-      if temporaries[idx] then
-        flattened:insert(node {
-          symbols = terralib.newlist {node.symbols[idx]},
-          values = terralib.newlist {
-            ast.specialized.expr.ID {
-              value = temporaries[idx],
-              span = node.span,
-              annotations = node.annotations,
-            }
-          },
-        })
-      else
-        flattened:insert(node {
-          symbols = terralib.newlist {node.symbols[idx]},
-          values = terralib.newlist {node.values[idx]},
-        })
-      end
-    end
-    return flattened
-  end
-end
-
-local function get_index_path(expr)
-  if expr:is(ast.typed.expr.Constant) and
-     expr.expr_type.type == "integer" then
-    return data.newtuple(tostring(expr.value))
-  elseif expr:is(ast.typed.expr.Cast) then
-    return get_index_path(expr.arg)
-  elseif expr:is(ast.typed.expr.Ctor) then
-    local fields = expr.fields:map(get_index_path)
-    local path = fields[1]
-    for idx = 2, #fields do
-      path = path .. fields[idx]
-    end
-    return path
-  elseif expr:is(ast.typed.expr.CtorListField) or
-         expr:is(ast.typed.expr.CtorRecField) then
-    return get_index_path(expr.value)
-  else
-    return data.newtuple("*")
-  end
-end
-
-local function get_access_paths(expr)
-  if expr:is(ast.typed.expr.FieldAccess) then
-    local paths, next_exprs = get_access_paths(expr.value)
-    return paths:map(function(path)
-      return path .. data.newtuple(expr.field_name)
-    end), next_exprs
-
-  elseif expr:is(ast.typed.expr.IndexAccess) then
-    local paths, next_exprs = get_access_paths(expr.value)
-    local index_path = get_index_path(expr.index)
-    next_exprs:insert(expr.index)
-    return paths:map(function(path)
-      return path .. index_path
-    end), next_exprs
-
-  elseif expr:is(ast.typed.expr.Deref) then
-    return expr.expr_type.bounds_symbols:map(function(bound)
-      return data.newtuple(bound)
-    end), terralib.newlist {expr.value}
-
-  elseif expr:is(ast.typed.expr.ID) then
-    return terralib.newlist {data.newtuple(expr.value)},
-      terralib.newlist()
-
-  else
-    assert(false)
-  end
-end
-
-local pretty = require("regent/pretty")
-
-local function symbols_aliased(cx, sym1, sym2)
-  local function is_value_type(ty)
-    return ty:isprimitive() or std.is_fspace_instance(ty) or ty:isstruct()
-  end
-
-  local function pointers_aliased(ty1, ty2)
-    assert(ty1:ispointer() or ty2:ispointer())
-    -- Regent doesn't have an address-of operator, so the address of
-    -- a value-typed variable can neither be taken nor aliased. However,
-    -- pointers to arrays can be passed first to a Terra function and then
-    -- back to the Regent code, so the alasing between a pointer and an array
-    -- is still possible.
-    if ty1:ispointer() then
-      if ty2:ispointer() or ty2:isarray() then
-        return true
-      else
-        return false
-      end
-    end
-    assert(ty2:ispointer())
-    return pointers_aliased(ty2, ty1)
-  end
-
-  if sym1 == sym2 then return true
-  else
-    local ty1 = std.as_read(sym1:gettype())
-    local ty2 = std.as_read(sym2:gettype())
-    if std.is_region(ty1) and std.is_region(ty2) then
-      return std.type_maybe_eq(ty1:fspace(), ty2:fspace()) and
-             not std.check_constraint(cx,
-               std.constraint(ty1, ty2, std.disjointness))
-    elseif ty1:isarray() and ty2:isarray() then
-      return false
-    elseif ty1:ispointer() or ty2:ispointer() then
-      return pointers_aliased(ty1, ty2)
-    elseif is_value_type(ty1) or is_value_type(ty2) then
-      return false
-    else
-      assert(false, "should be unreachable")
-    end
-  end
-  return false
-end
-
-local function refs_aliased(cx, path1, path2)
-  local len = math.min(#path1, #path2)
-  local sym1 = path1[1]
-  local sym2 = path2[1]
-
-  if symbols_aliased(cx, sym1, sym2) then
-    for idx = 2, len do
-      local e1 = path1[idx]
-      local e2 = path2[idx]
-      if e1 ~= e2 and not (e1 == "*" or e2 == "*") then
-        return false
-      end
-    end
-    return true
-  end
-  return false
-end
-
-local function can_alias(node, cx, updates)
-  if ast.is_node(node) and node:is(ast.typed.expr) then
-    if std.is_ref(node.expr_type) or std.is_rawref(node.expr_type) then
-      local paths, next_exprs = get_access_paths(node)
-      for i = 1, #paths do
-        for j = 1, #updates do
-          if refs_aliased(cx, updates[j], paths[i]) then
-            return true
-          end
-        end
-      end
-
-      for i = 1, #next_exprs do
-        if can_alias(next_exprs[i], cx, updates) then
-          return true
-        end
-      end
-
-    else
-      for k, child in pairs(node) do
-        if k ~= "node_type" and k ~= "node_id" then
-          if can_alias(child, cx, updates) then
-            return true
-          end
-        end
-      end
-    end
-
-  elseif terralib.islist(node) then
-    for _, child in ipairs(node) do
-      if can_alias(child, cx, updates) then
-        return true
-      end
-    end
-  end
-
-  return false
-end
-
-local function update_alias(expr, updates)
-  local paths = get_access_paths(expr)
-  updates:insertall(paths)
-end
-
-function normalize.stat_assignment_or_reduce(cx, node)
-  if #node.lhs == 1 then
-    assert(#node.rhs == 1)
-    return node {
-      lhs = node.lhs[1],
-      rhs = node.rhs[1],
-    }
-  else
-    local updates = terralib.newlist()
-    local needs_temporary = terralib.newlist()
-    local temporaries = {}
-    for idx = 1, #node.lhs do
-      local lh = node.lhs[idx]
-      local rh = node.rhs[idx]
-      if can_alias(rh, cx, updates) then
-        needs_temporary:insert(idx)
-        temporaries[idx] = std.newsymbol(std.as_read(rh.expr_type))
-      end
-      update_alias(lh, updates)
-    end
-
-    local flattened = terralib.newlist()
-    for idx = 1, #needs_temporary do
-      local symbol = temporaries[needs_temporary[idx]]
-      flattened:insert(ast.typed.stat.Var {
-        symbol = symbol,
-        type = symbol:gettype(),
-        value = node.rhs[needs_temporary[idx]],
-        annotations = node.annotations,
-        span = node.span,
-      })
-    end
-
-    for idx = 1, #node.lhs do
-      if temporaries[idx] then
-        flattened:insert(node {
-          lhs = node.lhs[idx],
-          rhs = ast.typed.expr.ID {
-            value = temporaries[idx],
-            expr_type = std.rawref(&temporaries[idx]:gettype()),
-            span = node.span,
-            annotations = node.annotations,
-          },
-        })
-      else
-        flattened:insert(node {
-          lhs = node.lhs[idx],
-          rhs = node.rhs[idx],
-        })
-      end
-    end
-
-    return flattened
-  end
-end
-
---
--- De-sugar statement "var ip = image(r, p, f)" into the following statements:
---
--- var coloring : legion_domain_point_coloring_t
--- coloring = legion_domain_point_coloring_create()
--- for color in p.colors do
---   legion_domain_point_coloring_color_domain(
---     coloring, color, f(p[color].bounds))
--- end
--- var ip = partition(aliased, r, coloring)
--- legion_domain_point_coloring_destroy(coloring)
---
-local capi = std.c
-
-local function desugar_image_by_task(cx, node)
-  local parent = node.value.parent.value
-  local parent_type = parent:gettype()
-  local partition = node.value.partition
-  local partition_type = std.as_read(partition.expr_type)
-  local image_partition_type = node.type
-
-  local stats = terralib.newlist()
-
-  local coloring_symbol =
-    regentlib.newsymbol(capi.legion_domain_point_coloring_t)
-  local coloring_expr = ast_util.mk_expr_id(coloring_symbol)
-  stats:insert(
-    ast_util.mk_stat_var(
-      coloring_symbol, nil,
-      ast_util.mk_expr_call(capi.legion_domain_point_coloring_create)))
-
-  local colors_symbol = regentlib.newsymbol(partition_type:colors())
-  local color_symbol =
-    regentlib.newsymbol(partition_type:colors().index_type(colors_symbol))
-  local colors_expr = ast_util.mk_expr_colors_access(partition)
-  local subregion_type = partition_type:subregion_dynamic()
-  std.add_constraint(cx, subregion_type, partition_type, std.subregion, false)
-
-  local subregion_expr =
-    ast_util.mk_expr_index_access(partition,
-                                  ast_util.mk_expr_id(color_symbol),
-                                  subregion_type)
-  local rect_expr =
-    ast_util.mk_expr_call(node.value.task.value,
-                          ast_util.mk_expr_bounds_access(subregion_expr))
-  local loop_body =
-    ast_util.mk_stat_expr(
-      ast_util.mk_expr_call(capi.legion_domain_point_coloring_color_domain,
-                            terralib.newlist { coloring_expr,
-                                               ast_util.mk_expr_id(color_symbol),
-                                               rect_expr }))
-
-  stats:insert(ast_util.mk_stat_var(colors_symbol, nil, colors_expr))
-  stats:insert(
-    ast_util.mk_stat_for_list(color_symbol,
-                              ast_util.mk_expr_id(colors_symbol),
-                              ast_util.mk_block(loop_body)))
-
-  stats:insert(
-    ast_util.mk_stat_var(node.symbol, image_partition_type,
-                         ast_util.mk_expr_partition(image_partition_type,
-                                                    ast_util.mk_expr_id(colors_symbol),
-                                                    coloring_expr)))
-  std.add_constraint(cx, image_partition_type, parent_type, std.subregion, false)
-
-  stats:insert(
-    ast_util.mk_stat_expr(
-      ast_util.mk_expr_call(capi.legion_domain_point_coloring_destroy,
-                            coloring_expr)))
-
-  return stats
-end
-
-function normalize.stat(cx)
-  return function(node, continuation)
-    if node:is(ast.specialized.stat.Assignment) or
-       node:is(ast.specialized.stat.Reduce) then
-      node = flatten_multifield_accesses(node)
-      return node
-    elseif node:is(ast.typed.stat.Assignment) or
-           node:is(ast.typed.stat.Reduce) then
-      return normalize.stat_assignment_or_reduce(cx, node)
-    elseif not std.config["parallelize"] and
-           node:is(ast.typed.stat.ParallelizeWith) then
-      node = ast.typed.stat.Block {
-        block = node.block,
-        span = node.span,
-        annotations = node.annotations,
+local normalize_expr_factory = terralib.memoize(function(field, is_list, read)
+  assert(field ~= nil)
+  assert(is_list ~= nil)
+  assert(read ~= nil)
+  if is_list then
+    return function(stats, expr)
+      return expr {
+        [field] = expr[field]:map(function(value) return normalize.expr(stats, value, read) end),
       }
-      return continuation(node, true)
-    elseif node:is(ast.specialized.stat.Var) then
-      return normalize.stat_var(node)
-    elseif node:is(ast.typed.stat.Var) and node.value and
-           node.value:is(ast.typed.expr.ImageByTask) then
-      return desugar_image_by_task(cx, node)
-    else
-      return continuation(node, true)
+    end
+
+  else
+    return function(stats, expr)
+      return expr { [field] = normalize.expr(stats, expr[field], read) }
     end
   end
-end
+end)
 
-function normalize.top_task(node)
-  local cx = {}
-  if node:is(ast.typed) then
-    cx.constraints = node.prototype:get_constraints()
-  end
-  return node {
-    body = node.body and node.body {
-      stats = ast.flatmap_node_continuation(
-        normalize.stat(cx),
-        node.body.stats)
-      }
+local predicates = {
+  [ast.specialized.expr.ID]       = function(node) return true end,
+  [ast.specialized.expr.Constant] = function(node) return true end,
+  [ast.specialized.expr.Function] = function(node) return true end,
+  [ast.specialized.expr.FieldAccess] =
+    function(node)
+      return normalize.normalized(node.value)
+    end,
+  [ast.specialized.expr.Deref]       =
+    function(node)
+      return normalize.normalized(node.value)
+    end,
+  [ast.specialized.expr.IndexAccess] =
+    function(node)
+      return
+        normalize.normalized(node.value) and
+        normalize.normalized(node.index)
+      end,
+  [ast.specialized.expr.Unary]    =
+    function(node)
+      return normalize.normalized(node.rhs)
+    end,
+  [ast.specialized.expr.Binary]   =
+    function(node)
+      return normalize.normalized(node.lhs) and normalize.normalized(node.rhs)
+    end,
+  [ast.specialized.expr.Cast]     =
+    function(node)
+      return normalize.normalized(node.args[1])
+    end,
+  [ast.specialized.expr.Ctor]     =
+    function(node)
+      return data.all(node.fields:map(function(field)
+        return normalize.normalized(field.value)
+      end))
+    end,
+}
+
+normalize.normalized = terralib.memoize(function(expr)
+  local predicate = predicates[expr.node_type]
+  return predicate and predicate(expr) or false
+end)
+
+local expr_regent_cast = normalize_expr_factory("value", false, true)
+
+local function expr_ispace(stats, expr)
+  local extent = normalize.expr(stats, expr.extent, true)
+  local start = expr.start and normalize.expr(stats, expr.start, true) or false
+  return expr {
+    extent = extent,
+    start = start,
   }
 end
 
+local expr_region = normalize_expr_factory("ispace", false, true)
+
+local expr_field_access = normalize_expr_factory("value", false, true)
+
+local expr_deref = normalize_expr_factory("value", false, true)
+
+local function expr_index_access(stats, expr)
+  local value = normalize.expr(stats, expr.value, true)
+  local index = normalize.expr(stats, expr.index, true)
+  return expr {
+    index = index,
+    value = value,
+  }
+end
+
+local function is_projection(node)
+  return node:is(ast.specialized.expr.IndexAccess) and
+         (normalize.normalized(node.value) or is_projection(node.value)) and
+         normalize.normalized(node.index)
+end
+
+local function expr_call(stats, expr)
+  local args = expr.args
+  -- TODO: We handle task launches specially here to make the index launch optimizer
+  --       (and potentially other optimization passes as well) happy
+  if std.is_task(expr.fn.value) then
+    args = args:map(function(arg)
+      return normalize.expr(stats, arg, not is_projection(arg))
+    end)
+  else
+    args = args:map(function(arg) return normalize.expr(stats, arg, true) end)
+  end
+  return expr { args = args }
+end
+
+local expr_method_call = normalize_expr_factory("args", true, true)
+
+local expr_ctor = normalize_expr_factory("fields", true, false)
+
+local expr_ctor_field = normalize_expr_factory("value", false, true)
+
+local expr_is_null = normalize_expr_factory("pointer", false, true)
+
+local expr_unary = normalize_expr_factory("rhs", false, true)
+
+local function expr_binary(stats, expr)
+  local lhs = normalize.expr(stats, expr.lhs, true)
+  local rhs = normalize.expr(stats, expr.rhs, true)
+  return expr {
+    lhs = lhs,
+    rhs = rhs,
+  }
+end
+
+local expr_cast = normalize_expr_factory("args", true, true)
+
+local expr_import_ispace = normalize_expr_factory("value", false, true)
+
+local function expr_import_region(stats, expr)
+  local ispace    = normalize.expr(stats, expr.ispace   , true)
+  local value     = normalize.expr(stats, expr.value    , true)
+  local field_ids = normalize.expr(stats, expr.field_ids, true)
+  return expr {
+    ispace = ispace,
+    value = value,
+    field_ids = field_ids,
+  }
+end
+
+local function expr_import_partition(stats, expr)
+  local region = normalize.expr(stats, expr.region, true)
+  local colors = normalize.expr(stats, expr.colors, true)
+  local value  = normalize.expr(stats, expr.value,  true)
+  return expr {
+    region = region,
+    colors = colors,
+    value = value,
+  }
+end
+
+local normalize_expr_table = {
+  [ast.specialized.expr.DynamicCast]                = expr_regent_cast,
+  [ast.specialized.expr.StaticCast]                 = expr_regent_cast,
+  [ast.specialized.expr.UnsafeCast]                 = expr_regent_cast,
+  [ast.specialized.expr.Ispace]                     = expr_ispace,
+  [ast.specialized.expr.Region]                     = expr_region,
+  [ast.specialized.expr.FieldAccess]                = expr_field_access,
+  [ast.specialized.expr.Deref]                      = expr_deref,
+  [ast.specialized.expr.IndexAccess]                = expr_index_access,
+  [ast.specialized.expr.MethodCall]                 = expr_method_call,
+  [ast.specialized.expr.Call]                       = expr_call,
+  [ast.specialized.expr.Ctor]                       = expr_ctor,
+  [ast.specialized.expr.CtorListField]              = expr_ctor_field,
+  [ast.specialized.expr.CtorRecField]               = expr_ctor_field,
+  [ast.specialized.expr.Isnull]                     = expr_is_null,
+  [ast.specialized.expr.Unary]                      = expr_unary,
+  [ast.specialized.expr.Binary]                     = expr_binary,
+  [ast.specialized.expr.Cast]                       = expr_cast,
+
+  -- Normal expressions
+  [ast.specialized.expr.ID]                         = pass_through_expr,
+  [ast.specialized.expr.Function]                   = pass_through_expr,
+  [ast.specialized.expr.Constant]                   = pass_through_expr,
+
+  -- Expressions that do not need to be normalized
+  [ast.specialized.expr.New]                        = pass_through_expr,
+  [ast.specialized.expr.Null]                       = pass_through_expr,
+  [ast.specialized.expr.RawContext]                 = pass_through_expr,
+  [ast.specialized.expr.RawFields]                  = pass_through_expr,
+  [ast.specialized.expr.RawPhysical]                = pass_through_expr,
+  [ast.specialized.expr.RawRuntime]                 = pass_through_expr,
+  [ast.specialized.expr.RawValue]                   = pass_through_expr,
+  [ast.specialized.expr.Partition]                  = pass_through_expr,
+  [ast.specialized.expr.PartitionEqual]             = pass_through_expr,
+  [ast.specialized.expr.PartitionByField]           = pass_through_expr,
+  [ast.specialized.expr.PartitionByRestriction]     = pass_through_expr,
+  [ast.specialized.expr.Image]                      = pass_through_expr,
+  [ast.specialized.expr.Preimage]                   = pass_through_expr,
+  [ast.specialized.expr.CrossProduct]               = pass_through_expr,
+  [ast.specialized.expr.CrossProductArray]          = pass_through_expr,
+  [ast.specialized.expr.ListSlicePartition]         = pass_through_expr,
+  [ast.specialized.expr.ListDuplicatePartition]     = pass_through_expr,
+  [ast.specialized.expr.ListCrossProduct]           = pass_through_expr,
+  [ast.specialized.expr.ListCrossProductComplete]   = pass_through_expr,
+  [ast.specialized.expr.ListPhaseBarriers]          = pass_through_expr,
+  [ast.specialized.expr.ListInvert]                 = pass_through_expr,
+  [ast.specialized.expr.ListRange]                  = pass_through_expr,
+  [ast.specialized.expr.ListIspace]                 = pass_through_expr,
+  [ast.specialized.expr.ListFromElement]            = pass_through_expr,
+  [ast.specialized.expr.PhaseBarrier]               = pass_through_expr,
+  [ast.specialized.expr.DynamicCollective]          = pass_through_expr,
+  [ast.specialized.expr.DynamicCollectiveGetResult] = pass_through_expr,
+  [ast.specialized.expr.Advance]                    = pass_through_expr,
+  [ast.specialized.expr.Adjust]                     = pass_through_expr,
+  [ast.specialized.expr.Arrive]                     = pass_through_expr,
+  [ast.specialized.expr.Await]                      = pass_through_expr,
+  [ast.specialized.expr.Copy]                       = pass_through_expr,
+  [ast.specialized.expr.Fill]                       = pass_through_expr,
+  [ast.specialized.expr.Acquire]                    = pass_through_expr,
+  [ast.specialized.expr.Release]                    = pass_through_expr,
+  [ast.specialized.expr.AttachHDF5]                 = pass_through_expr,
+  [ast.specialized.expr.DetachHDF5]                 = pass_through_expr,
+  [ast.specialized.expr.AllocateScratchFields]      = pass_through_expr,
+  [ast.specialized.expr.WithScratchFields]          = pass_through_expr,
+  [ast.specialized.expr.RegionRoot]                 = pass_through_expr,
+  [ast.specialized.expr.Condition]                  = pass_through_expr,
+  [ast.specialized.expr.ImportIspace]               = expr_import_ispace,
+  [ast.specialized.expr.ImportRegion]               = expr_import_region,
+  [ast.specialized.expr.ImportPartition]            = expr_import_partition,
+
+  [ast.specialized.expr.LuaTable]                   = pass_through_expr,
+}
+
+local normalize_expr = ast.make_single_dispatch(
+  normalize_expr_table,
+  {ast.specialized.expr})
+
+function normalize.expr(stats, expr, read)
+  local expr = normalize_expr(stats)(expr, read)
+  if read and not normalize.normalized(expr) then
+    local temp_var = std.newsymbol()
+    stats:insert(ast.specialized.stat.Var {
+      symbols = temp_var,
+      values = expr,
+      span = expr.span,
+      annotations = ast.default_annotations(),
+    })
+    return ast.specialized.expr.ID {
+      value = temp_var,
+      span = expr.span,
+      annotations = ast.default_annotations(),
+    }
+  else
+    return expr
+  end
+end
+
+-- Normalization for Statements
+
+local function stat_if(stats, stat)
+  local cond = normalize.expr(stats, stat.cond, true)
+  local then_block = normalize.block(stat.then_block)
+  local else_block = normalize.block(stat.else_block)
+
+  for idx = #stat.elseif_blocks, 1, -1 do
+    local elseif_stats = terralib.newlist()
+
+    local elseif_block = stat.elseif_blocks[idx]
+    local elseif_cond = normalize.expr(elseif_stats, elseif_block.cond, true)
+    elseif_stats:insert(ast.specialized.stat.If {
+      cond = elseif_cond,
+      then_block = normalize.block(elseif_block.block),
+      -- TODO: We will set this to false eventually
+      elseif_blocks = terralib.newlist(),
+      else_block = else_block,
+      span = elseif_block.span,
+      annotations = stat.annotations,
+    })
+    else_block = else_block { stats = elseif_stats }
+  end
+
+  stats:insert(stat {
+    cond = cond,
+    then_block = then_block,
+    -- TODO: We will set this to false eventually
+    elseif_blocks = terralib.newlist(),
+    else_block = else_block,
+  })
+end
+
+local function stat_while(stats, stat)
+  local cond_stats = terralib.newlist()
+  local cond = normalize.expr(cond_stats, stat.cond, true)
+  if not cond:is(ast.specialized.expr.ID) then
+    local cond_var = std.newsymbol()
+    cond_stats:insert(ast.specialized.stat.Var {
+      symbols = cond_var,
+      values = cond,
+      span = cond.span,
+      annotations = ast.default_annotations(),
+    })
+    cond = ast.specialized.expr.ID {
+      value = cond_var,
+      span = cond.span,
+      annotations = ast.default_annotations(),
+    }
+  end
+  local block = normalize.block(stat.block)
+  local block_stats = block.stats
+
+  cond_stats:map(function(stat)
+    if stat:is(ast.specialized.stat.Var) and stat.symbols == cond.value then
+      block_stats:insert(ast.specialized.stat.Assignment {
+        lhs = ast.specialized.expr.ID {
+          value = cond.value,
+          span = cond.span,
+          annotations = ast.default_annotations(),
+        },
+        rhs = stat.values,
+        span = cond.span,
+        annotations = ast.default_annotations(),
+      })
+    else
+      block_stats:insert(stat)
+    end
+  end)
+
+  stats:insertall(cond_stats)
+  stats:insert(stat {
+    cond = cond,
+    block = block { stats = block_stats },
+  })
+end
+
+local function stat_for_num(stats, stat)
+  local values = stat.values:map(function(value)
+    return normalize.expr(stats, value, true)
+  end)
+  stats:insert(stat {
+    values = values,
+    block = normalize.block(stat.block),
+  })
+end
+
+local function stat_for_list(stats, stat)
+  local value = normalize.expr(stats, stat.value, true)
+  stats:insert(stat {
+    value = value,
+    block = normalize.block(stat.block),
+  })
+end
+
+local function stat_repeat(stats, stat)
+  local block = normalize.block(stat.block)
+  local block_stats = block.stats
+  local until_cond = normalize.expr(block_stats, stat.until_cond, true)
+  stats:insert(stat {
+    until_cond = until_cond,
+    block = block { stats = block_stats },
+  })
+end
+
+local function stat_block(stats, stat)
+  stats:insert(stat { block = normalize.block(stat.block) })
+end
+
+local function has_value(values, idx)
+  return #values >= idx and values[idx] or false
+end
+
+local function stat_var(stats, stat)
+  local values = stat.values:map(function(value)
+    return normalize.expr(stats, value, false)
+  end)
+  if #stat.symbols == 1 then
+    stats:insert(stat {
+      symbols = stat.symbols[1],
+      values = has_value(values, 1),
+    })
+
+  else
+    local temp_vars = terralib.newlist()
+    for idx = 1, #stat.symbols do
+      if has_value(values, idx) then
+        local temp_var = std.newsymbol()
+        temp_vars:insert(temp_var)
+        stats:insert(stat {
+          symbols = temp_var,
+          values = values[idx]
+        })
+      end
+    end
+
+    for idx = 1, #stat.symbols do
+      if has_value(values, idx) then
+        stats:insert(stat {
+          symbols = stat.symbols[idx],
+          values = ast.specialized.expr.ID {
+              value = temp_vars[idx],
+              span = stat.span,
+              annotations = stat.annotations,
+            },
+        })
+
+      else
+        stats:insert(stat {
+          symbols = stat.symbols[idx],
+          values = false,
+        })
+      end
+    end
+  end
+end
+
+local function stat_var_unpack(stats, stat)
+  stats:insert(stat {
+    value = normalize.expr(stats, stat.value, true)
+  })
+end
+
+local function stat_return(stats, stat)
+  local value = stat.value and normalize.expr(stats, stat.value, true) or false
+  stats:insert(stat { value = value })
+end
+
+local function stat_assignment_or_reduce(stats, stat)
+  stat = flatten_multifield_accesses(stat)
+
+  if #stat.lhs == 1 then
+    assert(#stat.rhs == 1)
+    local lhs = normalize.expr(stats, stat.lhs[1], false)
+    local rhs = normalize.expr(stats, stat.rhs[1], not normalize.normalized(lhs))
+    stats:insert(stat {
+      lhs = lhs,
+      rhs = rhs,
+    })
+
+  else
+    local temp_vars = stat.lhs:map(function(lh) return std.newsymbol() end)
+    local lhs = stat.lhs:map(function(lh) return normalize.expr(stats, lh, false) end)
+    local rhs = stat.rhs:map(function(rh) return normalize.expr(stats, rh, false) end)
+
+    data.zip(temp_vars, rhs):map(function(pair)
+      local symbol, rh = unpack(pair)
+      stats:insert(ast.specialized.stat.Var {
+        symbols = symbol,
+        values = rh,
+        annotations = rh.annotations,
+        span = rh.span,
+      })
+    end)
+    data.zip(lhs, temp_vars):map(function(pair)
+      local lh, symbol = unpack(pair)
+      stats:insert(stat {
+        lhs = lh,
+        rhs = ast.specialized.expr.ID {
+          value = symbol,
+          span = lh.span,
+          annotations = lh.annotations,
+        },
+      })
+    end)
+  end
+end
+
+local function stat_expr(stats, stat)
+  local expr = normalize.expr(stats, stat.expr, false)
+  stats:insert(stat { expr = expr })
+end
+
+local function stat_raw_delete(stats, stat)
+  local value = normalize.expr(stats, stat.value, false)
+  stats:insert(stat { value = value })
+end
+
+local function stat_parallel_prefix(stats, stat)
+  local dir = normalize.expr(stats, stat.dir, true)
+  stats:insert(stat { dir = dir })
+end
+
+local function pass_through_stat(stats, stat) stats:insert(stat) end
+
+local normalize_stat_table = {
+  [ast.specialized.stat.If]              = stat_if,
+  [ast.specialized.stat.While]           = stat_while,
+  [ast.specialized.stat.ForNum]          = stat_for_num,
+  [ast.specialized.stat.ForList]         = stat_for_list,
+  [ast.specialized.stat.Repeat]          = stat_repeat,
+  [ast.specialized.stat.MustEpoch]       = stat_block,
+  [ast.specialized.stat.Block]           = stat_block,
+  [ast.specialized.stat.ParallelizeWith] = stat_block,
+
+  [ast.specialized.stat.Var]             = stat_var,
+  [ast.specialized.stat.VarUnpack]       = stat_var_unpack,
+  [ast.specialized.stat.Return]          = stat_return,
+  [ast.specialized.stat.Break]           = pass_through_stat,
+  [ast.specialized.stat.Assignment]      = stat_assignment_or_reduce,
+  [ast.specialized.stat.Reduce]          = stat_assignment_or_reduce,
+  [ast.specialized.stat.Expr]            = stat_expr,
+  [ast.specialized.stat.ParallelPrefix]  = stat_parallel_prefix,
+  [ast.specialized.stat.RawDelete]       = stat_raw_delete,
+  [ast.specialized.stat.Fence]           = pass_through_stat,
+
+  [ast.specialized.stat.Elseif]          = unreachable,
+}
+
+local normalize_stat = ast.make_single_dispatch(
+  normalize_stat_table,
+  {ast.specialized.stat})
+
+function normalize.stat(stats, stat)
+  normalize_stat(stats)(stat)
+end
+
+function normalize.block(node)
+  local stats = terralib.newlist()
+  node.stats:map(function(stat)
+    normalize.stat(stats, stat)
+  end)
+  return node { stats = stats }
+end
+
+function normalize.top_task(node)
+  return node { body = node.body and normalize.block(node.body) }
+end
+
 function normalize.entry(node)
-  if node:is(ast.specialized.top.Task) or node:is(ast.typed.top.Task) then
+  if node:is(ast.specialized.top.Task) then
     return normalize.top_task(node)
   else
     return node

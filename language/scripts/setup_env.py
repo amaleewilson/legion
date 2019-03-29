@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2018 Stanford University
+# Copyright 2019 Stanford University
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 #
 
 from __future__ import print_function
-import argparse, hashlib, multiprocessing, os, platform, re, subprocess, sys, traceback
+import argparse, hashlib, multiprocessing, os, platform, re, subprocess, sys, tempfile, traceback
 
 def discover_llvm_version():
     if platform.node().startswith('titan'):
@@ -51,7 +51,9 @@ def discover_conduit():
         raise Exception('Please set CONDUIT in your environment')
 
 def gasnet_enabled():
-    return 'USE_GASNET' not in os.environ or os.environ['USE_GASNET'] == '1'
+    if 'USE_GASNET' in os.environ:
+        return os.environ['USE_GASNET'] == '1'
+    return platform.system() != 'Darwin'
 
 def hdf_enabled():
     return 'USE_HDF' in os.environ and os.environ['USE_HDF'] == '1'
@@ -65,13 +67,13 @@ def download(dest_path, url, sha256, insecure=False):
     dest_file = os.path.basename(dest_path)
     insecure_flag = []
     if insecure:
-        insecure_flag = ['--no-check-certificate']
+        insecure_flag = ['--insecure']
 
     if os.path.exists(dest_path):
         check_sha256(dest_path, sha256)
         return
 
-    subprocess.check_call(['wget'] + insecure_flag + ['-O', dest_path, url])
+    subprocess.check_call(['curl'] + insecure_flag + ['-o', dest_path, url])
     check_sha256(dest_path, sha256)
 
 def extract(dest_dir, archive_path, format):
@@ -114,6 +116,7 @@ def build_llvm(source_dir, build_dir, install_dir, use_cmake, cmake_exe, thread_
              '-DLLVM_ENABLE_ASSERTIONS=OFF'
              '-DLLVM_ENABLE_ZLIB=OFF',
              '-DLLVM_ENABLE_TERMINFO=OFF',
+             '-DLLVM_ENABLE_LIBEDIT=OFF',
              source_dir],
             cwd=build_dir,
             env=env)
@@ -130,25 +133,38 @@ def build_llvm(source_dir, build_dir, install_dir, use_cmake, cmake_exe, thread_
     subprocess.check_call(['make', '-j', str(thread_count)], cwd=build_dir)
     subprocess.check_call(['make', 'install'], cwd=build_dir)
 
-def build_terra(terra_dir, llvm_dir, cache, is_cray, thread_count):
+def build_terra(terra_dir, terra_branch, llvm_dir, cache, is_cray, thread_count):
     if cache:
         subprocess.check_call(['make', 'download'], cwd=terra_dir)
         return
 
-    env = None
+    env = {}
+    if terra_branch.startswith('luajit2.1'):
+        # https://github.com/LuaJIT/LuaJIT/issues/484
+
+        # Note: you *can't* set MACOSX_DEPLOYMENT_TARGET globally,
+        # because it will break Terra build outright. It must be set
+        # for LuaJIT and *only* LuaJIT, so to do that we use the PR
+        # branch directly.
+        env['LUAJIT_URL'] = 'https://github.com/elliottslaughter/LuaJIT.git'
+        env['LUAJIT_BRANCH'] = 'patch-1'
+    env.update(dict(list(os.environ.items())))
     if is_cray:
-        env = dict(list(os.environ.items()) + [
+        env.update(dict([
             ('CC', os.environ['HOST_CC']),
             ('CXX', os.environ['HOST_CXX']),
-        ])
+        ]))
+
+    flags = [
+        'LLVM_CONFIG=%s' % os.path.join(llvm_dir, 'bin', 'llvm-config'),
+        'CLANG=%s' % os.path.join(llvm_dir, 'bin', 'clang'),
+    ]
+    if platform.system() != 'Darwin':
+        flags.append('REEXPORT_LLVM_COMPONENTS=irreader mcjit x86')
+    flags.extend(['-j', str(thread_count)])
 
     subprocess.check_call(
-        ['make',
-         'LLVM_CONFIG=%s' % os.path.join(llvm_dir, 'bin', 'llvm-config'),
-         'CLANG=%s' % os.path.join(llvm_dir, 'bin', 'clang'),
-         'REEXPORT_LLVM_COMPONENTS=irreader mcjit x86',
-         '-j', str(thread_count),
-        ],
+        ['make'] + flags,
         cwd=terra_dir,
         env=env)
 
@@ -192,7 +208,7 @@ def build_regent(root_dir, use_cmake, cmake_exe,
              if use_cmake else ['--no-cmake']),
         env=env)
 
-def install_llvm(llvm_dir, llvm_install_dir, llvm_version, llvm_use_cmake, cmake_exe, thread_count, cache, is_cray, insecure):
+def install_llvm(llvm_dir, llvm_install_dir, scratch_dir, llvm_version, llvm_use_cmake, cmake_exe, thread_count, cache, is_cray, insecure):
     try:
         os.mkdir(llvm_dir)
     except OSError:
@@ -238,8 +254,7 @@ def install_llvm(llvm_dir, llvm_install_dir, llvm_version, llvm_use_cmake, cmake
             apply_patch(llvm_source_dir, os.path.join(os.path.dirname(os.path.realpath(__file__)), 'llvm-3.5-gcc.patch'))
         os.rename(clang_source_dir, os.path.join(llvm_source_dir, 'tools', 'clang'))
 
-        llvm_build_dir = os.path.join(llvm_dir, 'build')
-        os.mkdir(llvm_build_dir)
+        llvm_build_dir = tempfile.mkdtemp(prefix='setup_env_llvm_build', dir=scratch_dir or llvm_dir)
         os.mkdir(llvm_install_dir)
         build_llvm(llvm_source_dir, llvm_build_dir, llvm_install_dir, llvm_use_cmake, cmake_exe, thread_count, is_cray)
 
@@ -301,7 +316,8 @@ def check_dirty_build(name, build_result, component_dir):
         print_advice(component_dir)
         sys.exit(1)
 
-def driver(prefix_dir=None, cache=False, legion_use_cmake=False, llvm_version=None,
+def driver(prefix_dir=None, scratch_dir=None, cache=False,
+           legion_use_cmake=False, llvm_version=None,
            terra_url=None, terra_branch=None, insecure=False):
     if not cache:
         if 'CC' not in os.environ:
@@ -382,17 +398,25 @@ def driver(prefix_dir=None, cache=False, legion_use_cmake=False, llvm_version=No
         else:
             cmake_exe = 'cmake' # CMake is ok, use it
     if cache or ((legion_use_cmake or llvm_use_cmake) and cmake_exe is None):
+        cmake_stem = 'cmake-3.7.2-%s-x86_64' % platform.system()
+        cmake_basename = '%s.tar.gz' % cmake_stem
+        cmake_url = 'https://cmake.org/files/v3.7/%s' % cmake_basename
+        if cmake_stem == 'cmake-3.7.2-Linux-x86_64':
+            cmake_shasum = '0e6ec35d4fa9bf79800118916b51928b6471d5725ff36f1d0de5ebb34dcd5406'
+        elif cmake_stem == 'cmake-3.7.2-Darwin-x86_64':
+            cmake_shasum = '0175e97748052dfc15ebd3c0aa65286e5ec20ca22ed606ce88940e699496b03c'
+
         cmake_dir = os.path.realpath(os.path.join(prefix_dir, 'cmake'))
-        cmake_install_dir = os.path.join(cmake_dir, 'cmake-3.7.2-Linux-x86_64')
+        cmake_install_dir = os.path.join(cmake_dir, cmake_stem)
         if not os.path.exists(cmake_dir):
             os.mkdir(cmake_dir)
 
             proc_type = subprocess.check_output(['uname', '-p']).strip()
-            if proc_type != 'x86_64':
+            if proc_type != 'x86_64' and proc_type != 'i386':
                 raise Exception("Don't know how to download CMake binary for %s" % proc_type)
 
-            cmake_tarball = os.path.join(cmake_dir, 'cmake-3.7.2-Linux-x86_64.tar.gz')
-            download(cmake_tarball, 'https://cmake.org/files/v3.7/cmake-3.7.2-Linux-x86_64.tar.gz', '0e6ec35d4fa9bf79800118916b51928b6471d5725ff36f1d0de5ebb34dcd5406', insecure=insecure)
+            cmake_tarball = os.path.join(cmake_dir, cmake_basename)
+            download(cmake_tarball, cmake_url, cmake_shasum, insecure=insecure)
             extract(cmake_dir, cmake_tarball, 'gz')
         assert os.path.exists(cmake_install_dir)
         cmake_exe = os.path.join(cmake_install_dir, 'bin', 'cmake')
@@ -402,7 +426,7 @@ def driver(prefix_dir=None, cache=False, legion_use_cmake=False, llvm_version=No
     llvm_build_result = os.path.join(llvm_install_dir, 'bin', 'llvm-config')
     if not os.path.exists(llvm_install_dir):
         try:
-            install_llvm(llvm_dir, llvm_install_dir, llvm_version, llvm_use_cmake, cmake_exe, thread_count, cache, is_cray, insecure)
+            install_llvm(llvm_dir, llvm_install_dir, scratch_dir, llvm_version, llvm_use_cmake, cmake_exe, thread_count, cache, is_cray, insecure)
         except Exception as e:
             report_build_failure('llvm', llvm_dir, e)
     else:
@@ -417,7 +441,7 @@ def driver(prefix_dir=None, cache=False, legion_use_cmake=False, llvm_version=No
         git_clone(terra_dir, terra_url, terra_branch)
     if not os.path.exists(terra_build_dir):
         try:
-            build_terra(terra_dir, llvm_install_dir, cache, is_cray, thread_count)
+            build_terra(terra_dir, terra_branch, llvm_install_dir, cache, is_cray, thread_count)
         except Exception as e:
             report_build_failure('terra', terra_dir, e)
     else:
@@ -452,6 +476,9 @@ if __name__ == '__main__':
         '--prefix', dest='prefix_dir', required=False,
         help='Directory in which to install dependencies.')
     parser.add_argument(
+        '--scratch', dest='scratch_dir', required=False,
+        help='Directory in which to store temporary build files.')
+    parser.add_argument(
         '--cache-only', dest='cache', action='store_true',
         help='Only cache downloads (do not install).')
     parser.add_argument(
@@ -468,11 +495,11 @@ if __name__ == '__main__':
         help='Select LLVM version.')
     parser.add_argument(
         '--terra-url', dest='terra_url', required=False,
-        default='https://github.com/elliottslaughter/terra.git',
+        default='https://github.com/StanfordLegion/terra.git',
         help='URL of Terra repository to clone from.')
     parser.add_argument(
         '--terra-branch', dest='terra_branch', required=False,
-        default='compiler-snapshot',
+        default='luajit2.1',
         help='Branch of Terra repository to checkout.')
     args = parser.parse_args()
     driver(**vars(args))

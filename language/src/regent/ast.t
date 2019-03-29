@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University, NVIDIA Corporation
+-- Copyright 2019 Stanford University, NVIDIA Corporation
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -105,9 +105,9 @@ ast.annotation:leaf("Forbid", {"value"}, true)
 ast.annotation:leaf("Unroll", {"value"}, true)
 
 -- Annotation: Sets
-ast.annotation:leaf("Set", {"cuda", "external", "inline", "inner", "leaf",
-                            "openmp", "optimize", "parallel", "spmd", "trace",
-                            "vectorize"},
+ast.annotation:leaf("Set", {"cuda", "external", "idempotent", "inline",
+                            "inner", "leaf", "openmp", "optimize", "parallel", 
+                            "replicable", "spmd", "trace", "vectorize"},
                     false, true)
 
 function ast.default_annotations()
@@ -115,12 +115,14 @@ function ast.default_annotations()
   return ast.annotation.Set {
     cuda = allow,
     external = allow,
+    idempotent = allow,
     inline = allow,
     inner = allow,
     leaf = allow,
     openmp = allow,
     optimize = allow,
     parallel = allow,
+    replicable = allow,
     spmd = allow,
     trace = allow,
     vectorize = allow,
@@ -190,6 +192,7 @@ ast:inner("layout")
 ast.layout:leaf("Dim", {"index"}):set_memoize()
 ast.layout:leaf("Field", {"region_name", "field_paths"})
 ast.layout:leaf("Ordering", {"dimensions"})
+ast.layout:leaf("Colocation", {"fields"})
 
 -- Node Types (Unspecialized)
 
@@ -243,6 +246,7 @@ ast.unspecialized.expr:leaf("Partition", {"disjointness", "region", "coloring",
                                           "colors"})
 ast.unspecialized.expr:leaf("PartitionEqual", {"region", "colors"})
 ast.unspecialized.expr:leaf("PartitionByField", {"region", "colors"})
+ast.unspecialized.expr:leaf("PartitionByRestriction", {"region", "transform", "extent", "colors"})
 ast.unspecialized.expr:leaf("Image", {"parent", "partition", "region"})
 ast.unspecialized.expr:leaf("Preimage", {"parent", "partition", "region"})
 ast.unspecialized.expr:leaf("CrossProduct", {"args"})
@@ -276,6 +280,9 @@ ast.unspecialized.expr:leaf("Condition", {"conditions", "values"})
 ast.unspecialized.expr:leaf("Unary", {"op", "rhs"})
 ast.unspecialized.expr:leaf("Binary", {"op", "lhs", "rhs"})
 ast.unspecialized.expr:leaf("Deref", {"value"})
+ast.unspecialized.expr:leaf("ImportIspace", {"index_type_expr", "value"})
+ast.unspecialized.expr:leaf("ImportRegion", {"ispace", "fspace_type_expr", "value", "field_ids"})
+ast.unspecialized.expr:leaf("ImportPartition", {"disjointness", "region", "colors", "value"})
 
 ast.unspecialized:leaf("Block", {"stats"})
 
@@ -362,6 +369,7 @@ ast.specialized.expr:leaf("Partition", {"disjointness", "region", "coloring",
                                         "colors"})
 ast.specialized.expr:leaf("PartitionEqual", {"region", "colors"})
 ast.specialized.expr:leaf("PartitionByField", {"region", "colors"})
+ast.specialized.expr:leaf("PartitionByRestriction", {"region", "transform", "extent", "colors"})
 ast.specialized.expr:leaf("Image", {"parent", "partition", "region"})
 ast.specialized.expr:leaf("Preimage", {"parent", "partition", "region"})
 ast.specialized.expr:leaf("CrossProduct", {"args"})
@@ -397,6 +405,9 @@ ast.specialized.expr:leaf("Unary", {"op", "rhs"})
 ast.specialized.expr:leaf("Binary", {"op", "lhs", "rhs"})
 ast.specialized.expr:leaf("Deref", {"value"})
 ast.specialized.expr:leaf("LuaTable", {"value"})
+ast.specialized.expr:leaf("ImportIspace", {"index_type", "value"})
+ast.specialized.expr:leaf("ImportRegion", {"ispace", "fspace_type", "value", "field_ids"})
+ast.specialized.expr:leaf("ImportPartition", {"disjointness", "region", "colors", "value"})
 
 ast.specialized:leaf("Block", {"stats"})
 
@@ -465,6 +476,7 @@ ast.typed.expr:leaf("Partition", {"disjointness", "region", "coloring",
                                   "colors"})
 ast.typed.expr:leaf("PartitionEqual", {"region", "colors"})
 ast.typed.expr:leaf("PartitionByField", {"region", "colors"})
+ast.typed.expr:leaf("PartitionByRestriction", {"region", "transform", "extent", "colors"})
 ast.typed.expr:leaf("Image", {"parent", "partition", "region"})
 ast.typed.expr:leaf("ImageByTask", {"parent", "partition", "task"})
 ast.typed.expr:leaf("Preimage", {"parent", "partition", "region"})
@@ -505,6 +517,9 @@ ast.typed.expr:leaf("Deref", {"value"})
 ast.typed.expr:leaf("Future", {"value"})
 ast.typed.expr:leaf("FutureGetResult", {"value"})
 ast.typed.expr:leaf("ParallelizerConstraint", {"lhs", "op", "rhs"})
+ast.typed.expr:leaf("ImportIspace", {"value"})
+ast.typed.expr:leaf("ImportRegion", {"ispace", "value", "field_ids"})
+ast.typed.expr:leaf("ImportPartition", {"region", "colors", "value"})
 
 ast.typed:leaf("Block", {"stats"})
 
@@ -513,12 +528,12 @@ ast.typed.stat:leaf("Internal", {"actions"}) -- internal use only
 ast.typed.stat:leaf("If", {"cond", "then_block", "elseif_blocks", "else_block"})
 ast.typed.stat:leaf("Elseif", {"cond", "block"})
 ast.typed.stat:leaf("While", {"cond", "block"})
-ast.typed.stat:leaf("ForNum", {"symbol", "values", "block"})
+ast.typed.stat:leaf("ForNum", {"symbol", "values", "block", "metadata"})
 ast.typed.stat:leaf("ForNumVectorized", {"symbol", "values", "block",
-                                         "orig_block", "vector_width"})
-ast.typed.stat:leaf("ForList", {"symbol", "value", "block"})
+                                         "orig_block", "orig_metadata", "vector_width"})
+ast.typed.stat:leaf("ForList", {"symbol", "value", "block", "metadata"})
 ast.typed.stat:leaf("ForListVectorized", {"symbol", "value", "block",
-                                          "orig_block", "vector_width"})
+                                          "orig_block", "orig_metadata", "vector_width"})
 ast.typed.stat:leaf("Repeat", {"block", "until_cond"})
 ast.typed.stat:leaf("MustEpoch", {"block"})
 ast.typed.stat:leaf("Block", {"block"})
@@ -533,8 +548,8 @@ ast.typed.stat:leaf("Var", {"symbol", "type", "value"})
 ast.typed.stat:leaf("VarUnpack", {"symbols", "fields", "field_types", "value"})
 ast.typed.stat:leaf("Return", {"value"})
 ast.typed.stat:leaf("Break")
-ast.typed.stat:leaf("Assignment", {"lhs", "rhs"})
-ast.typed.stat:leaf("Reduce", {"op", "lhs", "rhs"})
+ast.typed.stat:leaf("Assignment", {"lhs", "rhs", "metadata"})
+ast.typed.stat:leaf("Reduce", {"op", "lhs", "rhs", "metadata"})
 ast.typed.stat:leaf("Expr", {"expr"})
 ast.typed.stat:leaf("RawDelete", {"value"})
 ast.typed.stat:leaf("Fence", {"kind", "blocking"})
@@ -545,14 +560,21 @@ ast.typed.stat:leaf("EndTrace", {"trace_id"})
 ast.typed.stat:leaf("MapRegions", {"region_types"})
 ast.typed.stat:leaf("UnmapRegions", {"region_types"})
 
-ast:leaf("TaskConfigOptions", {"leaf", "inner", "idempotent"})
+ast:leaf("TaskConfigOptions", {"leaf", "inner", "idempotent", "replicable"})
 
 ast.typed:inner("top", {"annotations"})
 ast.typed.top:leaf("Fspace", {"name", "fspace"})
 ast.typed.top:leaf("Task", {"name", "params", "return_type", "privileges",
                              "coherence_modes", "flags", "conditions",
                              "constraints", "body", "config_options",
-                             "region_divergence", "prototype"})
+                             "region_divergence", "metadata", "prototype"})
 ast.typed.top:leaf("TaskParam", {"symbol", "param_type", "future"})
+
+-- Metadata for Parallel Code Generation
+
+ast:inner("metadata")
+ast.metadata:leaf("Task", {"reduction", "op"})
+ast.metadata:leaf("Loop", {"parallelizable", "reductions"})
+ast.metadata:leaf("Stat", {"atomic", "scalar"})
 
 return ast

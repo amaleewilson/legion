@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1461,7 +1461,8 @@ namespace Legion {
 
     //--------------------------------------------------------------------------
     bool MapperManager::do_constraints_conflict(MappingCallInfo *ctx,
-                               LayoutConstraintID set1, LayoutConstraintID set2)
+                               LayoutConstraintID set1, LayoutConstraintID set2,
+                               const LayoutConstraint **conflict_constraint)
     //--------------------------------------------------------------------------
     {
       pause_mapper_call(ctx);
@@ -1476,14 +1477,16 @@ namespace Legion {
                       "is invalid.", mapper->get_mapper_name(), 
                       (c1 == NULL) ? set1 : set2, 
                       get_mapper_call_name(ctx->kind))
-      bool result = c1->conflicts(c2, 0/*dont care about dimensions*/);
+      const bool result = 
+        c1->conflicts(c2, 0/*dont care about dimensions*/, conflict_constraint);
       resume_mapper_call(ctx);
       return result;
     }
 
     //--------------------------------------------------------------------------
     bool MapperManager::do_constraints_entail(MappingCallInfo *ctx,
-                           LayoutConstraintID source, LayoutConstraintID target)
+                           LayoutConstraintID source, LayoutConstraintID target,
+                           const LayoutConstraint **failed_constraint)
     //--------------------------------------------------------------------------
     {
       pause_mapper_call(ctx);
@@ -1498,7 +1501,8 @@ namespace Legion {
                       "ID is invalid.", mapper->get_mapper_name(), 
                       (c1 == NULL) ? source : target, 
                       get_mapper_call_name(ctx->kind))
-      bool result = c1->entails(c2, 0/*don't care about dimensions*/);
+      const bool result = 
+        c1->entails(c2, 0/*don't care about dimensions*/, failed_constraint);
       resume_mapper_call(ctx);
       return result;
     }
@@ -1604,7 +1608,7 @@ namespace Legion {
           for (unsigned idx = 0; idx < instances.size(); idx++)
           {
             PhysicalManager *manager = instances[idx].impl;
-            if (manager->conflicts(constraints))
+            if (manager->conflicts(constraints, NULL))
             {
               conflicts = true;
               break;
@@ -1652,7 +1656,7 @@ namespace Legion {
                 instances.begin(); it != instances.end(); /*nothing*/)
           {
             PhysicalManager *manager = it->impl;
-            if (manager->conflicts(constraints))
+            if (manager->conflicts(constraints, NULL))
               it = instances.erase(it);
             else
               it++;
@@ -1700,7 +1704,7 @@ namespace Legion {
               instances.begin(); it != instances.end(); /*nothing*/)
         {
           PhysicalManager *manager = it->impl;
-          if (manager->conflicts(constraints))
+          if (manager->conflicts(constraints, NULL))
             it = instances.erase(it);
           else
             it++;
@@ -1727,7 +1731,8 @@ namespace Legion {
                                     const LayoutConstraintSet &constraints, 
                                     const std::vector<LogicalRegion> &regions,
                                     MappingInstance &result, 
-                                    bool acquire, GCPriority priority)
+                                    bool acquire, GCPriority priority,
+                                    bool tight_region_bounds, size_t *footprint)
     //--------------------------------------------------------------------------
     {
       if (!target_memory.exists())
@@ -1747,7 +1752,8 @@ namespace Legion {
       pause_mapper_call(ctx);
       bool success = runtime->create_physical_instance(target_memory, 
         constraints, regions, result, mapper_id, processor, acquire, priority,
-        (ctx->operation == NULL) ? 0 : ctx->operation->get_unique_op_id());
+        tight_region_bounds, footprint, (ctx->operation == NULL) ? 
+          0 : ctx->operation->get_unique_op_id());
       if (success && acquire)
         record_acquired_instance(ctx, result.impl, true/*created*/);
       resume_mapper_call(ctx);
@@ -1760,7 +1766,8 @@ namespace Legion {
                                     LayoutConstraintID layout_id,
                                     const std::vector<LogicalRegion> &regions,
                                     MappingInstance &result,
-                                    bool acquire, GCPriority priority)
+                                    bool acquire, GCPriority priority,
+                                    bool tight_region_bounds, size_t *footprint)
     //--------------------------------------------------------------------------
     {
       if (!target_memory.exists())
@@ -1780,7 +1787,8 @@ namespace Legion {
       pause_mapper_call(ctx);
       bool success = runtime->create_physical_instance(target_memory, layout_id,
                       regions, result, mapper_id, processor, acquire, priority,
-             (ctx->operation == NULL) ? 0 : ctx->operation->get_unique_op_id());
+                      tight_region_bounds, footprint, (ctx->operation == NULL) ? 
+                        0 : ctx->operation->get_unique_op_id());
       if (success && acquire)
         record_acquired_instance(ctx, result.impl, true/*created*/);
       resume_mapper_call(ctx);
@@ -1794,7 +1802,7 @@ namespace Legion {
                                     const std::vector<LogicalRegion> &regions,
                                     MappingInstance &result, bool &created, 
                                     bool acquire, GCPriority priority,
-                                    bool tight_region_bounds)
+                                    bool tight_region_bounds, size_t *footprint)
     //--------------------------------------------------------------------------
     {
       if (!target_memory.exists())
@@ -1815,7 +1823,7 @@ namespace Legion {
       pause_mapper_call(ctx);
       bool success = runtime->find_or_create_physical_instance(target_memory,
                   constraints, regions, result, created, mapper_id, processor, 
-                  acquire, priority, tight_region_bounds,
+                  acquire, priority, tight_region_bounds, footprint,
                   (ctx->operation == NULL) ? 0 :
                    ctx->operation->get_unique_op_id());
       if (success && acquire)
@@ -1831,7 +1839,7 @@ namespace Legion {
                                     const std::vector<LogicalRegion> &regions,
                                     MappingInstance &result, bool &created, 
                                     bool acquire, GCPriority priority,
-                                    bool tight_region_bounds)
+                                    bool tight_region_bounds, size_t *footprint)
     //--------------------------------------------------------------------------
     {
       if (!target_memory.exists())
@@ -1852,7 +1860,7 @@ namespace Legion {
       pause_mapper_call(ctx);
       bool success = runtime->find_or_create_physical_instance(target_memory,
                    layout_id, regions, result, created, mapper_id, processor, 
-                   acquire, priority, tight_region_bounds,
+                   acquire, priority, tight_region_bounds, footprint,
                    (ctx->operation == NULL) ? 0 : 
                     ctx->operation->get_unique_op_id());
       if (success && acquire)
@@ -2448,27 +2456,16 @@ namespace Legion {
       IndexSpace result = IndexSpace::NO_SPACE;
       switch (color.get_dim())
       {
-        case 1:
-          {
-            Point<1,coord_t> point(color);
-            result = runtime->get_index_subspace(p, &point,
-                NT_TemplateHelper::encode_tag<1,coord_t>());
-            break;
+#define DIMFUNC(DIM) \
+        case DIM: \
+          { \
+            Point<DIM,coord_t> point(color); \
+            result = runtime->get_index_subspace(p, &point, \
+                NT_TemplateHelper::encode_tag<DIM,coord_t>()); \
+            break; \
           }
-        case 2:
-          {
-            Point<2,coord_t> point(color);
-            result = runtime->get_index_subspace(p, &point,
-                NT_TemplateHelper::encode_tag<2,coord_t>());
-            break;
-          }
-        case 3:
-          {
-            Point<3,coord_t> point(color);
-            result = runtime->get_index_subspace(p, &point,
-                NT_TemplateHelper::encode_tag<3,coord_t>());
-            break;
-          }
+        LEGION_FOREACH_N(DIMFUNC)
+#undef DIMFUNC
         default:
           assert(false);
       }
@@ -2495,27 +2492,16 @@ namespace Legion {
       const TypeTag type_tag = handle.get_type_tag();
       switch (NT_TemplateHelper::get_dim(type_tag))
       {
-        case 1:
-          {
-            DomainT<1,coord_t> realm_is;
-            runtime->get_index_space_domain(handle, &realm_is, type_tag);
-            result = realm_is;
-            break;
+#define DIMFUNC(DIM) \
+        case DIM: \
+          { \
+            DomainT<DIM,coord_t> realm_is; \
+            runtime->get_index_space_domain(handle, &realm_is, type_tag); \
+            result = realm_is; \
+            break; \
           }
-        case 2:
-          {
-            DomainT<2,coord_t> realm_is;
-            runtime->get_index_space_domain(handle, &realm_is, type_tag);
-            result = realm_is;
-            break;
-          }
-        case 3:
-          {
-            DomainT<3,coord_t> realm_is;
-            runtime->get_index_space_domain(handle, &realm_is, type_tag);
-            result = realm_is;
-            break;
-          }
+        LEGION_FOREACH_N(DIMFUNC)
+#undef DIMFUNC
         default:
           assert(false);
       }
@@ -2774,27 +2760,16 @@ namespace Legion {
       LogicalRegion result = LogicalRegion::NO_REGION;
       switch (color.get_dim())
       {
-        case 1:
-          {
-            Point<1,coord_t> point(color);
-            result = runtime->get_logical_subregion_by_color(par, &point,
-                              NT_TemplateHelper::encode_tag<1,coord_t>());
-            break;
+#define DIMFUNC(DIM) \
+        case DIM: \
+          { \
+            Point<DIM,coord_t> point(color); \
+            result = runtime->get_logical_subregion_by_color(par, &point, \
+                              NT_TemplateHelper::encode_tag<DIM,coord_t>()); \
+            break; \
           }
-        case 2:
-          {
-            Point<2,coord_t> point(color);
-            result = runtime->get_logical_subregion_by_color(par, &point,
-                              NT_TemplateHelper::encode_tag<2,coord_t>());
-            break;
-          }
-        case 3:
-          {
-            Point<3,coord_t> point(color);
-            result = runtime->get_logical_subregion_by_color(par, &point,
-                              NT_TemplateHelper::encode_tag<3,coord_t>());
-            break;
-          }
+        LEGION_FOREACH_N(DIMFUNC)
+#undef DIMFUNC
         default:
           assert(false);
       }

@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University, NVIDIA Corporation
+-- Copyright 2019 Stanford University, NVIDIA Corporation
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -91,10 +91,7 @@ local function unreachable(node)
   assert(false, "unreachable")
 end
 
-local permitted_for_num_annotations = terralib.newlist({"parallel", "spmd", "trace"})
-if std.config["vectorize-unsafe"] then
-  permitted_for_num_annotations:insert("vectorize")
-end
+local permitted_for_num_annotations = terralib.newlist({"parallel", "spmd", "trace", "vectorize"})
 
 local node_allow_annotations = {
   -- Expressions:
@@ -125,6 +122,7 @@ local node_allow_annotations = {
   [ast.typed.expr.Partition]                  = deny_all,
   [ast.typed.expr.PartitionEqual]             = deny_all,
   [ast.typed.expr.PartitionByField]           = deny_all,
+  [ast.typed.expr.PartitionByRestriction]     = deny_all,
   [ast.typed.expr.Image]                      = deny_all,
   [ast.typed.expr.ImageByTask]                = deny_all,
   [ast.typed.expr.Preimage]                   = deny_all,
@@ -161,6 +159,9 @@ local node_allow_annotations = {
   [ast.typed.expr.Binary]                     = deny_all,
   [ast.typed.expr.Deref]                      = deny_all,
   [ast.typed.expr.ParallelizerConstraint]     = deny_all,
+  [ast.typed.expr.ImportIspace]               = deny_all,
+  [ast.typed.expr.ImportRegion]               = deny_all,
+  [ast.typed.expr.ImportPartition]            = deny_all,
 
   [ast.typed.expr.Internal]                   = unreachable,
   [ast.typed.expr.Future]                     = unreachable,
@@ -171,7 +172,7 @@ local node_allow_annotations = {
   [ast.typed.stat.Elseif]    = deny_all,
   [ast.typed.stat.While]     = allow({"spmd", "trace"}),
   [ast.typed.stat.ForNum]    = allow(permitted_for_num_annotations),
-  [ast.typed.stat.ForList]   = allow({"openmp", "parallel", "spmd", "trace", "vectorize"}),
+  [ast.typed.stat.ForList]   = allow({"openmp", "parallel", "spmd", "trace", "vectorize", "cuda"}),
   [ast.typed.stat.Repeat]    = allow({"spmd", "trace"}),
   [ast.typed.stat.MustEpoch] = deny_all,
   [ast.typed.stat.Block]     = allow({"spmd", "trace"}),
@@ -204,11 +205,13 @@ local node_allow_annotations = {
   [ast.typed.top.Task] = allow({
     "cuda",
     "external",
+    "idempotent",
     "inline",
     "inner",
     "leaf",
     "optimize",
     "parallel",
+    "replicable",
   }),
 
   [ast.typed.top.Fspace] = deny_all,

@@ -1,5 +1,5 @@
-/* Copyright 2018 Stanford University
- * Copyright 2018 Los Alamos National Laboratory
+/* Copyright 2019 Stanford University
+ * Copyright 2019 Los Alamos National Laboratory
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1458,7 +1458,7 @@ namespace Realm {
         requests = (RemoteWriteRequest*) calloc(max_nr, sizeof(RemoteWriteRequest));
         for (int i = 0; i < max_nr; i++) {
           requests[i].xd = this;
-          requests[i].dst_node = ID(dst_mem->me).memory.owner_node;
+          requests[i].dst_node = ID(dst_mem->me).memory_owner_node();
           enqueue_request(&requests[i]);
         }
       }
@@ -1824,17 +1824,27 @@ namespace Realm {
             break;
           }
 	  // TODO: support 2D/3D for memory side of an HDF transfer?
-	  size_t mem_bytes = mem_iter->step(hdf5_bytes, mem_info, 0);
+	  size_t mem_bytes = mem_iter->step(hdf5_bytes, mem_info, 0,
+					    true /*tentative*/);
 	  if(mem_bytes == hdf5_bytes) {
-	    // looks good - confirm the hdf5 step
+	    // looks good - confirm the steps
 	    hdf5_iter->confirm_step();
+	    mem_iter->confirm_step();
 	  } else {
 	    // cancel the hdf5 step and try to just step by mem_bytes
 	    assert(mem_bytes < hdf5_bytes);  // should never be larger
 	    hdf5_iter->cancel_step();
 	    hdf5_bytes = hdf5_iter->step(mem_bytes, hdf5_info);
-	    // now must match
-	    assert(hdf5_bytes == mem_bytes);
+	    // multi-dimensional hdf5 iterators may round down the size,
+	    //  so re-check the mem bytes
+	    if(hdf5_bytes == mem_bytes) {
+	      mem_iter->confirm_step();
+	    } else {
+	      mem_iter->cancel_step();
+	      mem_bytes = mem_iter->step(hdf5_bytes, mem_info, 0);
+	      // now must match
+	      assert(hdf5_bytes == mem_bytes);
+	    }
 	  }
 
 	  HDFRequest* new_req = (HDFRequest *)(dequeue_request());
@@ -2140,7 +2150,7 @@ namespace Realm {
 	    if(src_mem.kind() != it->src_kind)
 	      continue;
 	    if((it->src_type == SupportedPath::LOCAL_KIND) &&
-	       (ID(src_mem).memory.owner_node != node))
+	       (NodeID(ID(src_mem).memory_owner_node()) != node))
 	      continue;
 	  }
 
@@ -2151,7 +2161,7 @@ namespace Realm {
 	    if(dst_mem.kind() != it->dst_kind)
 	      continue;
 	    if((it->dst_type == SupportedPath::LOCAL_KIND) &&
-	       (ID(dst_mem).memory.owner_node != node))
+	       (NodeID(ID(dst_mem).memory_owner_node()) != node))
 	      continue;
 	  }
 	  
@@ -3823,7 +3833,7 @@ namespace Realm {
                            XferDesFence* _complete_fence,
                            RegionInstance inst)
       {
-	//if (ID(_src_buf.memory).memory.owner_node == my_node_id) {
+	//if (ID(_src_buf.memory).memory_owner_node() == my_node_id) {
 	if(_target_node == my_node_id) {
           // size_t total_field_size = 0;
           // for (unsigned i = 0; i < _oas_vec.size(); i++) {
@@ -3947,8 +3957,11 @@ namespace Realm {
 	if(!src_iter_ready.has_triggered() || !dst_iter_ready.has_triggered()) {
 	  Event wait_on = Event::merge_events(src_iter_ready, dst_iter_ready);
 	  log_new_dma.info() << "xd metadata wait: xd=" << _guid << " ready=" << wait_on;
-	  Realm::EventImpl::add_waiter(wait_on, new DeferredXDEnqueue(xferDes_queue,
-								      xd));
+          if (wait_on.exists())
+            Realm::EventImpl::add_waiter(wait_on, new DeferredXDEnqueue(xferDes_queue,
+                                                                        xd));
+          else
+            xferDes_queue->enqueue_xferDes_local(xd);
 	} else
 	  xferDes_queue->enqueue_xferDes_local(xd);
       } else {

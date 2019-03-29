@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University
+-- Copyright 2019 Stanford University
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -81,6 +81,12 @@ terra top_level_task(task : c.legion_task_t,
                   f1, f2)
 
     c.legion_field_allocator_destroy(fsa)
+  end
+
+  do
+    var init : int = 0
+    c.legion_runtime_fill_field(runtime, ctx, r, r, f1, &init, sizeof(int), c.legion_predicate_true())
+    c.legion_runtime_fill_field(runtime, ctx, r, r, f2, &init, sizeof(int), c.legion_predicate_true())
   end
 
   var coloring = c.legion_coloring_create()

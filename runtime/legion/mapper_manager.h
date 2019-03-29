@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -293,9 +293,11 @@ namespace Legion {
                                 FieldSpace handle);
       void release_layout(MappingCallInfo *ctx, LayoutConstraintID layout_id);
       bool do_constraints_conflict(MappingCallInfo *ctx, 
-                    LayoutConstraintID set1, LayoutConstraintID set2);
+                    LayoutConstraintID set1, LayoutConstraintID set2,
+                    const LayoutConstraint **conflict_constraint);
       bool do_constraints_entail(MappingCallInfo *ctx,
-                    LayoutConstraintID source, LayoutConstraintID target);
+                    LayoutConstraintID source, LayoutConstraintID target,
+                    const LayoutConstraint **failed_constraint);
     public:
       void find_valid_variants(MappingCallInfo *ctx, TaskID task_id,
                                std::vector<VariantID> &valid_variants,
@@ -325,26 +327,28 @@ namespace Legion {
                                     const LayoutConstraintSet &constraints, 
                                     const std::vector<LogicalRegion> &regions,
                                     MappingInstance &result, 
-                                    bool acquire, GCPriority priority);
+                                    bool acquire, GCPriority priority,
+                                    bool tight_region_bounds,size_t *footprint);
       bool create_physical_instance(MappingCallInfo *ctx, Memory target_memory,
                                     LayoutConstraintID layout_id,
                                     const std::vector<LogicalRegion> &regions,
                                     MappingInstance &result,
-                                    bool acquire, GCPriority priority);
+                                    bool acquire, GCPriority priority,
+                                    bool tight_region_bounds,size_t *footprint);
       bool find_or_create_physical_instance(
                                     MappingCallInfo *ctx, Memory target_memory,
                                     const LayoutConstraintSet &constraints, 
                                     const std::vector<LogicalRegion> &regions,
                                     MappingInstance &result, bool &created, 
                                     bool acquire, GCPriority priority,
-                                    bool tight_region_bounds);
+                                    bool tight_region_bounds,size_t *footprint);
       bool find_or_create_physical_instance(
                                     MappingCallInfo *ctx, Memory target_memory,
                                     LayoutConstraintID layout_id,
                                     const std::vector<LogicalRegion> &regions,
                                     MappingInstance &result, bool &created, 
                                     bool acquire, GCPriority priority,
-                                    bool tight_region_bounds);
+                                    bool tight_region_bounds,size_t *footprint);
       bool find_physical_instance(  MappingCallInfo *ctx, Memory target_memory,
                                     const LayoutConstraintSet &constraints,
                                     const std::vector<LogicalRegion> &regions,

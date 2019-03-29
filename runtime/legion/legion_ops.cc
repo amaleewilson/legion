@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -3155,7 +3155,8 @@ namespace Legion {
         for (unsigned idx = 0; idx < chosen_instances.size(); idx++)
         {
           PhysicalManager *manager = chosen_instances[idx].get_manager();
-          if (manager->conflicts(constraints))
+          const LayoutConstraint *conflict_constraint = NULL;
+          if (manager->conflicts(constraints, &conflict_constraint))
             REPORT_LEGION_ERROR(ERROR_INVALID_MAPPER_OUTPUT,
                           "Invalid mapper output. Mapper %s selected "
                           "instance for inline mapping (ID %lld) in task %s "
@@ -6056,13 +6057,13 @@ namespace Legion {
             dst_indirect_requirements[idx], offset + idx, logical_context_uid, 
             scatter_versions[idx], preconditions);
       }
+      // We can also mark this as having our resolved any predication
+      resolve_speculation();
       // Then put ourselves in the queue of operations ready to map
       if (!preconditions.empty())
         enqueue_ready_operation(Runtime::merge_events(preconditions));
       else
         enqueue_ready_operation();
-      // We can also mark this as having our resolved any predication
-      resolve_speculation();
     }
 
     //--------------------------------------------------------------------------
@@ -6087,11 +6088,11 @@ namespace Legion {
               it != scatter_versions.end(); it++)
           it->clear();
       }
-      // Tell our owner that we are done
-      owner->handle_point_commit(profiling_reported);
       // Don't commit this operation until we've reported our profiling
       // Out index owner will deactivate the operation
       commit_operation(false/*deactivate*/, profiling_reported);
+      // Tell our owner that we are done, they will do the deactivate
+      owner->handle_point_commit(profiling_reported);
     }
 
     //--------------------------------------------------------------------------
@@ -10192,12 +10193,6 @@ namespace Legion {
         assert(it->impl != NULL);
 #endif
         it->impl->register_dependence(this);
-#ifdef LEGION_SPY
-        if (it->impl->producer_op != NULL)
-          LegionSpy::log_mapping_dependence(
-              parent_ctx->get_unique_id(), it->impl->producer_uid, 0,
-              get_unique_op_id(), 0, TRUE_DEPENDENCE);
-#endif
       }
     }
 
@@ -12041,6 +12036,22 @@ namespace Legion {
     }
 
     //--------------------------------------------------------------------------
+    void PendingPartitionOp::initialize_intersection_partition(TaskContext *ctx,
+                                                           IndexPartition pid,
+                                                           IndexPartition part,
+                                                           const bool dominates)
+    //--------------------------------------------------------------------------
+    {
+      initialize_operation(ctx, true/*track*/);
+#ifdef DEBUG_LEGION
+      assert(thunk == NULL);
+#endif
+      thunk = new IntersectionWithRegionThunk(pid, part, dominates);
+      if (runtime->legion_spy_enabled)
+        perform_logging();
+    }
+
+    //--------------------------------------------------------------------------
     void PendingPartitionOp::initialize_difference_partition(TaskContext *ctx,
                                                              IndexPartition pid,
                                                              IndexPartition h1,
@@ -12253,6 +12264,15 @@ namespace Legion {
       LegionSpy::log_target_pending_partition(op->unique_op_id, pid.id,
           INTERSECTION_PARTITION);
     } 
+
+    //--------------------------------------------------------------------------
+    void PendingPartitionOp::IntersectionWithRegionThunk::perform_logging(
+                                                         PendingPartitionOp* op)
+    //--------------------------------------------------------------------------
+    {
+      LegionSpy::log_target_pending_partition(op->unique_op_id, pid.id,
+          INTERSECTION_PARTITION);
+    }
 
     //--------------------------------------------------------------------------
     void PendingPartitionOp::DifferencePartitionThunk::perform_logging(
@@ -13443,13 +13463,13 @@ namespace Legion {
       perform_projection_version_analysis(owner->projection_info,
           owner->requirement, requirement, 0/*idx*/, 
           logical_context_uid, version_info, preconditions);
+      // We can also mark this as having our resolved any predication
+      resolve_speculation();
       // Then put ourselves in the queue of operations ready to map
       if (!preconditions.empty())
         enqueue_ready_operation(Runtime::merge_events(preconditions));
       else
         enqueue_ready_operation();
-      // We can also mark this as having our resolved any predication
-      resolve_speculation();
     }
 
     //--------------------------------------------------------------------------
@@ -13496,11 +13516,11 @@ namespace Legion {
     void PointDepPartOp::trigger_commit(void)
     //--------------------------------------------------------------------------
     {
-      // Tell our owner that we are done
-      owner->handle_point_commit(profiling_reported);
       // Don't commit this operation until we've reported our profiling
       // Out index owner will deactivate the operation
       commit_operation(false/*deactivate*/, profiling_reported);
+      // Tell our owner that we are done, they will do the deactivate
+      owner->handle_point_commit(profiling_reported);
     }
 
     //--------------------------------------------------------------------------
@@ -14702,24 +14722,24 @@ namespace Legion {
       perform_projection_version_analysis(owner->projection_info, 
           owner->get_requirement(), requirement, 0/*idx*/, 
           logical_context_uid, version_info, preconditions);
+      // We can also mark this as having our resolved any predication
+      resolve_speculation();
       if (!preconditions.empty())
         enqueue_ready_operation(Runtime::merge_events(preconditions));
       else
         enqueue_ready_operation();
-      // We can also mark this as having our resolved any predication
-      resolve_speculation();
     }
 
     //--------------------------------------------------------------------------
     void PointFillOp::trigger_commit(void)
     //--------------------------------------------------------------------------
     {
-      version_info.clear();
-      // Tell our owner that we are done
-      owner->handle_point_commit();
+      version_info.clear(); 
       // Don't commit this operation until we've reported our profiling
       // Out index owner will deactivate the operation
       commit_operation(false/*deactivate*/);
+      // Tell our owner that we are done, they will do the deactivate
+      owner->handle_point_commit();
     }
 
     //--------------------------------------------------------------------------
@@ -14790,6 +14810,7 @@ namespace Legion {
       initialize_operation(ctx, true/*track*/, 1/*regions*/, 
                            launcher.static_dependences);
       resource = launcher.resource;
+      footprint = launcher.footprint;
       switch (resource)
       {
         case EXTERNAL_POSIX_FILE:
@@ -14883,6 +14904,7 @@ namespace Legion {
       activate_operation();
       file_name = NULL;
       external_instance = NULL;
+      footprint = 0;
     }
 
     //--------------------------------------------------------------------------
@@ -15026,11 +15048,13 @@ namespace Legion {
       // this instance can be safely acquired for use
       MemoryManager *memory_manager = external_instance->memory_manager;
       memory_manager->attach_external_instance(external_instance);
+      PhysicalTraceInfo trace_info;
       InstanceRef result = runtime->forest->attach_external(this, 0/*idx*/,
                                                         requirement,
                                                         external_instance,
                                                         version_info,
-                                                        map_applied_conditions);
+                                                        map_applied_conditions,
+                                                        trace_info);
 #ifdef DEBUG_LEGION
       assert(result.has_ref());
 #endif
@@ -15077,10 +15101,12 @@ namespace Legion {
                                          const std::vector<FieldID> &field_set,
                                          const std::vector<size_t> &sizes, 
                                                LayoutConstraintSet &constraints,
-                                               ApEvent &ready_event)
+                                               ApEvent &ready_event,
+                                               size_t &instance_footprint)
     //--------------------------------------------------------------------------
     {
       PhysicalInstance result = PhysicalInstance::NO_INST;
+      instance_footprint = footprint;
       switch (resource)
       {
         case EXTERNAL_POSIX_FILE:
@@ -15373,9 +15399,11 @@ namespace Legion {
     //--------------------------------------------------------------------------
     {
       initialize_operation(ctx, true/*track*/);
-      // No need to check privileges because we never would have been
-      // able to attach in the first place anyway.
       requirement = region.impl->get_requirement();
+      // Make sure that the privileges are read-write so that we wait for
+      // all prior users of this particular region
+      requirement.privilege = READ_WRITE;
+      requirement.prop = EXCLUSIVE;
       // Delay getting a reference until trigger_mapping().  This means we
       //  have to keep region
       if (!region.is_valid())
@@ -15516,9 +15544,10 @@ namespace Legion {
       assert(!manager->is_reduction_manager()); 
 #endif
       std::set<RtEvent> applied_conditions;
+      PhysicalTraceInfo trace_info;
       ApEvent detach_event = 
         runtime->forest->detach_external(requirement, this, 0/*idx*/, 
-                                     version_info,reference,applied_conditions);
+            version_info, reference, applied_conditions, trace_info);
       version_info.apply_mapping(applied_conditions);
       // Also tell the runtime to detach the external instance from memory
       // This has to be done before we can consider this mapped

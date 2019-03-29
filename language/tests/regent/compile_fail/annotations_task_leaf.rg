@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University
+-- Copyright 2019 Stanford University
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -13,9 +13,9 @@
 -- limitations under the License.
 
 -- fails-with:
--- annotations_task_leaf.rg:25: task is not a valid leaf task
--- task f()
---    ^
+-- annotations_task_leaf.rg:26: task is not a valid leaf task
+--   var r = region(ispace(ptr, 4), int)
+--                ^
 
 import "regent"
 

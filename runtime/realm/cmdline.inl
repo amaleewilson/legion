@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -117,6 +117,9 @@ namespace Realm {
 
   template <>
   bool convert_integer_cmdline_argument<unsigned long>(const std::string& s, unsigned long& target);
+
+  template <>
+  bool convert_integer_cmdline_argument<long long>(const std::string& s, long long& target);
 
   template <>
   bool convert_integer_cmdline_argument<bool>(const std::string& s, bool& target);

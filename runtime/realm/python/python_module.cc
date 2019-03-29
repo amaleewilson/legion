@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,13 +47,19 @@ namespace Realm {
     get_symbol(this->PyByteArray_FromStringAndSize, "PyByteArray_FromStringAndSize");
 
     get_symbol(this->PyEval_InitThreads, "PyEval_InitThreads");
-    get_symbol(this->PyEval_RestoreThread, "PyEval_RestoreThread");
-    get_symbol(this->PyEval_SaveThread, "PyEval_SaveThread");
 
+#ifdef USE_PYGILSTATE_CALLS
+    get_symbol(this->PyGILState_Ensure, "PyGILState_Ensure");
+    get_symbol(this->PyGILState_Release, "PyGILState_Release");
+#else
     get_symbol(this->PyThreadState_New, "PyThreadState_New");
     get_symbol(this->PyThreadState_Clear, "PyThreadState_Clear");
     get_symbol(this->PyThreadState_Delete, "PyThreadState_Delete");
     get_symbol(this->PyThreadState_Get, "PyThreadState_Get");
+#endif
+    get_symbol(this->PyEval_RestoreThread, "PyEval_RestoreThread");
+    get_symbol(this->PyEval_SaveThread, "PyEval_SaveThread");
+
     get_symbol(this->PyThreadState_Swap, "PyThreadState_Swap");
 
     get_symbol(this->PyErr_PrintEx, "PyErr_PrintEx");
@@ -305,6 +311,11 @@ namespace Realm {
       interpreter_ready = true;
     }
 
+#ifdef USE_PYGILSTATE_CALLS
+    // our PyThreadState is implicit when using the PyGILState calls
+    assert(pythreads.count(Thread::self()) == 0);
+    pythreads[Thread::self()] = 0;
+#else
     // always create and remember our own python thread - does NOT require GIL
     PyThreadState *pythread = (pyproc->interpreter->api->PyThreadState_New)(pyproc->master_thread->interp);
     log_py.debug() << "created python thread: " << pythread;
@@ -312,6 +323,7 @@ namespace Realm {
     assert(pythread != 0);
     assert(pythreads.count(Thread::self()) == 0);
     pythreads[Thread::self()] = pythread;
+#endif
 
     // now go into main scheduler loop, holding scheduler lock for whole thing
     AutoHSLLock al(lock);
@@ -393,9 +405,13 @@ namespace Realm {
 	lock.unlock();
 
 	// make our python thread state active, acquiring the GIL
+#ifdef USE_PYGILSTATE_CALLS
+	PyGILState_STATE gilstate = (pyproc->interpreter->api->PyGILState_Ensure)();
+#else
 	assert((pyproc->interpreter->api->PyThreadState_Swap)(0) == 0);
 	log_py.debug() << "RestoreThread <- " << pythread;
 	(pyproc->interpreter->api->PyEval_RestoreThread)(pythread);
+#endif
 
 #ifndef NDEBUG
 	bool ok =
@@ -404,9 +420,13 @@ namespace Realm {
 	assert(ok);  // no fault recovery yet
 
 	// release the GIL
+#ifdef USE_PYGILSTATE_CALLS
+	(pyproc->interpreter->api->PyGILState_Release)(gilstate);
+#else
 	PyThreadState *saved = (pyproc->interpreter->api->PyEval_SaveThread)();
 	log_py.debug() << "SaveThread -> " << saved;
 	assert(saved == pythread);
+#endif
 
 	lock.lock();
 
@@ -529,6 +549,11 @@ namespace Realm {
     //  if the GIL is not held will assert-fail, and while a call to
     //  PyThreadState_Swap is technically illegal (and unsafe if python-created
     //  threads exist), it does what we want for now
+    // NOTE: we use PyEval_{Save,Restore}Thread here even if USE_PYGILSTATE_CALLS
+    //  is defined, as a call to PyGILState_Release will destroy a thread
+    //  context - the Save/Restore take care of the actual lock, and since we
+    //  restore each python thread on the OS thread that owned it intially, the
+    //  PyGILState TLS stuff should remain consistent
     PyThreadState *saved = (pyproc->interpreter->api->PyThreadState_Swap)(0);
     if(saved != 0) {
       log_py.info() << "python worker sleeping - releasing GIL";
@@ -564,6 +589,14 @@ namespace Realm {
 
   void PythonThreadTaskScheduler::worker_terminate(Thread *switch_to)
   {
+#ifdef USE_PYGILSTATE_CALLS
+    // nothing to do?  pythreads entry was a placeholder
+    // before we can kill the kernel thread, we need to tear down the python thread
+    std::map<Thread *, PyThreadState *>::iterator it = pythreads.find(Thread::self());
+    assert(it != pythreads.end());
+    pythreads.erase(it);
+
+#else
     // before we can kill the kernel thread, we need to tear down the python thread
     std::map<Thread *, PyThreadState *>::iterator it = pythreads.find(Thread::self());
     assert(it != pythreads.end());
@@ -587,6 +620,7 @@ namespace Realm {
     PyThreadState *saved = (pyproc->interpreter->api->PyEval_SaveThread)();
     log_py.debug() << "SaveThread -> " << saved;
     assert(saved == pyproc->master_thread);
+#endif
 
     // TODO: tear down interpreter if last thread
     if(shutdown_flag && pythreads.empty())
@@ -656,7 +690,12 @@ namespace Realm {
   
     // create a python interpreter that stays entirely within this thread
     interpreter = new PythonInterpreter;
+#ifdef USE_PYGILSTATE_CALLS
+    PyGILState_STATE gilstate = (interpreter->api->PyGILState_Ensure)();
+    assert(gilstate = PyGILState_UNLOCKED);
+#else
     master_thread = (interpreter->api->PyThreadState_Get)();
+#endif
 
     // always need the python threading module
     interpreter->import_module("threading");
@@ -673,19 +712,30 @@ namespace Realm {
       interpreter->run_string(*it);
 
     // default state is GIL _released_
+#ifdef USE_PYGILSTATE_CALLS
+    (interpreter->api->PyGILState_Release)(gilstate);
+#else
     PyThreadState *saved = (interpreter->api->PyEval_SaveThread)();
     log_py.debug() << "SaveThread -> " << saved;
     assert(saved == master_thread);
+#endif
   }
 
   void LocalPythonProcessor::destroy_interpreter(void)
   {
     assert(interpreter != 0);
 
+    log_py.info() << "destroying interpreter";
+
     // take GIL with master thread
+#ifdef USE_PYGILSTATE_CALLS
+    PyGILState_STATE gilstate = (interpreter->api->PyGILState_Ensure)();
+    assert(gilstate == PyGILState_UNLOCKED);
+#else
     assert((interpreter->api->PyThreadState_Swap)(0) == 0);
     log_py.debug() << "RestoreThread <- " << master_thread;
     (interpreter->api->PyEval_RestoreThread)(master_thread);
+#endif
 
     // during shutdown, the threading module tries to remove the Thread object
     //  associated with this kernel thread - if that doesn't exist (because we're
@@ -717,16 +767,25 @@ namespace Realm {
     }
 
     // perform import/compile on master thread
+#ifdef USE_PYGILSTATE_CALLS
+    PyGILState_STATE gilstate = (interpreter->api->PyGILState_Ensure)();
+    assert(gilstate == PyGILState_UNLOCKED);
+#else
     assert((interpreter->api->PyThreadState_Swap)(0) == 0);
     log_py.debug() << "RestoreThread <- " << master_thread;
     (interpreter->api->PyEval_RestoreThread)(master_thread);
+#endif
     
     PyObject *fnptr = interpreter->find_or_import_function(psi);
     assert(fnptr != 0);
 
+#ifdef USE_PYGILSTATE_CALLS
+    (interpreter->api->PyGILState_Release)(gilstate);
+#else
     PyThreadState *saved = (interpreter->api->PyEval_SaveThread)();
     log_py.debug() << "SaveThread -> " << saved;
     assert(saved == master_thread);
+#endif
 
     log_py.info() << "task " << treg->func_id << " registered on " << me << ": " << *(treg->codedesc);
 

@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University
+-- Copyright 2019 Stanford University
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -15,8 +15,31 @@
 -- Regent Configuration and Command Line Parsing
 
 local common_config = require("common/config")
+local data = require("common/data")
 
 local config = {}
+
+local expect_vars = terralib.newlist({"TERRA_PATH", "INCLUDE_PATH", "LG_RT_DIR", "USE_CMAKE", "USE_RDIR"})
+if os.getenv("USE_CMAKE") == "1" then
+  expect_vars:insert("CMAKE_BUILD_DIR")
+end
+if os.execute("bash -c \"[ `uname` == 'Darwin' ]\"") == 0 then
+  expect_vars:insert("DYLD_LIBRARY_PATH")
+else
+  expect_vars:insert("LD_LIBRARY_PATH")
+end
+for _, expect_var in ipairs(expect_vars) do
+  if os.getenv(expect_var) == nil then
+    print("ERROR: Regent expects " .. expect_var .. " to be set, but it appears to be missing.")
+    print("Did you configure LAUNCHER to pass through the right environment variables?")
+    print()
+    print("The following variables must be configured to pass through the LAUNCHER command.")
+    for _, v in ipairs(expect_vars) do
+      print("    " .. v)
+    end
+    os.exit(1)
+  end
+end
 
 local default_options = {
   -- Main user-facing correctness flags:
@@ -24,23 +47,30 @@ local default_options = {
 
   -- Main user-facing optimization flags:
   ["cuda"] = true,
-  ["cuda-offline"] = false,
+  ["cuda-offline"] = not data.is_luajit(),
   ["cuda-arch"] = os.getenv("GPU_ARCH") or "fermi",
   ["index-launch"] = true,
   ["inline"] = true,
   ["future"] = true,
   ["leaf"] = true,
   ["inner"] = true,
+  ["idempotent"] = true,
+  ["replicable"] = true,
   ["mapping"] = true,
   ["openmp"] = false,
+  ["openmp-offline"] = not data.is_luajit(),
   ["openmp-strict"] = false,
   ["skip-empty-tasks"] = true,
   ["vectorize"] = true,
-  ["vectorize-unsafe"] = false,
+
+  -- Legion runtime compile options:
+  ["legion-dim"] = tonumber(os.getenv("MAX_DIM")) or 3, -- Set this to the value of LEGION_MAX_DIM.
 
   -- Legion runtime optimization flags:
   ["legion-leaf"] = true,
   ["legion-inner"] = true,
+  ["legion-idempotent"] = true,
+  ["legion-replicable"] = true,
 
   -- Dataflow optimization flags:
   ["flow"] = os.getenv('USE_RDIR') == '1' or false,
@@ -58,7 +88,10 @@ local default_options = {
   ["debug"] = false,
   ["no-dynamic-branches"] = true,
   ["no-dynamic-branches-assert"] = false,
+  ["override-demand-openmp"] = false,
+  ["override-demand-cuda"] = false,
   ["pretty"] = false,
+  ["pretty-verbose"] = false,
   ["layout-constraints"] = true,
   ["trace"] = true,
   ["validate"] = true,

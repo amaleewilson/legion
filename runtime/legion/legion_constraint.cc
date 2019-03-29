@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -212,35 +212,57 @@ namespace Legion {
     /////////////////////////////////////////////////////////////
 
     //--------------------------------------------------------------------------
-    ProcessorConstraint::ProcessorConstraint(void)
-      : valid(false)
+    ProcessorConstraint::ProcessorConstraint(Processor::Kind kind)
     //--------------------------------------------------------------------------
     {
+      if ((kind != Processor::NO_KIND) && (kind != Processor::PROC_GROUP))
+        valid_kinds.push_back(kind);
     }
 
     //--------------------------------------------------------------------------
-    ProcessorConstraint::ProcessorConstraint(Processor::Kind k)
-      : kind(k), valid(true)
+    void ProcessorConstraint::add_kind(Processor::Kind kind)
     //--------------------------------------------------------------------------
     {
+      if ((kind == Processor::NO_KIND) || (kind == Processor::PROC_GROUP))
+        return;
+      for (unsigned idx = 0; idx < valid_kinds.size(); idx++)
+        if (valid_kinds[idx] == kind)
+          return;
+      valid_kinds.push_back(kind);
+    }
+
+    //--------------------------------------------------------------------------
+    bool ProcessorConstraint::can_use(Processor::Kind kind) const
+    //--------------------------------------------------------------------------
+    {
+      for (unsigned idx = 0; idx < valid_kinds.size(); idx++)
+        if (valid_kinds[idx] == kind)
+          return true;
+      return false;
     }
 
     //--------------------------------------------------------------------------
     void ProcessorConstraint::serialize(Serializer &rez) const
     //--------------------------------------------------------------------------
     {
-      rez.serialize(valid);
-      if (valid)
-        rez.serialize(kind);
+      rez.serialize<size_t>(valid_kinds.size());
+      for (std::vector<Processor::Kind>::const_iterator it = 
+            valid_kinds.begin(); it != valid_kinds.end(); it++)
+        rez.serialize(*it);
     }
     
     //--------------------------------------------------------------------------
     void ProcessorConstraint::deserialize(Deserializer &derez)
     //--------------------------------------------------------------------------
     {
-      derez.deserialize(valid);
-      if (valid)
-        derez.deserialize(kind);
+      size_t num_kinds;
+      derez.deserialize(num_kinds);
+      if (num_kinds > 0)
+      {
+        valid_kinds.resize(num_kinds);
+        for (unsigned idx = 0; idx < num_kinds; idx++)
+          derez.deserialize(valid_kinds[idx]);
+      }
     }
 
     /////////////////////////////////////////////////////////////
@@ -1508,19 +1530,40 @@ namespace Legion {
 
     //--------------------------------------------------------------------------
     bool LayoutConstraintSet::entails(const LayoutConstraintSet &other,
-                                      unsigned total_dims) const
+                                      unsigned total_dims,
+                                      const LayoutConstraint **failed) const
     //--------------------------------------------------------------------------
     {
       if (!specialized_constraint.entails(other.specialized_constraint))
+      {
+        if (failed != NULL)
+          *failed = &other.specialized_constraint;
         return false;
+      }
       if (!field_constraint.entails(other.field_constraint))
+      {
+        if (failed != NULL)
+          *failed = &other.field_constraint;
         return false;
+      }
       if (!memory_constraint.entails(other.memory_constraint))
+      {
+        if (failed != NULL)
+          *failed = &other.memory_constraint;
         return false;
+      }
       if (!pointer_constraint.entails(other.pointer_constraint))
+      {
+        if (failed != NULL)
+          *failed = &other.pointer_constraint;
         return false;
+      }
       if (!ordering_constraint.entails(other.ordering_constraint, total_dims))
+      {
+        if (failed != NULL)
+          *failed = &other.ordering_constraint;
         return false;
+      }
       for (std::vector<SplittingConstraint>::const_iterator it = 
             other.splitting_constraints.begin(); it !=
             other.splitting_constraints.end(); it++)
@@ -1535,7 +1578,11 @@ namespace Legion {
           }
         }
         if (!entailed)
+        {
+          if (failed != NULL)
+            *failed = &(*it);
           return false;
+        }
       }
       for (std::vector<DimensionConstraint>::const_iterator it = 
             other.dimension_constraints.begin(); it != 
@@ -1551,7 +1598,11 @@ namespace Legion {
           }
         }
         if (!entailed)
+        {
+          if (failed != NULL)
+            *failed = &(*it);
           return false;
+        }
       }
       for (std::vector<AlignmentConstraint>::const_iterator it = 
             other.alignment_constraints.begin(); it != 
@@ -1567,7 +1618,11 @@ namespace Legion {
           }
         }
         if (!entailed)
+        {
+          if (failed != NULL)
+            *failed = &(*it);
           return false;
+        }
       }
       for (std::vector<OffsetConstraint>::const_iterator it = 
             other.offset_constraints.begin(); it != 
@@ -1583,34 +1638,63 @@ namespace Legion {
           }
         }
         if (!entailed)
+        {
+          if (failed != NULL)
+            *failed = &(*it);
           return false;
+        }
       }
       return true;
     }
 
     //--------------------------------------------------------------------------
     bool LayoutConstraintSet::conflicts(const LayoutConstraintSet &other,
-                                        unsigned total_dims) const
+                                        unsigned total_dims,
+                                        const LayoutConstraint **conflict) const
     //--------------------------------------------------------------------------
     {
       // Do these in order
       if (specialized_constraint.conflicts(other.specialized_constraint))
+      {
+        if (conflict != NULL)
+          *conflict = &specialized_constraint;
         return true;
+      }
       if (field_constraint.conflicts(other.field_constraint))
+      {
+        if (conflict != NULL)
+          *conflict = &field_constraint;
         return true;
+      }
       if (memory_constraint.conflicts(other.memory_constraint))
+      {
+        if (conflict != NULL)
+          *conflict = &memory_constraint;
         return true;
+      }
       if (pointer_constraint.conflicts(other.pointer_constraint))
+      {
+        if (conflict != NULL)
+          *conflict = &pointer_constraint;
         return true;
+      }
       if (ordering_constraint.conflicts(other.ordering_constraint, total_dims))
+      {
+        if (conflict != NULL)
+          *conflict = &ordering_constraint;
         return true;
+      }
       for (std::vector<SplittingConstraint>::const_iterator it = 
             splitting_constraints.begin(); it != 
             splitting_constraints.end(); it++)
       {
         for (unsigned idx = 0; idx < other.splitting_constraints.size(); idx++)
           if (it->conflicts(other.splitting_constraints[idx]))
+          {
+            if (conflict != NULL)
+              *conflict = &(*it);
             return true;
+          }
       }
       for (std::vector<DimensionConstraint>::const_iterator it = 
             dimension_constraints.begin(); it !=
@@ -1618,7 +1702,11 @@ namespace Legion {
       {
         for (unsigned idx = 0; idx < other.dimension_constraints.size(); idx++)
           if (it->conflicts(other.dimension_constraints[idx]))
+          {
+            if (conflict != NULL)
+              *conflict = &(*it);
             return true;
+          }
       }
       for (std::vector<AlignmentConstraint>::const_iterator it = 
             alignment_constraints.begin(); it !=
@@ -1626,7 +1714,11 @@ namespace Legion {
       {
         for (unsigned idx = 0; idx < other.alignment_constraints.size(); idx++)
           if (it->conflicts(other.alignment_constraints[idx]))
+          {
+            if (conflict != NULL)
+              *conflict = &(*it);
             return true;
+          }
       }
       for (std::vector<OffsetConstraint>::const_iterator it = 
             offset_constraints.begin(); it != 
@@ -1634,7 +1726,11 @@ namespace Legion {
       {
         for (unsigned idx = 0; idx < other.offset_constraints.size(); idx++)
           if (it->conflicts(other.offset_constraints[idx]))
+          {
+            if (conflict != NULL)
+              *conflict = &(*it);
             return true;
+          }
       }
       return false;
     }

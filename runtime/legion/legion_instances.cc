@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,7 +77,7 @@ namespace Legion {
       if (!found_in_cache)
       {
         compressed = src_mask;
-        compress_mask<STATIC_LOG2(MAX_FIELDS)>(compressed, full_mask);
+        compress_mask<STATIC_LOG2(LEGION_MAX_FIELDS)>(compressed, full_mask);
         compressed_cache.push_back(
             std::pair<FieldMask,FieldMask>(src_mask, compressed));
       }
@@ -220,7 +220,8 @@ namespace Legion {
       if (!found_in_cache)
       {
         compressed = copy_mask;
-        compress_mask<STATIC_LOG2(MAX_FIELDS)>(compressed, allocated_fields);
+        compress_mask<STATIC_LOG2(LEGION_MAX_FIELDS)>(compressed, 
+                                                      allocated_fields);
         // Save the result in the cache, duplicates from races here are benign
         AutoLock o_lock(layout_lock);
         comp_cache[hash_key].push_back(
@@ -411,7 +412,7 @@ namespace Legion {
       if (num_dims != total_dims)
         return false;
       // Layout descriptions are always complete, so just check for conflicts
-      if (constraints->conflicts(candidate_constraints, total_dims))
+      if (constraints->conflicts(candidate_constraints, total_dims, NULL))
         return false;
       // If they don't conflict they have to be the same
       return true;
@@ -427,7 +428,7 @@ namespace Legion {
       if (layout->allocated_fields != allocated_fields)
         return false;
       // Layout descriptions are always complete so just check for conflicts
-      if (constraints->conflicts(layout->constraints, total_dims))
+      if (constraints->conflicts(layout->constraints, total_dims, NULL))
         return false;
       // If they don't conflict they have to be the same
       return true;
@@ -483,12 +484,12 @@ namespace Legion {
                                      const PointerConstraint &constraint,
                                      DistributedID did,
                                      AddressSpaceID owner_space,
-                                     RegionNode *node,
-                                     PhysicalInstance inst, IndexSpaceNode *d, 
+                                     RegionNode *node, PhysicalInstance inst, 
+                                     size_t footprint, IndexSpaceNode *d,
                                      bool own, bool register_now)
       : DistributedCollectable(ctx->runtime, did, owner_space, register_now), 
         context(ctx), memory_manager(memory), region_node(node), layout(desc),
-        instance(inst), instance_domain(d), 
+        instance(inst), instance_footprint(footprint), instance_domain(d), 
         own_domain(own), pointer_constraint(constraint)
     //--------------------------------------------------------------------------
     {
@@ -830,29 +831,34 @@ namespace Legion {
     }
 
     //--------------------------------------------------------------------------
-    bool PhysicalManager::entails(LayoutConstraints *constraints) const
+    bool PhysicalManager::entails(LayoutConstraints *constraints,
+                               const LayoutConstraint **failed_constraint) const
     //--------------------------------------------------------------------------
     {
       // Always test the pointer constraint locally
       if (!pointer_constraint.entails(constraints->pointer_constraint))
         return false;
       return layout->constraints->entails_without_pointer(constraints,
-              (instance_domain != NULL) ? instance_domain->get_num_dims() : 0);
+              (instance_domain != NULL) ? instance_domain->get_num_dims() : 0,
+              failed_constraint);
     }
 
     //--------------------------------------------------------------------------
-    bool PhysicalManager::entails(const LayoutConstraintSet &constraints) const
+    bool PhysicalManager::entails(const LayoutConstraintSet &constraints,
+                               const LayoutConstraint **failed_constraint) const
     //--------------------------------------------------------------------------
     {
       // Always test the pointer constraint locally
       if (!pointer_constraint.entails(constraints.pointer_constraint))
         return false;
       return layout->constraints->entails_without_pointer(constraints,
-              (instance_domain != NULL) ? instance_domain->get_num_dims() : 0);
+              (instance_domain != NULL) ? instance_domain->get_num_dims() : 0,
+              failed_constraint);
     }
 
     //--------------------------------------------------------------------------
-    bool PhysicalManager::conflicts(LayoutConstraints *constraints) const
+    bool PhysicalManager::conflicts(LayoutConstraints *constraints,
+                             const LayoutConstraint **conflict_constraint) const
     //--------------------------------------------------------------------------
     {
       // Always test the pointer constraint locally
@@ -860,11 +866,13 @@ namespace Legion {
         return true;
       // We know our layouts don't have a pointer constraint so nothing special
       return layout->constraints->conflicts(constraints,
-              (instance_domain != NULL) ? instance_domain->get_num_dims() : 0);
+              (instance_domain != NULL) ? instance_domain->get_num_dims() : 0,
+              conflict_constraint);
     }
 
     //--------------------------------------------------------------------------
-    bool PhysicalManager::conflicts(const LayoutConstraintSet &constraints)const
+    bool PhysicalManager::conflicts(const LayoutConstraintSet &constraints,
+                             const LayoutConstraint **conflict_constraint) const
     //--------------------------------------------------------------------------
     {
       // Always test the pointer constraint locally
@@ -872,7 +880,8 @@ namespace Legion {
         return true;
       // We know our layouts don't have a pointer constraint so nothing special
       return layout->constraints->conflicts(constraints,
-              (instance_domain != NULL) ? instance_domain->get_num_dims() : 0);
+              (instance_domain != NULL) ? instance_domain->get_num_dims() : 0,
+              conflict_constraint);
     }
 
     //--------------------------------------------------------------------------
@@ -992,12 +1001,12 @@ namespace Legion {
                                      IndexSpaceNode *instance_domain, bool own,
                                      RegionNode *node, LayoutDescription *desc, 
                                      const PointerConstraint &constraint,
-                                     bool register_now, ApEvent u_event,
-                                     bool external_instance,
+                                     bool register_now, size_t footprint,
+                                     ApEvent u_event, bool external_instance,
                                      Reservation read_only_reservation) 
       : PhysicalManager(ctx, mem, desc, constraint, 
                         encode_instance_did(did, external_instance), 
-                        owner_space, node, inst, instance_domain, 
+                        owner_space, node, inst, footprint, instance_domain, 
                         own, register_now), use_event(u_event),
                         read_only_mapping_reservation(read_only_reservation)
     //--------------------------------------------------------------------------
@@ -1026,7 +1035,7 @@ namespace Legion {
     //--------------------------------------------------------------------------
     InstanceManager::InstanceManager(const InstanceManager &rhs)
       : PhysicalManager(NULL, NULL, NULL, rhs.pointer_constraint, 0, 0, NULL,
-                    PhysicalInstance::NO_INST, NULL, false, false),
+                    PhysicalInstance::NO_INST, 0, NULL, false, false),
         use_event(ApEvent::NO_AP_EVENT)
     //--------------------------------------------------------------------------
     {
@@ -1080,18 +1089,6 @@ namespace Legion {
         LegionRuntime::Accessor::AccessorType::Generic> temp = 
                                                     instance.get_accessor();
       return temp.get_untyped_field_accessor(info.field_id, info.size);
-    }
-
-    //--------------------------------------------------------------------------
-    size_t InstanceManager::get_instance_size(void) const
-    //--------------------------------------------------------------------------
-    {
-#ifdef DEBUG_LEGION
-      assert(layout != NULL);
-#endif
-      size_t field_sizes = layout->get_total_field_size();
-      size_t volume = instance_domain->get_volume(); 
-      return (field_sizes * volume);
     }
 
     //--------------------------------------------------------------------------
@@ -1208,6 +1205,7 @@ namespace Legion {
         rez.serialize(owner_space);
         rez.serialize(memory_manager->memory);
         rez.serialize(instance);
+        rez.serialize(instance_footprint);
         rez.serialize(instance_domain->handle);
         rez.serialize(region_node->handle);
         rez.serialize(use_event);
@@ -1233,6 +1231,8 @@ namespace Legion {
       derez.deserialize(mem);
       PhysicalInstance inst;
       derez.deserialize(inst);
+      size_t inst_footprint;
+      derez.deserialize(inst_footprint);
       IndexSpace inst_handle;
       derez.deserialize(inst_handle);
       LogicalRegion handle;
@@ -1258,15 +1258,16 @@ namespace Legion {
                                             inst_domain, false/*owns*/, 
                                             target_node, layout,
                                             pointer_constraint,
-                                            false/*reg now*/, use_event,
+                                            false/*reg now*/, 
+                                            inst_footprint, use_event,
                                             external_instance, 
                                             read_only_reservation);
       else
         man = new InstanceManager(runtime->forest, did, owner_space,
                                   memory, inst, inst_domain, false/*owns*/,
                                   target_node, layout, pointer_constraint, 
-                                  false/*reg now*/, use_event,
-                                  external_instance,
+                                  false/*reg now*/, inst_footprint,
+                                  use_event, external_instance,
                                   read_only_reservation);
       // Hold-off doing the registration until construction is complete
       man->register_with_runtime(NULL/*no remote registration needed*/);
@@ -1285,9 +1286,9 @@ namespace Legion {
                                        IndexSpaceNode *inst_domain,bool own_dom,
                                        RegionNode *node, ReductionOpID red, 
                                        const ReductionOp *o, ApEvent u_event,
-                                       bool register_now)
-      : PhysicalManager(ctx, mem, desc, constraint, did, owner_space, 
-                        node, inst, inst_domain, own_dom, register_now),
+                                       size_t footprint, bool register_now)
+      : PhysicalManager(ctx, mem, desc, constraint, did, owner_space, node, 
+                        inst, footprint, inst_domain, own_dom, register_now),
         op(o), redop(red), use_event(u_event)
     //--------------------------------------------------------------------------
     {  
@@ -1332,6 +1333,7 @@ namespace Legion {
         rez.serialize(owner_space);
         rez.serialize(memory_manager->memory);
         rez.serialize(instance);
+        rez.serialize(instance_footprint);
         rez.serialize(instance_domain->handle);
         rez.serialize(redop);
         rez.serialize(region_node->handle);
@@ -1360,6 +1362,8 @@ namespace Legion {
       derez.deserialize(mem);
       PhysicalInstance inst;
       derez.deserialize(inst);
+      size_t inst_footprint;
+      derez.deserialize(inst_footprint);
       IndexSpace inst_handle;
       derez.deserialize(inst_handle);
       ReductionOpID redop;
@@ -1392,14 +1396,15 @@ namespace Legion {
                                                    pointer_constraint, 
                                                    inst_dom, false/*owner*/,
                                                    target_node, redop, op,
-                                                   use_event,
+                                                   use_event, inst_footprint,
                                                    false/*reg now*/);
         else
           man = new FoldReductionManager(runtime->forest, 
                                          did, owner_space, memory, inst,
                                          layout, pointer_constraint, inst_dom,
                                          false/*own*/, target_node, redop, op,
-                                         use_event, false/*reg now*/);
+                                         use_event, inst_footprint,
+                                         false/*reg now*/);
       }
       else
       {
@@ -1412,13 +1417,15 @@ namespace Legion {
                                                    inst_dom, false/*owner*/,
                                                    target_node, redop, op,
                                                    ptr_space, use_event,
+                                                   inst_footprint,
                                                    false/*reg now*/);
         else
           man = new ListReductionManager(runtime->forest, did, 
                                          owner_space, memory, inst,
                                          layout, pointer_constraint, inst_dom,
                                          false/*own*/, target_node, redop,op,
-                                         ptr_space, use_event,false/*reg now*/);
+                                         ptr_space, use_event, inst_footprint,
+                                         false/*reg now*/);
       }
       man->register_with_runtime(NULL/*no remote registration needed*/);
     }
@@ -1572,10 +1579,12 @@ namespace Legion {
                                                ReductionOpID red,
                                                const ReductionOp *o, 
                                                Domain dom, ApEvent use_event, 
+                                               size_t footprint,
                                                bool register_now)
       : ReductionManager(ctx, encode_reduction_list_did(did), owner_space, 
                          mem, inst, desc, cons, d, own_dom, node, 
-                         red, o, use_event, register_now), ptr_space(dom)
+                         red, o, use_event, register_now, footprint), 
+        ptr_space(dom)
     //--------------------------------------------------------------------------
     {
 #ifdef DEBUG_LEGION
@@ -1595,9 +1604,9 @@ namespace Legion {
 
     //--------------------------------------------------------------------------
     ListReductionManager::ListReductionManager(const ListReductionManager &rhs)
-      : ReductionManager(NULL, 0, 0, NULL,
-                         PhysicalInstance::NO_INST, NULL,rhs.pointer_constraint,
-                         NULL, false, NULL, 0, NULL,ApEvent::NO_AP_EVENT,false),
+      : ReductionManager(NULL, 0, 0, NULL, PhysicalInstance::NO_INST,
+                         NULL, rhs.pointer_constraint, NULL, false, NULL, 0, 
+                         NULL, ApEvent::NO_AP_EVENT, 0, false),
         ptr_space(Domain::NO_DOMAIN)
     //--------------------------------------------------------------------------
     {
@@ -1643,13 +1652,6 @@ namespace Legion {
       return instance.get_accessor();
     }
 
-    //--------------------------------------------------------------------------
-    size_t ListReductionManager::get_instance_size(void) const
-    //--------------------------------------------------------------------------
-    {
-      return ptr_space.get_volume();
-    }
-    
     //--------------------------------------------------------------------------
     bool ListReductionManager::is_foldable(void) const
     //--------------------------------------------------------------------------
@@ -1710,10 +1712,11 @@ namespace Legion {
                                                ReductionOpID red,
                                                const ReductionOp *o,
                                                ApEvent u_event,
+                                               size_t footprint,
                                                bool register_now)
       : ReductionManager(ctx, encode_reduction_fold_did(did), owner_space, 
                          mem, inst, desc, cons, d, own_dom, node, 
-                         red, o, u_event, register_now)
+                         red, o, u_event, footprint, register_now)
     //--------------------------------------------------------------------------
     {
       if (!is_owner())
@@ -1730,9 +1733,9 @@ namespace Legion {
 
     //--------------------------------------------------------------------------
     FoldReductionManager::FoldReductionManager(const FoldReductionManager &rhs)
-      : ReductionManager(NULL, 0, 0, NULL,
-                         PhysicalInstance::NO_INST, NULL,rhs.pointer_constraint,
-                         NULL, false, NULL, 0, NULL, ApEvent::NO_AP_EVENT,false)
+      : ReductionManager(NULL, 0, 0, NULL, PhysicalInstance::NO_INST,
+                         NULL, rhs.pointer_constraint, NULL, false, NULL, 0, 
+                         NULL, ApEvent::NO_AP_EVENT, 0, false)
     //--------------------------------------------------------------------------
     {
       // should never be called
@@ -1784,16 +1787,6 @@ namespace Legion {
       return temp.get_untyped_field_accessor(info.field_id, info.size);
     }
 
-    //--------------------------------------------------------------------------
-    size_t FoldReductionManager::get_instance_size(void) const
-    //--------------------------------------------------------------------------
-    {
-      unsigned field_count = FieldMask::pop_count(layout->allocated_fields);
-      size_t field_size = op->sizeof_rhs;
-      size_t volume = instance_domain->get_volume();
-      return (field_count * field_size * volume);
-    }
-    
     //--------------------------------------------------------------------------
     bool FoldReductionManager::is_foldable(void) const
     //--------------------------------------------------------------------------
@@ -1849,7 +1842,7 @@ namespace Legion {
                                    DistributedID did)
       : PhysicalManager(ctx, NULL/*memory*/, desc, constraint, did, 
                         ctx->runtime->address_space,
-                        NULL/*region*/, PhysicalInstance::NO_INST,
+                        NULL/*region*/, PhysicalInstance::NO_INST, 0,
                         NULL, false/*own domain*/, true/*reg now*/)
     //--------------------------------------------------------------------------
     {
@@ -1858,7 +1851,7 @@ namespace Legion {
     //--------------------------------------------------------------------------
     VirtualManager::VirtualManager(const VirtualManager &rhs)
       : PhysicalManager(NULL, NULL, NULL, rhs.pointer_constraint, 0, 0,
-                        NULL, PhysicalInstance::NO_INST, NULL, false, false)
+                        NULL, PhysicalInstance::NO_INST, 0, NULL, false, false)
     //--------------------------------------------------------------------------
     {
       // should never be called
@@ -1910,15 +1903,6 @@ namespace Legion {
     }
 
     //--------------------------------------------------------------------------
-    size_t VirtualManager::get_instance_size(void) const
-    //--------------------------------------------------------------------------
-    {
-      // should never be called
-      assert(false);
-      return 0;
-    }
-
-    //--------------------------------------------------------------------------
     void VirtualManager::send_manager(AddressSpaceID target)
     //--------------------------------------------------------------------------
     {
@@ -1947,20 +1931,8 @@ namespace Legion {
     }
 
     //--------------------------------------------------------------------------
-    size_t InstanceBuilder::compute_needed_size(RegionTreeForest *forest)
-    //--------------------------------------------------------------------------
-    {
-      if (!valid)
-        initialize(forest);
-      size_t total_field_bytes = 0;
-      for (unsigned idx = 0; idx < field_sizes.size(); idx++)
-        total_field_bytes += field_sizes[idx];
-      return (total_field_bytes * instance_domain->get_volume());
-    }
-
-    //--------------------------------------------------------------------------
     PhysicalManager* InstanceBuilder::create_physical_instance(
-                                                       RegionTreeForest *forest)
+                                    RegionTreeForest *forest, size_t *footprint)
     //--------------------------------------------------------------------------
     {
       if (!valid)
@@ -1972,6 +1944,8 @@ namespace Legion {
                         "Ignoring request to create instance in "
                         "memory " IDFMT " with no fields.",
                         memory_manager->memory.id);
+        if (footprint != NULL)
+          *footprint = 0;
         return NULL;
       }
       // Construct the realm layout each time since (realm will take ownership 
@@ -2015,6 +1989,9 @@ namespace Legion {
       // Wait for the profiling response
       if (!profiling_ready.has_triggered())
         profiling_ready.wait();
+      // Save the footprint size if we need to
+      if (footprint != NULL)
+        *footprint = instance_footprint;
       // If we couldn't make it then we are done
       if (!instance.exists())
         return NULL;
@@ -2078,7 +2055,8 @@ namespace Legion {
                                          instance, instance_domain, 
                                          own_domain, ancestor, layout, 
                                          pointer_constraint, 
-                                         true/*register now*/, ready,
+                                         true/*register now*/, 
+                                         instance_footprint, ready,
                                          false/*external instance*/,
                                          read_only_reservation);
             break;
@@ -2101,6 +2079,7 @@ namespace Legion {
                                               instance_domain, own_domain,
                                               ancestor, redop_id,
                                               reduction_op, filled_and_ready,
+                                              instance_footprint,
                                               true/*register now*/);
             // Before we can actually use this instance, we have to 
             // initialize it with a fill operation of the proper value
@@ -2161,6 +2140,7 @@ namespace Legion {
           Realm::ProfilingMeasurements::InstanceAllocResult>());
 #endif
       Realm::ProfilingMeasurements::InstanceAllocResult result;
+      result.footprint = 0;
       result.success = false; // Need this to avoid compiler warnings
 #ifdef DEBUG_LEGION
 #ifndef NDEBUG
@@ -2172,6 +2152,7 @@ namespace Legion {
 #ifdef DEBUG_LEGION
       assert(measured);
 #endif
+      instance_footprint = result.footprint;
       // If we failed then clear the instance name since it is not valid
       if (!result.success)
       {
@@ -2504,11 +2485,17 @@ namespace Legion {
         assert(field_set.size() > 0);
         assert(field_sizes.size() > 0);
 #endif
-        size_t gcd = field_sizes[0];
+        // Start with an initial upper bound on alignment of 32
+        size_t gcd = 32;
         for (unsigned idx = 0; idx < field_set.size(); idx++)
         {
-          while (field_sizes[idx] % gcd != 0)
-            gcd >>= 1;
+          size_t next = field_sizes[idx];
+          while (next != 0)
+          {
+            size_t mod = gcd % next;
+            gcd = next;
+            next = mod;
+          }
         }
 #ifdef DEBUG_LEGION
         assert(gcd != 0);
@@ -2519,9 +2506,10 @@ namespace Legion {
       else if (ord.ordering.back() == DIM_F)
       {
         // SOA - each field is its own group
-        // Use natural alignment by default
+        // Use a GCD(sizeof(T),32)
         for (unsigned idx = 0; idx < field_set.size(); idx++)
-          field_alignments[field_set[idx]] = field_sizes[idx];
+          field_alignments[field_set[idx]] = 
+            (field_sizes[idx] | 32) & ~((field_sizes[idx] | 32) - 1);
       }
       else // Have to be AOS or SOA for now
         assert(false);

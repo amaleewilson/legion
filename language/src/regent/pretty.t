@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University
+-- Copyright 2019 Stanford University
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -240,6 +240,28 @@ function pretty.annotations(cx, node)
   return text.Lines { lines = result }
 end
 
+function pretty.metadata(cx, node)
+  if node:is(ast.metadata.Loop) then
+    local result = terralib.newlist()
+    result:insertall({"-- parallelizable: ", tostring(node.parallelizable)})
+    if node.reductions and #node.reductions > 0 then
+      result:insert(", reductions: ")
+      result:insert(commas(node.reductions:map(function(reduction)
+        return tostring(reduction)
+      end)))
+    end
+    return text.Lines { lines = terralib.newlist({ join(result) }) }
+  elseif node:is(ast.metadata.Stat) then
+    return text.Lines {
+      lines = terralib.newlist({
+        join({"-- ", "atomic: ", tostring(node.atomic),
+              ", scalar: ", tostring(node.scalar)})}),
+    }
+  else
+    assert(false)
+  end
+end
+
 function pretty.expr_condition(cx, node)
   return join({
       join(node.conditions:map(tostring), true), "(", pretty.expr(cx, node.value), ")"})
@@ -266,6 +288,8 @@ function pretty.expr_constant(cx, node)
   local value = node.value
   if type(node.value) == "string" then
     value = "\"" .. value:gsub("\n", "\\n"):gsub("\t", "\\t"):gsub("\"", "\\\"") .. "\""
+  elseif type(value) == "cdata" and node.expr_type:isfloat() then
+    value = tonumber(value)
   end
   return text.Line { value = tostring(value) }
 end
@@ -282,9 +306,8 @@ function pretty.expr_function(cx, node)
     name = 'vector'
   elseif node.value == _G['tuple'] then
     name = 'tuple'
-  elseif regentlib.is_math_op(node.value) then
-    -- HACK: This information should be exported from std.t
-    name = regentlib.get_math_op_name(node.value, node.expr_type.returntype)
+  elseif regentlib.is_math_fn(node.value) then
+    name = node.value:printpretty()
   else
     name = tostring(node.value)
   end
@@ -351,11 +374,11 @@ function pretty.expr_raw_context(cx, node)
 end
 
 function pretty.expr_raw_fields(cx, node)
-  return join({"__fields(", pretty.expr(cx, node.region), ")"})
+  return join({"__fields(", pretty.expr_region_root(cx, node.region), ")"})
 end
 
 function pretty.expr_raw_physical(cx, node)
-  return join({"__physical(", pretty.expr(cx, node.region), ")"})
+  return join({"__physical(", pretty.expr_region_root(cx, node.region), ")"})
 end
 
 function pretty.expr_raw_runtime(cx, node)
@@ -419,6 +442,16 @@ function pretty.expr_partition_by_field(cx, node)
   return join({
       "partition(",
       commas({pretty.expr_region_root(cx, node.region),
+              pretty.expr(cx, node.colors)}),
+      ")"})
+end
+
+function pretty.expr_partition_by_restriction(cx, node)
+  return join({
+      "restrict(",
+      commas({pretty.expr(cx, node.region),
+              pretty.expr(cx, node.transform),
+              pretty.expr(cx, node.extent),
               pretty.expr(cx, node.colors)}),
       ")"})
 end
@@ -673,6 +706,29 @@ function pretty.expr_future_get_result(cx, node)
   return join({"__future_get_result(", pretty.expr(cx, node.value), ")"})
 end
 
+function pretty.expr_import_ispace(cx, node)
+  return join({
+      "__import_ispace(",
+      commas({tostring(node.expr_type.index_type), pretty.expr(cx, node.value)}),
+      ")"})
+end
+
+function pretty.expr_import_region(cx, node)
+  return join({
+      "__import_region(",
+      commas({pretty.expr(cx, node.ispace), tostring(node.expr_type:fspace()),
+              pretty.expr(cx, node.value), pretty.expr(cx, node.field_ids)}),
+      ")"})
+end
+
+function pretty.expr_import_partition(cx, node)
+  return join({
+      "__import_partition(",
+      commas({tostring(node.expr_type.disjointness), pretty.expr(cx, node.region),
+              pretty.expr(cx, node.colors), pretty.expr(cx, node.value)}),
+      ")"})
+end
+
 function pretty.expr(cx, node)
   if node:is(ast.typed.expr.ID) then
     return pretty.expr_id(cx, node)
@@ -745,6 +801,9 @@ function pretty.expr(cx, node)
 
   elseif node:is(ast.typed.expr.PartitionByField) then
     return pretty.expr_partition_by_field(cx, node)
+
+  elseif node:is(ast.typed.expr.PartitionByRestriction) then
+    return pretty.expr_partition_by_restriction(cx, node)
 
   elseif node:is(ast.typed.expr.Image) then
     return pretty.expr_image(cx, node)
@@ -851,6 +910,15 @@ function pretty.expr(cx, node)
   elseif node:is(ast.typed.expr.ParallelizerConstraint) then
     return pretty.expr_binary(cx, node)
 
+  elseif node:is(ast.typed.expr.ImportIspace) then
+    return pretty.expr_import_ispace(cx, node)
+
+  elseif node:is(ast.typed.expr.ImportRegion) then
+    return pretty.expr_import_region(cx, node)
+
+  elseif node:is(ast.typed.expr.ImportPartition) then
+    return pretty.expr_import_partition(cx, node)
+
   else
     assert(false, "unexpected node type " .. tostring(node.node_type))
   end
@@ -895,6 +963,9 @@ end
 function pretty.stat_for_num(cx, node)
   local result = terralib.newlist()
   result:insert(pretty.annotations(cx, node.annotations))
+  if std.config["pretty-verbose"] and node.metadata then
+    result:insert(pretty.metadata(cx, node.metadata))
+  end
   local values = pretty.expr_list(cx, node.values)
   local cx = cx:new_local_scope()
   cx:record_var(node, node.symbol)
@@ -925,6 +996,9 @@ end
 function pretty.stat_for_list(cx, node)
   local result = terralib.newlist()
   result:insert(pretty.annotations(cx, node.annotations))
+  if std.config["pretty-verbose"] and node.metadata then
+    result:insert(pretty.metadata(cx, node.metadata))
+  end
   local value = pretty.expr(cx, node.value)
   local cx = cx:new_local_scope()
   cx:record_var(node, node.symbol)
@@ -992,6 +1066,9 @@ function pretty.stat_index_launch_num(cx, node)
   if node.reduce_op then
     call = join({pretty.expr(cx, node.reduce_lhs), node.reduce_op .. "=", call}, true)
   end
+  node.preamble:map(function(stat)
+    result:insert(text.Indent { value = pretty.stat(cx, stat) })
+  end)
   result:insert(text.Indent { value = call })
   result:insert(text.Line { value = "end" })
   return text.Lines { lines = result }
@@ -1009,6 +1086,9 @@ function pretty.stat_index_launch_list(cx, node)
   if node.reduce_op then
     call = join({pretty.expr(cx, node.reduce_lhs), node.reduce_op .. "=", call}, true)
   end
+  node.preamble:map(function(stat)
+    result:insert(text.Indent { value = pretty.stat(cx, stat) })
+  end)
   result:insert(text.Indent { value = call })
   result:insert(text.Line { value = "end" })
   return text.Lines { lines = result }
@@ -1058,6 +1138,9 @@ end
 function pretty.stat_assignment(cx, node)
   local result = terralib.newlist()
   result:insert(pretty.annotations(cx, node.annotations))
+  if std.config["pretty-verbose"] and node.metadata then
+    result:insert(pretty.metadata(cx, node.metadata))
+  end
   result:insert(join({pretty.expr(cx, node.lhs), "=", pretty.expr(cx, node.rhs)}, true))
   return text.Lines { lines = result }
 end
@@ -1065,6 +1148,9 @@ end
 function pretty.stat_reduce(cx, node)
   local result = terralib.newlist()
   result:insert(pretty.annotations(cx, node.annotations))
+  if std.config["pretty-verbose"] and node.metadata then
+    result:insert(pretty.metadata(cx, node.metadata))
+  end
   result:insert(join({pretty.expr(cx, node.lhs), node.op .. "=", pretty.expr(cx, node.rhs)}, true))
   return text.Lines { lines = result }
 end
@@ -1318,6 +1404,7 @@ function pretty.task_config_options(cx, node)
       join({"leaf (", tostring(node.leaf), ")"}),
       join({"inner (", tostring(node.inner), ")"}),
       join({"idempotent (", tostring(node.idempotent), ")"}),
+      join({"replicable (", tostring(node.replicable), ")"}),
   })
 end
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2018 Stanford University
+# Copyright 2019 Stanford University
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ import numpy
 def init(R):
     # The fields of regions are numpy arrays, so you can call normal
     # numpy methods on them.
-    R.x.fill(0)
+    R.x.fill(123)
 
 # It's also possible to pass other arguments to a task, as long as
 # those arguments are pickleable. The second argument here is just a
@@ -43,7 +43,7 @@ def inc(R, step):
     return 42
 
 # Define the main task. This task is called first.
-@task(top_level=True)
+@task
 def main():
     # Create a 2D index space of size 4x4.
     I = legion.Ispace.create([4, 4])
@@ -58,6 +58,9 @@ def main():
     # Legion will automatically create an index space and field space.
     R2 = legion.Region.create([4, 4], {'x': legion.float64})
 
+    # Fill the field x of region R with an initial value.
+    legion.fill(R, 'x', 101)
+
     # Launch two tasks. The second task will depend on the first,
     # since they both write R.
     init(R)
@@ -70,3 +73,6 @@ def main():
     print("child task returned", child_result)
     print("child task future contains", child_result.get())
     print("main_task done")
+
+if __name__ == '__legion_main__':
+    main()

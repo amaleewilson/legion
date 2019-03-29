@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University, NVIDIA Corporation
+-- Copyright 2019 Stanford University, NVIDIA Corporation
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -59,6 +59,8 @@ function parser.annotation_name(p, required)
     return "cuda", values
   elseif p:nextif("__external") then
     return "external"
+  elseif p:nextif("__idempotent") then
+    return "idempotent"
   elseif p:nextif("__inline") then
     return "inline"
   elseif p:nextif("__inner") then
@@ -71,6 +73,8 @@ function parser.annotation_name(p, required)
     return "optimize"
   elseif p:nextif("__parallel") then
     return "parallel"
+  elseif p:nextif("__replicable") then
+    return "replicable"
   elseif p:nextif("__spmd") then
     return "spmd"
   elseif p:nextif("__trace") then
@@ -526,7 +530,7 @@ function parser.expr_prefix(p)
 
   elseif p:nextif("__fields") then
     p:expect("(")
-    local region = p:expr()
+    local region = p:expr_region_root()
     p:expect(")")
     return ast.unspecialized.expr.RawFields {
       region = region,
@@ -536,7 +540,7 @@ function parser.expr_prefix(p)
 
   elseif p:nextif("__physical") then
     p:expect("(")
-    local region = p:expr()
+    local region = p:expr_region_root()
     p:expect(")")
     return ast.unspecialized.expr.RawPhysical {
       region = region,
@@ -752,6 +756,25 @@ function parser.expr_prefix(p)
       parent = parent,
       partition = partition,
       region = region,
+      annotations = ast.default_annotations(),
+      span = ast.span(start, p),
+    }
+
+  elseif p:nextif("restrict") then
+    p:expect("(")
+    local region = p:expr()
+    p:expect(",")
+    local transform = p:expr()
+    p:expect(",")
+    local extent = p:expr()
+    p:expect(",")
+    local colors = p:expr()
+    p:expect(")")
+    return ast.unspecialized.expr.PartitionByRestriction {
+      region = region,
+      transform = transform,
+      extent = extent,
+      colors = colors,
       annotations = ast.default_annotations(),
       span = ast.span(start, p),
     }
@@ -1120,6 +1143,60 @@ function parser.expr_prefix(p)
     return ast.unspecialized.expr.WithScratchFields {
       region = region,
       field_ids = field_ids,
+      annotations = ast.default_annotations(),
+      span = ast.span(start, p),
+    }
+
+  elseif p:nextif("__import_ispace") then
+    local start = ast.save(p)
+    p:expect("(")
+    local index_type_expr = p:luaexpr()
+    p:expect(",")
+    local value = p:expr()
+    p:expect(")")
+    return ast.unspecialized.expr.ImportIspace {
+      index_type_expr = index_type_expr,
+      value = value,
+      annotations = ast.default_annotations(),
+      span = ast.span(start, p),
+    }
+
+  elseif p:nextif("__import_region") then
+    local start = ast.save(p)
+    p:expect("(")
+    local ispace = p:expr()
+    p:expect(",")
+    local fspace_type_expr = p:luaexpr()
+    p:expect(",")
+    local value = p:expr()
+    p:expect(",")
+    local field_ids = p:expr()
+    p:expect(")")
+    return ast.unspecialized.expr.ImportRegion {
+      ispace = ispace,
+      fspace_type_expr = fspace_type_expr,
+      value = value,
+      field_ids = field_ids,
+      annotations = ast.default_annotations(),
+      span = ast.span(start, p),
+    }
+
+  elseif p:nextif("__import_partition") then
+    local start = ast.save(p)
+    p:expect("(")
+    local disjointness = p:disjointness_kind()
+    p:expect(",")
+    local region = p:expr()
+    p:expect(",")
+    local colors = p:expr()
+    p:expect(",")
+    local value = p:expr()
+    p:expect(")")
+    return ast.unspecialized.expr.ImportPartition {
+      disjointness = disjointness,
+      region = region,
+      colors = colors,
+      value = value,
       annotations = ast.default_annotations(),
       span = ast.span(start, p),
     }

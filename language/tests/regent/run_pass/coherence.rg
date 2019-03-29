@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University
+-- Copyright 2019 Stanford University
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ end
 
 task k() : int
   var r = region(ispace(ptr, 5), a)
+  fill(r.{b, c}, 0)
   must_epoch
     g(r)
     h(r)

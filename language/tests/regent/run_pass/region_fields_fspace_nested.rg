@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University
+-- Copyright 2019 Stanford University
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -59,6 +59,9 @@ end
 task main()
   var rn = region(ispace(ptr, 4), Node)
   var rw = region(ispace(ptr, 4), Wire(rn))
+  fill(rn.{capacitance, leakage, charge, voltage}, 0.0)
+  fill(rw.{inductance, resistance, capacitance, current.{_0, _1, _2}, voltage.{_1, _2}}, 0.0)
+  fill(rw.{in_node, out_node}, dynamic_cast(ptr(Node, rn), 0))
   calculate_new_currents(rn, rw)
 end
 regentlib.start(main)

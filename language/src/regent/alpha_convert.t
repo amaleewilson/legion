@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University
+-- Copyright 2019 Stanford University
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -239,6 +239,7 @@ local node_alpha_conversion = {
   [ast.specialized.expr.Partition]                  = pass_through,
   [ast.specialized.expr.PartitionEqual]             = pass_through,
   [ast.specialized.expr.PartitionByField]           = pass_through,
+  [ast.specialized.expr.PartitionByRestriction]     = pass_through,
   [ast.specialized.expr.Image]                      = pass_through,
   [ast.specialized.expr.Preimage]                   = pass_through,
   [ast.specialized.expr.CrossProduct]               = pass_through,
@@ -272,6 +273,9 @@ local node_alpha_conversion = {
   [ast.specialized.expr.Unary]                      = pass_through,
   [ast.specialized.expr.Binary]                     = pass_through,
   [ast.specialized.expr.Deref]                      = pass_through,
+  [ast.specialized.expr.ImportIspace]               = pass_through,
+  [ast.specialized.expr.ImportRegion]               = update_fspace_type,
+  [ast.specialized.expr.ImportPartition]            = pass_through,
 
   [ast.specialized.expr.LuaTable] = function(cx, node, continuation)
     report.error(node, "unable to specialize value of type table")
@@ -309,25 +313,47 @@ local node_alpha_conversion = {
   [ast.specialized.stat.ParallelPrefix]  = pass_through,
 
   [ast.specialized.stat.Var] = function(cx, node, continuation)
-    local symbols = terralib.newlist()
-    for i, symbol in ipairs(node.symbols) do
-      if node.values[i] and node.values[i]:is(ast.specialized.expr.Region) then
-        symbols[i] = cx:replace_variable(node, symbol)
+    -- Unfortunately, we need to keep this code path because the specialization
+    -- performs an alpha conversion for quote contents that are not yet normalized.
+    if terralib.islist(node.symbols) then
+      local symbols = terralib.newlist()
+      for i, symbol in ipairs(node.symbols) do
+        if node.values[i] and node.values[i]:is(ast.specialized.expr.Region) then
+          symbols[i] = cx:replace_variable(node, symbol)
+        end
       end
+
+      local values = continuation(node.values)
+
+      for i, symbol in ipairs(node.symbols) do
+        if not symbols[i] then
+          symbols[i] = cx:replace_variable(node, symbol)
+        end
+      end
+
+      return node {
+        symbols = symbols,
+        values = values,
+      }
+    else
+      assert(std.is_symbol(node.symbols))
+      local symbol = false
+      if node.values and node.values:is(ast.specialized.expr.Region) then
+        symbol = cx:replace_variable(node, node.symbols)
+      end
+
+      local value = node.values and continuation(node.values) or false
+
+      if not symbol then
+        symbol = cx:replace_variable(node, node.symbols)
+      end
+
+      return node {
+        symbols = symbol,
+        values = value,
+      }
     end
 
-    local values = continuation(node.values)
-
-    for i, symbol in ipairs(node.symbols) do
-      if not symbols[i] then
-        symbols[i] = cx:replace_variable(node, symbol)
-      end
-    end
-
-    return node {
-      symbols = symbols,
-      values = values,
-    }
   end,
 
   [ast.specialized.stat.VarUnpack] = function(cx, node, continuation)

@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University
+-- Copyright 2019 Stanford University
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -147,10 +147,11 @@ local get_ghost_rect = {
     var diff_rect : std.rect1d
     diff_rect.lo.__ptr = 0
     diff_rect.hi.__ptr = -1
-    [clear_unnecessary_polarity(root, r, polarity)]
+    var polarity_copy = polarity
+    [clear_unnecessary_polarity(root, r, polarity_copy)]
     -- If the ghost region is not necessary at all for this stencil,
     -- make a dummy region with only one element.
-    if polarity == [std.int1d:zero()] then return diff_rect end
+    if polarity_copy == [std.int1d:zero()] then return diff_rect end
     [get_ghost_rect_body(diff_rect, sz, root, r, s, polarity)]
     [bounds_checks(diff_rect)]
     return diff_rect
@@ -160,11 +161,12 @@ local get_ghost_rect = {
     var diff_rect : std.rect2d
     diff_rect.lo.__ptr.x, diff_rect.lo.__ptr.y = 0, 0
     diff_rect.hi.__ptr.x, diff_rect.hi.__ptr.y = -1, -1
-    [clear_unnecessary_polarity(root, r, polarity, "x")]
-    [clear_unnecessary_polarity(root, r, polarity, "y")]
+    var polarity_copy = polarity
+    [clear_unnecessary_polarity(root, r, polarity_copy, "x")]
+    [clear_unnecessary_polarity(root, r, polarity_copy, "y")]
     -- If the ghost region is not necessary at all for this stencil,
     -- make a dummy region with only one element.
-    if polarity == [std.int2d:zero()] then return diff_rect end
+    if polarity_copy == [std.int2d:zero()] then return diff_rect end
     [get_ghost_rect_body(diff_rect, sz, root, r, s, polarity, "x")]
     [get_ghost_rect_body(diff_rect, sz, root, r, s, polarity, "y")]
     [bounds_checks(diff_rect)]
@@ -175,12 +177,13 @@ local get_ghost_rect = {
     var diff_rect : std.rect3d
     diff_rect.lo.__ptr.x, diff_rect.lo.__ptr.y, diff_rect.lo.__ptr.z = 0, 0, 0
     diff_rect.hi.__ptr.x, diff_rect.hi.__ptr.y, diff_rect.hi.__ptr.z = -1, -1, -1
-    [clear_unnecessary_polarity(root, r, polarity, "x")]
-    [clear_unnecessary_polarity(root, r, polarity, "y")]
-    [clear_unnecessary_polarity(root, r, polarity, "z")]
+    var polarity_copy = polarity
+    [clear_unnecessary_polarity(root, r, polarity_copy, "x")]
+    [clear_unnecessary_polarity(root, r, polarity_copy, "y")]
+    [clear_unnecessary_polarity(root, r, polarity_copy, "z")]
     -- If the ghost region is not necessary at all for this stencil,
     -- make a dummy region with only one element.
-    if polarity == [std.int3d:zero()] then return diff_rect end
+    if polarity_copy == [std.int3d:zero()] then return diff_rect end
     [get_ghost_rect_body(diff_rect, sz, root, r, s, polarity, "x")]
     [get_ghost_rect_body(diff_rect, sz, root, r, s, polarity, "y")]
     [get_ghost_rect_body(diff_rect, sz, root, r, s, polarity, "z")]
@@ -1266,7 +1269,9 @@ end
 
 local terra factorize(dop : int, factors : &&int, num_factors : &int)
   @num_factors = 0
-  @factors = [&int](std.c.malloc([sizeof(int)] * dop))
+  var size = [sizeof(int)] * dop
+  @factors = [&int](std.c.malloc(size))
+  std.assert(size == 0 or @factors ~= nil, "malloc failed in factorize")
   while dop > 1 do
     var factor = 1
     while factor <= dop do
@@ -1350,7 +1355,8 @@ local function create_equal_partition(caller_cx, region_symbol, pparam)
         compute_extent[index_type], terralib.newlist {
           ast_util.mk_expr_constant(factors[1], int),
           ast_util.mk_expr_bounds_access(ast_util.mk_expr_id(region_symbol))
-        })
+        },
+        true)
       color_type = index_type
     end
   else
@@ -1395,7 +1401,8 @@ local function create_equal_partition(caller_cx, region_symbol, pparam)
         std.assert, terralib.newlist {
           ast_util.mk_expr_binary("==", bounds, my_bounds),
           ast_util.mk_expr_constant("color space bounds mismatch", rawstring)
-        })))
+        },
+        true)))
   end
 
   return partition_symbol, stats
@@ -1437,7 +1444,7 @@ local function create_image_partition(caller_cx, pr, pp, stencil, pparam)
     base_name .. "__coloring")
   local coloring_expr = ast_util.mk_expr_id(coloring_symbol)
   stats:insert(ast_util.mk_stat_var(coloring_symbol, nil,
-                           ast_util.mk_expr_call(c.legion_domain_point_coloring_create)))
+                           ast_util.mk_expr_call(c.legion_domain_point_coloring_create, nil, true)))
 
   local loop_body = terralib.newlist()
   local pr_expr = ast_util.mk_expr_id(pr)
@@ -1468,7 +1475,8 @@ local function create_image_partition(caller_cx, pr, pp, stencil, pparam)
                  terralib.newlist { pr_bounds_expr,
                                     sr_bounds_expr,
                                     ast_util.mk_expr_id(tmp_var),
-                                    polarity_expr })
+                                    polarity_expr },
+                 true)
   --loop_body:insert(ast_util.mk_stat_block(ast_util.mk_block(terralib.newlist {
   --  ast_util.mk_stat_expr(ast_util.mk_expr_call(print_rect[pr_rect_type],
   --                            pr_bounds_expr)),
@@ -1485,7 +1493,8 @@ local function create_image_partition(caller_cx, pr, pp, stencil, pparam)
     ast_util.mk_expr_call(c.legion_domain_point_coloring_color_domain,
                  terralib.newlist { coloring_expr,
                                     color_expr,
-                                    ghost_rect_expr })))
+                                    ghost_rect_expr },
+                 true)))
 
   stats:insert(
     ast_util.mk_stat_for_list(color_symbol, color_space_expr, ast_util.mk_block(loop_body)))
@@ -1494,7 +1503,8 @@ local function create_image_partition(caller_cx, pr, pp, stencil, pparam)
                 ast_util.mk_expr_partition(gp_type, color_space_expr, coloring_expr)))
 
   stats:insert(ast_util.mk_stat_expr(ast_util.mk_expr_call(c.legion_domain_point_coloring_destroy,
-                                         coloring_expr)))
+                                         coloring_expr,
+                                         true)))
 
   if std.config["bounds-checks"] then
     local bounds = ast_util.mk_expr_bounds_access(color_space_symbol)
@@ -1504,7 +1514,8 @@ local function create_image_partition(caller_cx, pr, pp, stencil, pparam)
         std.assert, terralib.newlist {
           ast_util.mk_expr_binary("==", bounds, my_bounds),
           ast_util.mk_expr_constant("color space bounds mismatch", rawstring)
-        })))
+        },
+        true)))
   end
 
   caller_cx:update_constraint(sr_expr)
@@ -1543,7 +1554,7 @@ local function create_subset_partition(caller_cx, sr, pp, pparam)
   local coloring_symbol = get_new_tmp_var(c.legion_domain_point_coloring_t, base_name .. "__coloring")
   local coloring_expr = ast_util.mk_expr_id(coloring_symbol)
   stats:insert(ast_util.mk_stat_var(coloring_symbol, nil,
-                           ast_util.mk_expr_call(c.legion_domain_point_coloring_create)))
+                           ast_util.mk_expr_call(c.legion_domain_point_coloring_create, nil, true)))
 
   local loop_body = terralib.newlist()
   local sr_expr = ast_util.mk_expr_id(sr)
@@ -1555,7 +1566,8 @@ local function create_subset_partition(caller_cx, sr, pp, pparam)
   local intersect_expr =
     ast_util.mk_expr_call(get_intersection(sr_rect_type),
                  terralib.newlist { sr_bounds_expr,
-                                    srpp_bounds_expr })
+                                    srpp_bounds_expr },
+                 true)
   --loop_body:insert(ast_util.mk_stat_expr(ast_util.mk_expr_call(print_rect[sr_rect_type],
   --                                           sr_bounds_expr)))
   --loop_body:insert(ast_util.mk_stat_expr(ast_util.mk_expr_call(print_rect[sr_rect_type],
@@ -1568,7 +1580,8 @@ local function create_subset_partition(caller_cx, sr, pp, pparam)
     ast_util.mk_expr_call(c.legion_domain_point_coloring_color_domain,
                  terralib.newlist { coloring_expr,
                                     color_expr,
-                                    intersect_expr })))
+                                    intersect_expr },
+                 true)))
 
   stats:insert(
     ast_util.mk_stat_for_list(color_symbol, color_space_expr, ast_util.mk_block(loop_body)))
@@ -1577,7 +1590,8 @@ local function create_subset_partition(caller_cx, sr, pp, pparam)
                 ast_util.mk_expr_partition(sp_type, color_space_expr, coloring_expr)))
 
   stats:insert(ast_util.mk_stat_expr(ast_util.mk_expr_call(c.legion_domain_point_coloring_destroy,
-                                         coloring_expr)))
+                                         coloring_expr,
+                                         true)))
 
   if std.config["bounds-checks"] then
     local bounds = ast_util.mk_expr_bounds_access(color_space_symbol)
@@ -1587,7 +1601,8 @@ local function create_subset_partition(caller_cx, sr, pp, pparam)
         std.assert, terralib.newlist {
           ast_util.mk_expr_binary("==", bounds, my_bounds),
           ast_util.mk_expr_constant("color space bounds mismatch", rawstring)
-        })))
+        },
+        true)))
   end
 
   caller_cx:add_primary_partition(sr, pparam, sp_symbol)
@@ -2189,7 +2204,8 @@ local function transform_task_launches(parallelizable, caller_cx, call_stats)
                 std.assert, terralib.newlist {
                   ast_util.mk_expr_binary("==", bounds, my_bounds),
                   ast_util.mk_expr_constant("color space bounds mismatch", rawstring)
-                })))
+                },
+                true)))
           end
         end
       end
@@ -2285,10 +2301,12 @@ local function rewrite_metadata_access(task_cx)
   return function(node, continuation)
     if node:is(ast.typed.expr.FieldAccess) and
        node.field_name == "bounds" and
-       std.is_region(std.as_read(node.value.expr_type)) then
-      assert(node.value:is(ast.typed.expr.ID))
+       node.value:is(ast.typed.expr.FieldAccess) and 
+       node.value.field_name == "ispace" and
+       std.is_region(std.as_read(node.value.value.expr_type)) then
+      assert(node.value.value:is(ast.typed.expr.ID))
       local metadata_params =
-        task_cx:find_metadata_parameters(node.value.value)
+        task_cx:find_metadata_parameters(node.value.value.value)
       if metadata_params then
         return ast_util.mk_expr_id(metadata_params.bounds)
       else
@@ -2424,7 +2442,12 @@ end
 function normalize_accesses.expr(normalizer_cx)
   return function(node, continuation)
     if node:is(ast.typed.expr.ID) then
-      return normalizer_cx:find_decl(node.value) or node
+      local decl = normalizer_cx:find_decl(node.value)
+      if decl ~= nil then
+        return continuation(decl)
+      else
+        return node
+      end
     else
       return continuation(node, true)
     end
@@ -2551,7 +2574,8 @@ function normalize_accesses.stat(task_cx, normalizer_cx)
     if node:is(ast.typed.stat.Var) then
       local symbol_type = node.symbol:gettype()
       if std.is_index_type(symbol_type) or
-         std.is_bounded_type(symbol_type) then
+         std.is_bounded_type(symbol_type) or
+         std.is_rect_type(symbol_type) then
         -- TODO: variables can be assigned later
         assert(node.value)
         normalizer_cx:add_decl(node.symbol, node.value)
@@ -2640,6 +2664,8 @@ function reduction_analysis.top_task(task_cx, node)
   assert(reduction_op ~= nil)
   -- TODO: convert reductions with - or / into fold-and-reduces
   assert(reduction_op ~= "-" and reduction_op ~= "/")
+  assert(node.metadata.reduction == reduction_var)
+  assert(node.metadata.op == reduction_op)
   task_cx.reduction_info = {
     op = reduction_op,
     symbol = reduction_var,
@@ -3126,7 +3152,8 @@ function parallelize_tasks.stat(task_cx)
                          terralib.newlist {
                            ast_util.mk_expr_constant(false, bool),
                            ast_util.mk_expr_constant("unreachable", rawstring)
-                         })),
+                         },
+                         true)),
           })
         end
         stats:insert(case_split_if)
@@ -3158,7 +3185,8 @@ function parallelize_tasks.top_task_body(task_cx, node)
         stats:insert(ast_util.mk_stat_var(red_var, stat.type))
 
         local cond = ast_util.mk_expr_call(is_zero,
-          ast_util.mk_expr_id(task_cx:get_task_point_symbol()))
+          ast_util.mk_expr_id(task_cx:get_task_point_symbol()),
+          true)
         local if_stat = ast_util.mk_stat_if(
           cond, ast_util.mk_stat_assignment(red_var_expr, stat.value))
         local init =
@@ -3296,8 +3324,10 @@ function parallelize_tasks.top_task(global_cx, node)
       leaf = false,
       inner = false,
       idempotent = false,
+      replicable = false,
     },
     region_divergence = false,
+    metadata = false,
     prototype = task,
     annotations = node.annotations {
       parallel = ast.annotation.Forbid { value = false },
@@ -3317,6 +3347,7 @@ function parallelize_tasks.entry(node)
   if node:is(ast.typed.top.Task) then
     if global_context[node.prototype] then return node end
     if node.annotations.parallel:is(ast.annotation.Demand) then
+      assert(node.metadata)
       check_parallelizable.top_task(node)
       local task_name = node.name
       local new_task_code, cx = parallelize_tasks.top_task(global_context, node)

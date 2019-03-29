@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -226,12 +226,12 @@ namespace Legion {
       virtual UniqueID get_unique_id(void) const;
       virtual unsigned get_context_index(void) const;
       virtual void set_context_index(unsigned index);
-      virtual int get_depth(void) const;
       virtual const char* get_task_name(void) const;
     public:
       bool is_remote(void) const;
       inline bool is_stolen(void) const { return (steal_count > 0); }
       inline bool is_origin_mapped(void) const { return map_origin; }
+      int get_depth(void) const;
     public:
       void set_current_proc(Processor current);
       inline void set_origin_mapped(bool origin) { map_origin = origin; }
@@ -454,7 +454,6 @@ namespace Legion {
       // the task has had its variant selected
       bool is_leaf(void) const;
       bool is_inner(void) const;
-      bool has_virtual_instances(void) const;
       bool is_created_region(unsigned index) const;
       void update_no_access_regions(void);
     public:
@@ -552,13 +551,12 @@ namespace Legion {
       bool                                  perform_postmap;
     protected:
       // Events that must be triggered before we are done mapping
-      std::set<RtEvent> map_applied_conditions;
+      std::set<RtEvent>                     map_applied_conditions;
     protected:
       TaskContext*                          execution_context;
     protected:
       mutable bool leaf_cached, is_leaf_result;
       mutable bool inner_cached, is_inner_result;
-      mutable bool has_virtual_instances_cached, has_virtual_instances_result;
     protected:
       // Profiling information
       std::vector<ProfilingMeasurementID> task_profiling_requests;
@@ -649,12 +647,15 @@ namespace Legion {
       IndexSpace launch_space; // global set of points
       IndexSpace internal_space; // local set of points
       ReductionOpID redop;
+      bool deterministic_redop;
       const ReductionOp *reduction_op;
       FutureMap point_arguments;
       // For handling reductions of types with serdez methods
       const SerdezRedopFns *serdez_redop_fns;
       size_t reduction_state_size;
       void *reduction_state; 
+      // Temporary storage for future results
+      std::map<DomainPoint,std::pair<void*,size_t> > temporary_futures;
     protected:
       bool children_complete_invoked;
       bool children_commit_invoked;
@@ -906,6 +907,7 @@ namespace Legion {
                              const IndexTaskLauncher &launcher,
                              IndexSpace launch_space,
                              ReductionOpID redop,
+                             bool deterministic,
                              bool check_privileges,
                              bool track = true);
       void initialize_predicate(const Future &pred_future,
@@ -1145,9 +1147,7 @@ namespace Legion {
       bool origin_mapped;
       bool need_versioning_analysis;
       UniqueID remote_owner_uid;
-    protected:
-      // Temporary storage for future results
-      std::map<DomainPoint,std::pair<void*,size_t> > temporary_futures;
+    protected: 
       std::map<PhysicalManager*,std::pair<unsigned,bool> > acquired_instances;
       std::set<RtEvent> map_applied_conditions;
       std::set<ApEvent> restrict_postconditions;

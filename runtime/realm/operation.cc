@@ -1,4 +1,4 @@
-/* Copyright 2018 Stanford University, NVIDIA Corporation
+/* Copyright 2019 Stanford University, NVIDIA Corporation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -493,7 +493,7 @@ namespace Realm {
 
     if(!found) {
       // not found - who owns this event?
-      int owner = ID(finish_event).event.creator_node;
+      int owner = ID(finish_event).event_creator_node();
 
       if(owner == my_node_id) {
 	// if we're the owner, it's probably for an event that already completed successfully,
@@ -506,8 +506,8 @@ namespace Realm {
     }
 
     if(remote_node != -1) {
-      // TODO: active message
-      assert(false);
+      log_optable.info() << "event " << finish_event << " - requesting remote cancellation on node " << remote_node;
+      CancelOperationMessage::send_request(remote_node, finish_event, reason_data, reason_size);
     }
 
     if(local_op) {
@@ -552,7 +552,7 @@ namespace Realm {
 
     if(!found) {
       // not found - who owns this event?
-      int owner = ID(finish_event).event.creator_node;
+      int owner = ID(finish_event).event_creator_node();
 
       if(owner == my_node_id) {
 	// if we're the owner, it's probably for an event that already completed successfully,
@@ -609,6 +609,32 @@ namespace Realm {
 
     os << "}\n";
 #endif
+  }
+
+
+  ////////////////////////////////////////////////////////////////////////
+  //
+  // struct CancelOperationMessage
+  //
+
+  /*static*/ void CancelOperationMessage::handle_request(RequestArgs args,
+							 const void *data,
+							 size_t datalen)
+  {
+    get_runtime()->optable.request_cancellation(args.finish_event,
+						data, datalen);
+  }
+
+  /*static*/ void CancelOperationMessage::send_request(NodeID target,
+						       Event finish_event,
+						       const void *reason_data,
+						       size_t reason_size)
+  {
+    RequestArgs args;
+
+    args.finish_event = finish_event;
+
+    Message::request(target, args, reason_data, reason_size, PAYLOAD_COPY);
   }
 
 

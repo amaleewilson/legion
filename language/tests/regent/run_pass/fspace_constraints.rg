@@ -1,4 +1,4 @@
--- Copyright 2018 Stanford University
+-- Copyright 2019 Stanford University
 --
 -- Licensed under the Apache License, Version 2.0 (the "License");
 -- you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ where
 end
 
 task f(rtop : region(tree(rtop)), t : ptr(tree(rtop), rtop))
-where reads(rtop) do
+where reads writes(rtop) do
 end
 
 task main()

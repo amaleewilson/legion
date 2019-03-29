@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2018 Stanford University
+# Copyright 2019 Stanford University
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,10 +25,14 @@ def hi(i):
     print("hello %s" % i)
     return i
 
-@task(top_level=True)
+@task
 def main():
     futures = []
     for i in legion.IndexLaunch([10]):
         futures.append(hi(i))
-    for future in futures:
+    for i, future in enumerate(futures):
         print("got %s" % future.get())
+        assert future.get() == i
+
+if __name__ == '__legion_main__':
+    main()
