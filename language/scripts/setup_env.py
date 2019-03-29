@@ -184,7 +184,8 @@ def build_regent(root_dir, use_cmake, cmake_exe,
 
     subprocess.check_call(
         [os.path.join(root_dir, 'install.py'),
-         '--with-terra', terra_dir,
+         '--cuda',
+          '--with-terra', terra_dir,
          '--rdir', 'auto',
          '-j', str(thread_count),
         ] + (['--cmake', '--with-cmake', cmake_exe]
