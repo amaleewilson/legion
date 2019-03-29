@@ -2,10 +2,15 @@
 #include <stdio.h>
 #include <string>
 #include "terra.h"
+#include <cuda.h>
 #include <dlfcn.h>
 #include <stdlib.h>
 
-int main(int argc, char ** argv) { 
+
+void data_transform(CUdeviceptr d_A, CUdeviceptr d_B, std::string src_layout, std::string dst_layout, int size, int copy_per_thread, int fid_count){
+
+
+
     void *handle;
     void (*cosine)(float*, float*);
     char *error;
@@ -15,7 +20,9 @@ int main(int argc, char ** argv) {
     //initialize the terra state in lua
     terra_init(Lu);
 
-    std::string fid_count = "4";
+    std::string fid_cnt = std::to_string(fid_count);
+    std::string sz = std::to_string(size);
+    std::string cpt = std::to_string(copy_per_thread);
 
 
 std::string s = "\n\
@@ -26,8 +33,8 @@ std::string s = "\n\
   ]]\n\
   \n\
   import \"data_transfer/transfer_lang\"\n\
-  local kf = layout_transform_copy src aos, dst soa, size 16, copy_size_per_thread 2, fid_count " + fid_count + " done\n\
-  local R,L = terralib.cudacompile({ kf = kf },true,nil,false)\n\
+  local kf = layout_transform_copy src " + src_layout + ", dst " + dst_layout + ", size " + sz+ ", copy_size_per_thread " + cpt + ", fid_count " + fid_cnt + " done\n\
+  local R,L = terralib.cudacompile({ kf = kf },nil,nil,false)\n\
   \n\
   terra run_main(A : &float, B : &float)\n\
     -- I do not understand what this L is doing, but it seems necessary.\n\
@@ -42,7 +49,7 @@ std::string s = "\n\
   local path = \"/lib64\"\n\
   path = terralib.cudahome..path\n\
   local args = {\"-L\"..path, \"-Wl,-rpath,\"..path, \"-lcuda\", \"-lcudart\"}\n\
-  terralib.saveobj(\"cudaoldc.so\",{  run_main = run_main },args)";
+  terralib.saveobj(\"kernel_gen.so\",{  run_main = run_main },args)";
 
     const char *st = s.c_str();
 
@@ -52,31 +59,25 @@ std::string s = "\n\
 
     printf("\nTEST\n");
 
-    float *in = (float*)malloc(sizeof(float)*64);
-    float *out = (float*)malloc(sizeof(float)*64); 
-
-    for (int i = 0; i < 64; ++i){
-      in[i] = i;
-      out[i] = 0;
-    }
- 
-  printf("input data\n"); 
-   for (int i = 0; i < 64; ++i){
-    printf("in %f\n", in[i]);
-
-  }
-
-    float *d_in, *d_out;
-
-    cudaMalloc((void **)&d_in, sizeof(float)*64);
-    cudaMalloc((void **)&d_out, sizeof(float)*64);
-
-    cudaMemcpy(d_in,in, sizeof(float)*64, cudaMemcpyHostToDevice);
+//     double *in = (double*)malloc(sizeof(double)*64);
+//     double *out = (double*)malloc(sizeof(double)*64); 
+// 
+//     for (int i = 0; i < 64; ++i){
+//       in[i] = i;
+//       out[i] = 0;
+//     }
+// 
+//     double *d_in, *d_out;
+// 
+//     cudaMalloc((void **)&d_in, sizeof(double)*64);
+//     cudaMalloc((void **)&d_out, sizeof(double)*64);
+// 
+//     cudaMemcpy(d_in,in, sizeof(double)*64, cudaMemcpyHostToDevice);
 
 
 
    //handle = dlopen("/home/amaleewilson/forked_legion/legion/language/src/cuda_hello.so", RTLD_LAZY);
-   handle = dlopen("/home/amaleewilson/forked_legion/legion/language/src/cudaoldc.so", RTLD_LAZY);
+   handle = dlopen("/home/amaleewilson/forked_legion/legion/language/src/kernel_gen.so", RTLD_LAZY);
 
     if (!handle) {
         fprintf(stderr, "%s\n", dlerror());
@@ -84,13 +85,6 @@ std::string s = "\n\
     }
 
    dlerror();    /* Clear any existing error */
-
-   /* Writing: cosine = (float (*)(float)) dlsym(handle, "cos");
-       would seem more natural, but the C99 standard leaves
-       casting from "void *" to a function pointer undefined.
-       The assignment used below is the POSIX.1-2003 (Technical
-       Corrigendum 1) workaround; see the Rationale for the
-       POSIX specification of dlsym(). */
 
 //   *(void **) (&cosine) = dlsym(handle, "terra_hello");
     void (*run_main)(float*, float*);
@@ -105,16 +99,17 @@ std::string s = "\n\
    //printf("%f\n", (*cosine)(d_in, d_out));
    //(*cosine)(d_in, d_out);
   //(*cosine)(in, out);
-    (*run_main)(d_in, d_out);
+    //(*run_main)(d_in, d_out);
+    
+    (*run_main)((float *)d_A, (float *)d_B);
 
-  cudaMemcpy(out, d_out, sizeof(float)*64, cudaMemcpyDeviceToHost);
+//  cudaMemcpy(out, d_out, sizeof(double)*64, cudaMemcpyDeviceToHost);
 
-  printf("\n\noutput data\n"); 
-  
-   for (int i = 0; i < 64; ++i){
-    printf("out %f\n", out[i]);
-
-  }
+//   
+//    for (int i = 0; i < 64; ++i){
+//     printf("out %f\n", out[i]);
+// 
+//   }
 
 
 
@@ -122,3 +117,4 @@ std::string s = "\n\
     exit(EXIT_SUCCESS);
 
 }
+

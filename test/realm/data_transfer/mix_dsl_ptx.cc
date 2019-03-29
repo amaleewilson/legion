@@ -37,7 +37,7 @@
 #include <unistd.h>
 
 
-
+#include <cufft.h>
 #include "terra.h"
 
 
@@ -285,23 +285,6 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
    import \"transfer_lang\"\n\
    local kf_test = layout_transform_copy src " + src +", dst " + dst + ", size " + std::to_string(num_elems) +", copy_size_per_thread " + std::to_string(c_sz / fid_count) + ", fid_count " + std::to_string(fid_count) + " done\n\
    local R,L = terralib.cudacompile({ kf_test = kf_test },true,nil,false)\n";  
-   
-   //\
-   \n\
-   terra run_main(A : &float, B : &float)\n\
-     -- I do not understand what this L is doing, but it seems necessary.\n\
-     if L(nil,nil,nil,0) ~= 0 then\n\
-         C.printf(\"WHAT\\n\")\n\
-     end\n\
-     var N = 16\n\
-    	var launch = terralib.CUDAParams { 1,1,1, N,1,1, 0, nil }\n\
- 	  R.kf_test(&launch, A, B)\n\
-   end\n\
-   \n\
-   local path = \"/lib64\"\n\
-   path = terralib.cudahome..path\n\
-   local args = {\"-L\"..path, \"-Wl,-rpath,\"..path, \"-lcuda\", \"-lcudart\"}\n\
-   terralib.saveobj(\"cudaoldc.so\",{  run_main = run_main },args)";
 
     const char *st = s.c_str();
 

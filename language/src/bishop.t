@@ -55,11 +55,16 @@ local language = {
 }
 
 function language:statement(lex)
+  print("bishop.t function language:statement(lex)")
   local node = parser:parse(lex)
+  print("bishop.t node parsed")
   local function ctor(environment_function)
+    print("bishop.t ctor")
     node = type_check.mapper(node)
+    print("bishop.t node type checked")
     return function()
       node = optimize_match.mapper(node)
+      print("bishop.t node optimize_matched")
       return codegen.mapper(node)
     end
   end

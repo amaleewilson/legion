@@ -1,4 +1,5 @@
 #include "realm.h"
+#include "c_hello.cc"
 
 #include "realm/realm_config.h"
 #include "realm/transfer/lowlevel_dma.h"
@@ -37,10 +38,6 @@
 #include <unistd.h>
 
 
-
-#include "terra.h"
-
-
 using namespace Realm;
 
 enum T_method {
@@ -68,8 +65,7 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos);
 
 // define input ptx file for different platforms
 #if defined(_WIN64) || defined(__LP64__)
-//#define PTX_FILE "kernel_transpose_gpu64.ptx"
-#define PTX_FILE "test_ptx_output.ptx"
+#define PTX_FILE "kernel_transpose_gpu64.ptx"
 #define CUBIN_FILE "kernel_transpose_gpu64.cubin"
 #else
 #define PTX_FILE "kernel_transpose_gpu32.ptx"
@@ -114,46 +110,6 @@ void top_level_task(const void *args, size_t arglen,
 
   char *arg_v = NULL;
   new_runSoAtoAoSTest(0, &arg_v, m);
-}
-
-void cpu_tranpose_soa_to_aos(float *h_A, unsigned int mem_size_A, unsigned int size_A, size_t fid_count){
-
-  float *h_C;
-  checkCudaErrors(cuMemHostAlloc((void**)&h_C, mem_size_A, 0));
-  
-  std::string trans_method = "cpu";
-
-  int elem_count = size_A/fid_count;
-
-  // create and start timer
-  StopWatchInterface *timer = NULL;
-  sdkCreateTimer(&timer);
-
-  // start the timer
-  sdkStartTimer(&timer);
-  
-    trans_method += "_aos_to_soa";
-    for (size_t i = 0; i < size_A; ++i){
-      h_C[i] = h_A[i/fid_count + (i%fid_count)*elem_count];
-    } 
-
-  // stop and destroy timer
-  sdkStopTimer(&timer);
-  
-  float memcpy_time = sdkGetTimerValue(&timer);
-  sdkDeleteTimer(&timer);
-
-
-#ifdef CHECK_COPY
-  // TODO
-#endif
-    
-
-  // should the mem ops be 2??
-  int mem_ops = 1;
-  int total_bytes = mem_size_A * mem_ops;
-  std::cout << trans_method << "," << memcpy_time  << "," << fid_count << "," << num_elems << "," << total_bytes << "," << total_bytes/memcpy_time/1000000 << std::endl;
-
 }
 
 void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
@@ -219,22 +175,7 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
       e.wait();
       src_insts.push_back(s_inst);
 
-      /*
-    int tst[20];
-    sharedtst_ptr = tst;
-
-    s_inst.read_untyped(0, tst_ptr, 80);
-
-    log_app.print() << "s_inst";
-
-    for (int i = 0; i < 20; ++i){
-      log_app.print() << tst[i];
-    }
-    */
-
-
     } // end src_mem thing
-
 
 
 
@@ -243,120 +184,29 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   int block_size = 32;
   //int block_size = 64; // This cut bw in half 
 
-
-
-
-  size_t fid_count = field_sizes.size(); 
-
-
-  std::string src;
-  std::string dst;
-
-  switch(method){
-    case BP_SOA_TO_AOS :
-      src = "soa";
-      dst = "aos"; 
-      break;
-    case BP_AOS_TO_SOA :
-      src = "aos";
-      dst = "soa"; 
-      break;
-    default: 
-      src = "soa";
-      dst = "aos"; 
-      break;
-  }
-
-
-
-    lua_State * Lu = luaL_newstate(); //create a plain lua state
-    luaL_openlibs(Lu);                //initialize its libraries
-    //initialize the terra state in lua
-    terra_init(Lu);
-
-
-    std::string s = "\n\
-   local C = terralib.includecstring [[\n\
-   #include \"cuda_runtime.h\"\n\
-   #include <stdlib.h>\n\
-   #include <stdio.h>\n\
-   ]]\n\
-   \n\
-   import \"transfer_lang\"\n\
-   local kf_test = layout_transform_copy src " + src +", dst " + dst + ", size " + std::to_string(num_elems) +", copy_size_per_thread " + std::to_string(c_sz / fid_count) + ", fid_count " + std::to_string(fid_count) + " done\n\
-   local R,L = terralib.cudacompile({ kf_test = kf_test },true,nil,false)\n";  
-   
-   //\
-   \n\
-   terra run_main(A : &float, B : &float)\n\
-     -- I do not understand what this L is doing, but it seems necessary.\n\
-     if L(nil,nil,nil,0) ~= 0 then\n\
-         C.printf(\"WHAT\\n\")\n\
-     end\n\
-     var N = 16\n\
-    	var launch = terralib.CUDAParams { 1,1,1, N,1,1, 0, nil }\n\
- 	  R.kf_test(&launch, A, B)\n\
-   end\n\
-   \n\
-   local path = \"/lib64\"\n\
-   path = terralib.cudahome..path\n\
-   local args = {\"-L\"..path, \"-Wl,-rpath,\"..path, \"-lcuda\", \"-lcudart\"}\n\
-   terralib.saveobj(\"cudaoldc.so\",{  run_main = run_main },args)";
-
-    const char *st = s.c_str();
-
-    if (terra_dostring(Lu, st)){
-        printf("error\n"); 
-    }
-  
-
-
-  std::cout << "terra called before initCUDA\n";
-
-
   CUresult error_id = initCUDA(argc, argv, &copy_func);
   if (error_id != CUDA_SUCCESS) {
     printf("initCUDA() returned %d\n-> %s\n", error_id,
            getCudaDrvErrorString(error_id));
     exit(EXIT_FAILURE);
   }
+  size_t fid_count = field_sizes.size(); 
 
   unsigned int size_A = num_elems * fid_count;
   unsigned int mem_size_A = sizeof(float) * size_A;
   
   float* tst_ptr = new float[size_A];
     
-  //MemoryImpl *src_memory = get_runtime()->get_memory_impl(src_insts[0]); 
-  //float *src_base =  reinterpret_cast<float *>(src_memory->get_direct_ptr(0, mem_size_A)); 
-  //std::cout << "test " << src_base[0] << std::endl;
-
-
-  //void *src_base = LocalCPUMemory(src_insts[0].get_location()).get_direct_ptr(0, mem_size_A);
-  // necessary to read this again???
-    
     src_insts[0].read_untyped(0, tst_ptr, mem_size_A);
     
-  //src_insts[0].read_untyped(0, h_A, mem_size_A);
-  /*
-    log_app.print() << V" og s_inst";
-
-    for (int i = 0; i < 20; ++i){
-      log_app.print() <<  tst_ptr[i];
-    }
-  */
-
   float *h_A;
   checkCudaErrors(cuMemHostAlloc((void**)&h_A, mem_size_A, 0));
 
-
-
   for (size_t i = 0; i < size_A; ++i){
     h_A[i] = tst_ptr[i];
-    //std::cout << "test " << src_base[i] << std::endl;
-    //h_A[i] = *((float*)(src_base[i]));
   }
 
-/*
+
   //DEBUGGING THING
   for (size_t i = 0; i < 12; ++i){
     h_A[i] = i * 2 + 1;
@@ -370,13 +220,6 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   for (size_t i = 0; i < 48; ++i){
     h_A[i] = i * 7 + 1;
   }
-*/
-  
-  // Seems that read_untyped does not work with the cumemhostalloc'd h_A
-  // src_insts[0].read_untyped(0, h_A, mem_size_A);
-
-
-  //std::cout << "h_A[0] " << h_A[0] << "\n";
 
   CUdeviceptr d_A;
   checkCudaErrors(cuMemAlloc(&d_A, mem_size_A));
@@ -387,8 +230,8 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   checkCudaErrors(cuMemcpyHtoD(d_A, h_A, mem_size_A));
   checkCudaErrors(cuCtxSynchronize());    
   
- 
-    std::string trans_method = "kernel";
+
+  std::string trans_method = "kernel";
     // create and start timer
   StopWatchInterface *timer = NULL;
   sdkCreateTimer(&timer);
@@ -397,10 +240,13 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   size_t num_elems2 = (size_t)(size_A / fid_count);
   size_t elem_size = sizeof(float);
  
-  void *args[6] = {&d_A, &d_B};
+  void *args[6] = {&d_A, &d_B, &elem_size, &num_elems2, &fid_count};
   std::vector<void*> vector_args;
   vector_args.push_back(&d_A);
   vector_args.push_back(&d_B);
+  vector_args.push_back(&elem_size);
+  vector_args.push_back(&num_elems2);
+  vector_args.push_back(&fid_count);
  
   size_t grid_size = size_A/block_size;
 
@@ -410,6 +256,10 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
       vector_args = {};
       vector_args.push_back(&d_A);
       vector_args.push_back(&d_B);
+      vector_args.push_back(&elem_size);
+      vector_args.push_back(&num_elems2);
+      vector_args.push_back(&fid_count);
+      vector_args.push_back(&c_sz);
       trans_method += "_bp_soa_to_aos";
       break;
     case BP_AOS_TO_SOA :
@@ -417,18 +267,30 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
       vector_args = {};
       vector_args.push_back(&d_A);
       vector_args.push_back(&d_B);
+      vector_args.push_back(&elem_size);
+      vector_args.push_back(&num_elems2);
+      vector_args.push_back(&fid_count);
+      vector_args.push_back(&c_sz);
       trans_method += "_bp_aos_to_soa";
       break;
     default: 
       vector_args = {};
       vector_args.push_back(&d_A);
       vector_args.push_back(&d_B);
+      vector_args.push_back(&elem_size);
+      vector_args.push_back(&num_elems2);
+      vector_args.push_back(&fid_count);
+      vector_args.push_back(&c_sz);
       trans_method += "_bp_soa_to_aos";
       break;
   }
   
   size_t shared_size = block_size * ne_per_t * sizeof(float); 
+  //grid_size = grid_size/ne_per_t;
   grid_size = block_count;
+
+  //std::cout << "blocks per grid : " <<  grid_size << "\n";//(size_A)/block_size/ne_per_t << "\n";
+  //std::cout << "threads per block : " <<  block_size << "\n";//(size_A)/block_size/ne_per_t << "\n";
  
   dim3 block(block_size, 1, 1);
   dim3 grid(grid_size, 1, 1); 
@@ -441,13 +303,12 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
 
   // start the timer
   sdkStartTimer(&timer);
-    
-  checkCudaErrors(cuLaunchKernel( // TODO: double check the culaunch kernel api 
-      copy_func, grid.x, grid.y, grid.z, block.x, block.y, block.z,
-      shared_size, NULL, &vector_args[0]/*args*/ , NULL));
 
+  std::cout << "made it to the method\n";
+  std::cout << trans_method << "," << fid_count << "," << num_elems << "," << block_count << "," << block_size << "," << c_sz << std::endl;
 
-  checkCudaErrors(cuCtxSynchronize());
+  //data_transform(d_A, d_B, "soa", "aos", num_elems2/fid_count, 2, fid_count);
+    data_transform();
 
   // stop and destroy timer
   sdkStopTimer(&timer);
@@ -465,41 +326,30 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
 
   bool correct = true;
  
- if (method == BP_SOA_TO_AOS || method == BP_SOA_TO_AOS_SINGLE){ 
+ if (method == BP_SOA_TO_AOS ){ 
     for (int i = 0; i < size_A; i++) {
-    //std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] <<  " h_A : " << h_A[i] << std::endl;
+  //  std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] <<  " h_A : " << h_A[i] << std::endl;
   
       if (fabs(h_Ccheck[i] - h_A[i/fid_count + (i%fid_count)*num_elems]) > 1e-5) {
- //       std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
+        //std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << std::endl;
         correct = false;
       }
     }
  }
- else if (method == BP_AOS_TO_SOA || method == BP_AOS_TO_SOA_SINGLE){
+ else { // aos to soa
   
     for (int i = 0; i < size_A; i++) {
-   // std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << " h_A : " << h_A[i] << std::endl;
+    // std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << " h_A : " << h_A[i] << std::endl;
   
       if (fabs(h_Ccheck[i/fid_count + (i%fid_count)*num_elems] - h_A[i]) > 1e-5) {
-//        std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i/fid_count + (i%fid_count)*num_elems] << " h_A : " << h_A[i] << std::endl;
-        correct = false;
-      }
-    }
-
- }
- else{
-    for (int i = 0; i < size_A; i++) {
-    //std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i] << " h_A : " << h_A[i] << std::endl;
-  
-      if (fabs(h_Ccheck[i] - h_A[i]) > 1e-5) {
         //std::cout << "transpose h_Ccheck[" << i << "] : " << h_Ccheck[i/fid_count + (i%fid_count)*num_elems] << " h_A : " << h_A[i] << std::endl;
         correct = false;
       }
     }
 
  }
-
-  if (!correct){
+  
+ if (!correct){
       std::cout << "failed test" << std::endl;
   }
   else{
@@ -525,8 +375,7 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
 
 bool inline findModulePath(const char *module_file, std::string &module_path,
                            char **argv, std::string &ptx_source) {
-  char *actual_path = sdkFindFilePath(module_file, "/home/amaleewilson/forked_legion/legion/language/src/test_ptx_output");
-  std::cout << "actual_path" << "\n"; 
+  char *actual_path = sdkFindFilePath(module_file, argv[0]);
 
   if (actual_path) {
     module_path = actual_path;
@@ -539,6 +388,7 @@ bool inline findModulePath(const char *module_file, std::string &module_path,
     printf("> findModulePath file not found: <%s> \n", module_file);
     return false;
   } else {
+    //printf("> findModulePath <%s>\n", module_path.c_str());
 
     if (module_path.rfind(".ptx") != std::string::npos) {
       FILE *fp = fopen(module_path.c_str(), "rb");
@@ -581,10 +431,8 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
       goto Error;
     }
   } else {
-    printf("> initCUDA loading module: <%s>\n", module_path.c_str());
+    //printf("> initCUDA loading module: <%s>\n", module_path.c_str());
   }
-
-  std::cout << "module path " << module_path << "\n";
 
   if (module_path.rfind("ptx") != std::string::npos) {
     // in this branch we use compilation with parameters
@@ -611,6 +459,7 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
         cuModuleLoadDataEx(&cuModule, ptx_source.c_str(), jitNumOptions,
                            jitOptions, reinterpret_cast<void **>(jitOptVals));
 
+    //printf("> PTX JIT log:\n%s\n", jitLogBuffer);
   } else {
     status = cuModuleLoad(&cuModule, module_path.c_str());
   }
@@ -618,8 +467,31 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
   if (CUDA_SUCCESS != status) {
     goto Error;
   }
-
-  status = cuModuleGetFunction(&cuFunction, cuModule, "kf_test"); 
+  
+  switch(method){
+    case BP_SOA_TO_AOS :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "bp_soa_to_aos");
+      break;
+    case BP_AOS_TO_SOA :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "bp_aos_to_soa");
+      break;
+    case BP_SOA_TO_AOS_SINGLE :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "bp_soa_to_aos_single");
+      break;
+    case BP_AOS_TO_SOA_SINGLE :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "bp_aos_to_soa_single");
+      break;
+    case BP_SOA_TO_SOA :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "bp_soa_to_soa_test");
+      break;
+    case BP_AOS_TO_AOS :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "bp_aos_to_aos_test");
+      break;
+    default: 
+      status = cuModuleGetFunction(&cuFunction, cuModule, "bp_soa_to_aos");
+      break;
+      
+  }
 
   if (CUDA_SUCCESS != status) {
     goto Error;

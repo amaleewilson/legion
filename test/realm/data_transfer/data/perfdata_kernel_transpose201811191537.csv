@@ -1,0 +1,321 @@
+method,time,fieldIDcount,elemcount,bytes,bytesPerNano
+PASSED test
+kernel_share_transpose_multi,0.033,4,1024,16384,0.496485
+PASSED test
+kernel_share_transpose_multi,0.032,4,1024,16384,0.512
+PASSED test
+kernel_share_transpose_multi,0.038,4,1024,16384,0.431158
+PASSED test
+kernel_share_transpose_multi,0.035,4,1024,16384,0.468114
+PASSED test
+kernel_share_transpose_multi,0.032,4,1024,16384,0.512
+PASSED test
+kernel_share_transpose_multi,0.037,4,1024,16384,0.442811
+PASSED test
+kernel_share_transpose_multi,0.031,4,1024,16384,0.528516
+PASSED test
+kernel_share_transpose_multi,0.032,4,1024,16384,0.512
+PASSED test
+kernel_share_transpose_multi,0.032,4,1024,16384,0.512
+PASSED test
+kernel_share_transpose_multi,0.032,4,1024,16384,0.512
+PASSED test
+kernel_share_transpose_multi,0.035,4,2048,32768,0.936229
+PASSED test
+kernel_share_transpose_multi,0.04,4,2048,32768,0.8192
+PASSED test
+kernel_share_transpose_multi,0.033,4,2048,32768,0.99297
+PASSED test
+kernel_share_transpose_multi,0.04,4,2048,32768,0.8192
+PASSED test
+kernel_share_transpose_multi,0.038,4,2048,32768,0.862316
+PASSED test
+kernel_share_transpose_multi,0.035,4,2048,32768,0.936229
+PASSED test
+kernel_share_transpose_multi,0.04,4,2048,32768,0.8192
+PASSED test
+kernel_share_transpose_multi,0.034,4,2048,32768,0.963765
+PASSED test
+kernel_share_transpose_multi,0.04,4,2048,32768,0.8192
+PASSED test
+kernel_share_transpose_multi,0.04,4,2048,32768,0.8192
+PASSED test
+kernel_share_transpose_multi,0.041,4,4096,65536,1.59844
+PASSED test
+kernel_share_transpose_multi,0.039,4,4096,65536,1.68041
+PASSED test
+kernel_share_transpose_multi,0.039,4,4096,65536,1.68041
+PASSED test
+kernel_share_transpose_multi,0.041,4,4096,65536,1.59844
+PASSED test
+kernel_share_transpose_multi,0.039,4,4096,65536,1.68041
+PASSED test
+kernel_share_transpose_multi,0.039,4,4096,65536,1.68041
+PASSED test
+kernel_share_transpose_multi,0.043,4,4096,65536,1.52409
+PASSED test
+kernel_share_transpose_multi,0.038,4,4096,65536,1.72463
+PASSED test
+kernel_share_transpose_multi,0.04,4,4096,65536,1.6384
+PASSED test
+kernel_share_transpose_multi,0.047,4,4096,65536,1.39438
+PASSED test
+kernel_share_transpose_multi,0.051,4,8192,131072,2.57004
+PASSED test
+kernel_share_transpose_multi,0.05,4,8192,131072,2.62144
+PASSED test
+kernel_share_transpose_multi,0.054,4,8192,131072,2.42726
+PASSED test
+kernel_share_transpose_multi,0.057,4,8192,131072,2.29951
+PASSED test
+kernel_share_transpose_multi,0.06,4,8192,131072,2.18453
+PASSED test
+kernel_share_transpose_multi,0.052,4,8192,131072,2.52062
+PASSED test
+kernel_share_transpose_multi,0.052,4,8192,131072,2.52062
+PASSED test
+kernel_share_transpose_multi,0.051,4,8192,131072,2.57004
+PASSED test
+kernel_share_transpose_multi,0.052,4,8192,131072,2.52062
+PASSED test
+kernel_share_transpose_multi,0.057,4,8192,131072,2.29951
+PASSED test
+kernel_share_transpose_multi,0.063,4,16384,262144,4.16102
+PASSED test
+kernel_share_transpose_multi,0.07,4,16384,262144,3.74491
+PASSED test
+kernel_share_transpose_multi,0.066,4,16384,262144,3.97188
+PASSED test
+kernel_share_transpose_multi,0.065,4,16384,262144,4.03298
+PASSED test
+kernel_share_transpose_multi,0.068,4,16384,262144,3.85506
+PASSED test
+kernel_share_transpose_multi,0.066,4,16384,262144,3.97188
+PASSED test
+kernel_share_transpose_multi,0.062,4,16384,262144,4.22813
+PASSED test
+kernel_share_transpose_multi,0.067,4,16384,262144,3.9126
+PASSED test
+kernel_share_transpose_multi,0.07,4,16384,262144,3.74491
+PASSED test
+kernel_share_transpose_multi,0.069,4,16384,262144,3.79919
+PASSED test
+kernel_share_transpose_multi,0.09,4,32768,524288,5.82542
+PASSED test
+kernel_share_transpose_multi,0.083,4,32768,524288,6.31672
+PASSED test
+kernel_share_transpose_multi,0.087,4,32768,524288,6.0263
+PASSED test
+kernel_share_transpose_multi,0.084,4,32768,524288,6.24152
+PASSED test
+kernel_share_transpose_multi,0.086,4,32768,524288,6.09637
+PASSED test
+kernel_share_transpose_multi,0.09,4,32768,524288,5.82542
+PASSED test
+kernel_share_transpose_multi,0.091,4,32768,524288,5.76141
+PASSED test
+kernel_share_transpose_multi,0.085,4,32768,524288,6.16809
+PASSED test
+kernel_share_transpose_multi,0.093,4,32768,524288,5.63751
+PASSED test
+kernel_share_transpose_multi,0.087,4,32768,524288,6.0263
+PASSED test
+kernel_share_transpose_multi,0.144,4,65536,1048576,7.28178
+PASSED test
+kernel_share_transpose_multi,0.134,4,65536,1048576,7.82519
+PASSED test
+kernel_share_transpose_multi,0.139,4,65536,1048576,7.54371
+PASSED test
+kernel_share_transpose_multi,0.128,4,65536,1048576,8.192
+PASSED test
+kernel_share_transpose_multi,0.135,4,65536,1048576,7.76723
+PASSED test
+kernel_share_transpose_multi,0.129,4,65536,1048576,8.1285
+PASSED test
+kernel_share_transpose_multi,0.133,4,65536,1048576,7.88403
+PASSED test
+kernel_share_transpose_multi,0.134,4,65536,1048576,7.82519
+PASSED test
+kernel_share_transpose_multi,0.144,4,65536,1048576,7.28178
+PASSED test
+kernel_share_transpose_multi,0.128,4,65536,1048576,8.192
+PASSED test
+kernel_share_transpose_multi,0.242,4,131072,2097152,8.66592
+PASSED test
+kernel_share_transpose_multi,0.215,4,131072,2097152,9.7542
+PASSED test
+kernel_share_transpose_multi,0.213,4,131072,2097152,9.84578
+PASSED test
+kernel_share_transpose_multi,0.243,4,131072,2097152,8.63025
+PASSED test
+kernel_share_transpose_multi,0.243,4,131072,2097152,8.63025
+PASSED test
+kernel_share_transpose_multi,0.213,4,131072,2097152,9.84578
+PASSED test
+kernel_share_transpose_multi,0.243,4,131072,2097152,8.63025
+PASSED test
+kernel_share_transpose_multi,0.236,4,131072,2097152,8.88624
+PASSED test
+kernel_share_transpose_multi,0.233,4,131072,2097152,9.00065
+PASSED test
+kernel_share_transpose_multi,0.225,4,131072,2097152,9.32068
+PASSED test
+kernel_share_transpose_multi,0.441,4,262144,4194304,9.51089
+PASSED test
+kernel_share_transpose_multi,0.418,4,262144,4194304,10.0342
+PASSED test
+kernel_share_transpose_multi,0.42,4,262144,4194304,9.98644
+PASSED test
+kernel_share_transpose_multi,0.468,4,262144,4194304,8.96219
+PASSED test
+kernel_share_transpose_multi,0.443,4,262144,4194304,9.46795
+PASSED test
+kernel_share_transpose_multi,0.448,4,262144,4194304,9.36228
+PASSED test
+kernel_share_transpose_multi,0.448,4,262144,4194304,9.36228
+PASSED test
+kernel_share_transpose_multi,0.42,4,262144,4194304,9.98644
+PASSED test
+kernel_share_transpose_multi,0.46,4,262144,4194304,9.11805
+PASSED test
+kernel_share_transpose_multi,0.444,4,262144,4194304,9.44663
+PASSED test
+kernel_share_transpose_multi,0.853,4,524288,8388608,9.83424
+PASSED test
+kernel_share_transpose_multi,0.849,4,524288,8388608,9.88058
+PASSED test
+kernel_share_transpose_multi,0.851,4,524288,8388608,9.85735
+PASSED test
+kernel_share_transpose_multi,0.853,4,524288,8388608,9.83424
+PASSED test
+kernel_share_transpose_multi,0.884,4,524288,8388608,9.48938
+PASSED test
+kernel_share_transpose_multi,0.856,4,524288,8388608,9.79978
+PASSED test
+kernel_share_transpose_multi,0.832,4,524288,8388608,10.0825
+PASSED test
+kernel_share_transpose_multi,0.863,4,524288,8388608,9.72029
+PASSED test
+kernel_share_transpose_multi,0.859,4,524288,8388608,9.76555
+PASSED test
+kernel_share_transpose_multi,0.835,4,524288,8388608,10.0462
+PASSED test
+kernel_share_transpose_multi,1.633,4,1048576,16777216,10.2739
+PASSED test
+kernel_share_transpose_multi,1.634,4,1048576,16777216,10.2676
+PASSED test
+kernel_share_transpose_multi,1.69,4,1048576,16777216,9.92735
+PASSED test
+kernel_share_transpose_multi,1.624,4,1048576,16777216,10.3308
+PASSED test
+kernel_share_transpose_multi,1.633,4,1048576,16777216,10.2739
+PASSED test
+kernel_share_transpose_multi,1.637,4,1048576,16777216,10.2488
+PASSED test
+kernel_share_transpose_multi,1.67,4,1048576,16777216,10.0462
+PASSED test
+kernel_share_transpose_multi,1.623,4,1048576,16777216,10.3372
+PASSED test
+kernel_share_transpose_multi,1.648,4,1048576,16777216,10.1804
+PASSED test
+kernel_share_transpose_multi,1.644,4,1048576,16777216,10.2051
+PASSED test
+kernel_share_transpose_multi,3.141,4,2097152,33554432,10.6827
+PASSED test
+kernel_share_transpose_multi,3.204,4,2097152,33554432,10.4727
+PASSED test
+kernel_share_transpose_multi,3.205,4,2097152,33554432,10.4694
+PASSED test
+kernel_share_transpose_multi,3.168,4,2097152,33554432,10.5917
+PASSED test
+kernel_share_transpose_multi,3.217,4,2097152,33554432,10.4303
+PASSED test
+kernel_share_transpose_multi,3.203,4,2097152,33554432,10.4759
+PASSED test
+kernel_share_transpose_multi,3.114,4,2097152,33554432,10.7753
+PASSED test
+kernel_share_transpose_multi,3.216,4,2097152,33554432,10.4336
+PASSED test
+kernel_share_transpose_multi,3.208,4,2097152,33554432,10.4596
+PASSED test
+kernel_share_transpose_multi,3.172,4,2097152,33554432,10.5783
+PASSED test
+kernel_share_transpose_multi,6.346,4,4194304,67108864,10.575
+PASSED test
+kernel_share_transpose_multi,6.291,4,4194304,67108864,10.6674
+PASSED test
+kernel_share_transpose_multi,6.281,4,4194304,67108864,10.6844
+PASSED test
+kernel_share_transpose_multi,6.326,4,4194304,67108864,10.6084
+PASSED test
+kernel_share_transpose_multi,6.343,4,4194304,67108864,10.58
+PASSED test
+kernel_share_transpose_multi,6.3,4,4194304,67108864,10.6522
+PASSED test
+kernel_share_transpose_multi,6.316,4,4194304,67108864,10.6252
+PASSED test
+kernel_share_transpose_multi,6.317,4,4194304,67108864,10.6235
+PASSED test
+kernel_share_transpose_multi,6.334,4,4194304,67108864,10.595
+PASSED test
+kernel_share_transpose_multi,6.298,4,4194304,67108864,10.6556
+PASSED test
+kernel_share_transpose_multi,12.407,4,8388608,134217728,10.8179
+PASSED test
+kernel_share_transpose_multi,12.476,4,8388608,134217728,10.7581
+PASSED test
+kernel_share_transpose_multi,12.47,4,8388608,134217728,10.7633
+PASSED test
+kernel_share_transpose_multi,12.513,4,8388608,134217728,10.7263
+PASSED test
+kernel_share_transpose_multi,12.454,4,8388608,134217728,10.7771
+PASSED test
+kernel_share_transpose_multi,12.482,4,8388608,134217728,10.7529
+PASSED test
+kernel_share_transpose_multi,12.485,4,8388608,134217728,10.7503
+PASSED test
+kernel_share_transpose_multi,12.498,4,8388608,134217728,10.7391
+PASSED test
+kernel_share_transpose_multi,12.49,4,8388608,134217728,10.746
+PASSED test
+kernel_share_transpose_multi,12.455,4,8388608,134217728,10.7762
+PASSED test
+kernel_share_transpose_multi,24.41,4,16777216,268435456,10.9969
+PASSED test
+kernel_share_transpose_multi,24.911,4,16777216,268435456,10.7758
+PASSED test
+kernel_share_transpose_multi,24.926,4,16777216,268435456,10.7693
+PASSED test
+kernel_share_transpose_multi,24.939,4,16777216,268435456,10.7637
+PASSED test
+kernel_share_transpose_multi,24.937,4,16777216,268435456,10.7645
+PASSED test
+kernel_share_transpose_multi,24.898,4,16777216,268435456,10.7814
+PASSED test
+kernel_share_transpose_multi,24.988,4,16777216,268435456,10.7426
+PASSED test
+kernel_share_transpose_multi,24.268,4,16777216,268435456,11.0613
+PASSED test
+kernel_share_transpose_multi,24.908,4,16777216,268435456,10.7771
+PASSED test
+kernel_share_transpose_multi,24.827,4,16777216,268435456,10.8122
+PASSED test
+kernel_share_transpose_multi,49.957,4,33554432,536870912,10.7467
+PASSED test
+kernel_share_transpose_multi,49.575,4,33554432,536870912,10.8295
+PASSED test
+kernel_share_transpose_multi,49.738,4,33554432,536870912,10.794
+PASSED test
+kernel_share_transpose_multi,49.844,4,33554432,536870912,10.771
+PASSED test
+kernel_share_transpose_multi,49.584,4,33554432,536870912,10.8275
+PASSED test
+kernel_share_transpose_multi,46.736,4,33554432,536870912,11.4873
+PASSED test
+kernel_share_transpose_multi,46.778,4,33554432,536870912,11.477
+PASSED test
+kernel_share_transpose_multi,49.616,4,33554432,536870912,10.8205
+PASSED test
+kernel_share_transpose_multi,46.666,4,33554432,536870912,11.5045
+PASSED test
+kernel_share_transpose_multi,46.505,4,33554432,536870912,11.5444

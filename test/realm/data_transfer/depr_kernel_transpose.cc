@@ -70,7 +70,7 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos);
 
 // define input ptx file for different platforms
 #if defined(_WIN64) || defined(__LP64__)
-#define PTX_FILE "kernel_transpose_gpu64.ptx"
+#define PTX_FILE "depr_kernel_transpose_gpu64.ptx"
 #define CUBIN_FILE "kernel_transpose_gpu64.cubin"
 #else
 #define PTX_FILE "kernel_transpose_gpu32.ptx"

@@ -1,0 +1,12 @@
+ rm kernel_transpose; make kernel_transpose -f Makefile.transfer FLAGS=-DSHARE_TRANSPOSE_MULTI FLAGS+=-DKERNEL FLAGS+=-DCHECK_COPY
+./kernel_transpose -ne 64
+
+
+$TERRA_PATH
+/home/amaleewilson/forked_legion/legion/language/src/data_transfer/?.t
+
+
+
+/projects/opt/centos7/cuda/9.1/bin/nvcc -ccbin g++ -Xcompiler="-I../../../language/terra/release/include/terra -L../../../language/terra/release/lib -lterra -ldl  -pthread -I/projects/opt/centos7/cuda/9.1/include -L/projects/opt/centos7/cuda/9.1/lib64 -lcuda -lcudart" -I./Common  -DCHECK_COPY  -I/home/amaleewilson/forked_legion/legion/runtime -I/home/amaleewilson/forked_legion/legion/runtime/mappers -I/projects/opt/centos7/cuda/9.1/include -I/home/amaleewilson/forked_legion/legion/runtime/realm/transfer -I/projects/opt/centos7/cuda/9.1/include  -m64  -gencode arch=compute_30,code=compute_30 -o dsl_ptx_kernel_transpose.o -c dsl_ptx_kernel_transpose.cc ; /projects/opt/centos7/cuda/9.1/bin/nvcc -ccbin g++  -Xcompiler="-I../../../language/terra/release/include/terra -L../../../language/terra/release/lib -lterra -ldl  -pthread"  -m64     -gencode arch=compute_30,code=compute_30 -o dsl_ptx_kernel_transpose dsl_ptx_kernel_transpose.o  -L/projects/opt/centos7/cuda/9.1/lib64/stubs -lcuda -L. -lrealm -DCHECK_COPY  -I/home/amaleewilson/forked_legion/legion/runtime -I/home/amaleewilson/forked_legion/legion/runtime/mappers -I/projects/opt/centos7/cuda/9.1/include -I/home/amaleewilson/forked_legion/legion/runtime/realm/transfer  -DUSE_CUDA -DDEBUG_REALM -DDEBUG_LEGION -g -O0 -arch=compute_70 -code=sm_70 -DVOLTA_ARCH -Xptxas "-v" -I../../../language/terra/release/include/terra -L../../../language/terra/release/lib -lterra -ldl;  ./dsl_ptx_kernel_transpose -ne 64 -copy_count 8 -method bp_soa_to_aos -block_count 2 -thread_count 128
+
+/projects/opt/centos7/cuda/9.1/bin/nvcc -ccbin g++  -I/projects/opt/centos7/cuda/9.1/include -o sfft1D1D.o -c sfft1D1D.cu ; /projects/opt/centos7/cuda/9.1/bin/nvcc -ccbin g++ -L/projects/opt/centos7/cuda/9.1/lib64 -lcuda -lcudart -lcufft -o sfft1D1D sfft1D1D.o ; ./sfft1D1D

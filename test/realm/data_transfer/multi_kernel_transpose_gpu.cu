@@ -222,6 +222,14 @@ __device__ void bp_soa_to_aos_single(float *d_A, float *d_B, size_type elem_size
  
   size_type real_tid = ((blockIdx.x + blockIdx.y*gridDim.x) * (blockDim.x*blockDim.y) + (threadIdx.y*blockDim.x) + threadIdx.x);
  
+  size_type src_base0 = 0;
+  size_type src_base1 = elem_count;
+  size_type src_base2 = elem_count*2;
+  size_type src_base3 = elem_count*3;
+
+  size_type s_base[] = { src_base0, src_base1, src_base2, src_base3 };
+
+
   size_type inc = gridDim.x*gridDim.y*blockDim.x*blockDim.y;
 
   size_type of = (real_tid % fid_count); 
@@ -267,6 +275,10 @@ extern "C" __global__ void bp_aos_to_aos_test(float *d_A, float *d_B,
 extern "C" __global__ void bp_soa_to_soa_test(float *d_A, float *d_B,
                                                 int e_size, int e_count, int fid_count, int c_sz) {
   bp_soa_to_soa_test<32, int>(d_A, d_B, e_size, e_count, fid_count, c_sz);
+}
+extern "C" __global__ void bp_soa_to_aos_shared1024(float *d_A, float *d_B,
+                                                int e_size, int e_count, int fid_count, int c_sz) {
+  bp_soa_to_aos_shared<32, int, 1024>(d_A, d_B, e_size, e_count, fid_count, c_sz);
 }
 
 #endif  // #ifndef _COPY_KERNEL_H_

@@ -1,1 +1,7 @@
 python scripts/setup_env.py --llvm-version 38 --terra-url git@github.com:amaleewilson/terra.git --terra-branch master
+
+
+        std::error_code OutErrorInfo;
+        llvm::raw_fd_ostream outFile(llvm::StringRef("/home/amaleewilson/forked_legion/legion/language/src/test_ptx_output.ptx"), OutErrorInfo, llvm::sys::fs::F_None);
+        outFile << M;
+        outFile.close();

@@ -39,7 +39,7 @@
 
 
 #include "terra.h"
-
+#include "cuapi.cc"
 
 using namespace Realm;
 
@@ -219,26 +219,8 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
       e.wait();
       src_insts.push_back(s_inst);
 
-      /*
-    int tst[20];
-    sharedtst_ptr = tst;
-
-    s_inst.read_untyped(0, tst_ptr, 80);
-
-    log_app.print() << "s_inst";
-
-    for (int i = 0; i < 20; ++i){
-      log_app.print() << tst[i];
-    }
-    */
-
-
     } // end src_mem thing
 
-
-
-
-  CUfunction copy_func = NULL;
   
   int block_size = 32;
   //int block_size = 64; // This cut bw in half 
@@ -314,7 +296,7 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   std::cout << "terra called before initCUDA\n";
 
 
-  CUresult error_id = initCUDA(argc, argv, &copy_func);
+  CUresult error_id = initCUDA(argc, argv);
   if (error_id != CUDA_SUCCESS) {
     printf("initCUDA() returned %d\n-> %s\n", error_id,
            getCudaDrvErrorString(error_id));
@@ -442,12 +424,7 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
   // start the timer
   sdkStartTimer(&timer);
     
-  checkCudaErrors(cuLaunchKernel( // TODO: double check the culaunch kernel api 
-      copy_func, grid.x, grid.y, grid.z, block.x, block.y, block.z,
-      shared_size, NULL, &vector_args[0]/*args*/ , NULL));
-
-
-  checkCudaErrors(cuCtxSynchronize());
+  test_api::run_test(d_A, d_B, src, dst, num_elems, fid_count, c_sz, argc, argv);  
 
   // stop and destroy timer
   sdkStopTimer(&timer);
@@ -539,6 +516,7 @@ bool inline findModulePath(const char *module_file, std::string &module_path,
     printf("> findModulePath file not found: <%s> \n", module_file);
     return false;
   } else {
+    //printf("> findModulePath <%s>\n", module_path.c_str());
 
     if (module_path.rfind(".ptx") != std::string::npos) {
       FILE *fp = fopen(module_path.c_str(), "rb");
@@ -557,15 +535,14 @@ bool inline findModulePath(const char *module_file, std::string &module_path,
   }
 }
 
-static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
-  CUfunction cuFunction = 0;
+static CUresult initCUDA(int argc, char **argv ) {
   CUresult status;
   int major = 0, minor = 0;
   char deviceName[100];
   std::string module_path, ptx_source;
 
   cuDevice = findCudaDeviceDRV(argc, (const char **)argv);
-
+  
   status = cuCtxCreate(&cuContext, 0, cuDevice);
 
   if (CUDA_SUCCESS != status) {
@@ -581,7 +558,7 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
       goto Error;
     }
   } else {
-    printf("> initCUDA loading module: <%s>\n", module_path.c_str());
+    //printf("> initCUDA loading module: <%s>\n", module_path.c_str());
   }
 
   std::cout << "module path " << module_path << "\n";
@@ -611,6 +588,7 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
         cuModuleLoadDataEx(&cuModule, ptx_source.c_str(), jitNumOptions,
                            jitOptions, reinterpret_cast<void **>(jitOptVals));
 
+    //printf("> PTX JIT log:\n%s\n", jitLogBuffer);
   } else {
     status = cuModuleLoad(&cuModule, module_path.c_str());
   }
@@ -619,8 +597,35 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
     goto Error;
   }
 
-  status = cuModuleGetFunction(&cuFunction, cuModule, "kf_test"); 
 
+
+  status = cuModuleGetFunction(&cuFunction, cuModule, "kf_test"); 
+/*  
+  switch(method){
+    case BP_SOA_TO_AOS :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "bp_soa_to_aos");
+      break;
+    case BP_AOS_TO_SOA :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "bp_aos_to_soa");
+      break;
+    case BP_SOA_TO_AOS_SINGLE :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "bp_soa_to_aos_single");
+      break;
+    case BP_AOS_TO_SOA_SINGLE :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "bp_aos_to_soa_single");
+      break;
+    case BP_SOA_TO_SOA :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "bp_soa_to_soa_test");
+      break;
+    case BP_AOS_TO_AOS :
+      status = cuModuleGetFunction(&cuFunction, cuModule, "bp_aos_to_aos_test");
+      break;
+    default: 
+      status = cuModuleGetFunction(&cuFunction, cuModule, "bp_soa_to_aos");
+      break;
+      
+  }
+*/
   if (CUDA_SUCCESS != status) {
     goto Error;
   }
@@ -706,4 +711,5 @@ int main(int argc, char **argv)
   
   return 0;
 }
+
 

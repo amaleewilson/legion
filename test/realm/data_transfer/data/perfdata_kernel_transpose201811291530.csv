@@ -1,0 +1,16 @@
+method,time,fieldIDcount,elemcount,bytes,bytesPerNano,machine
+kernel_transpose1,0.024,4,1024,16384,0.682667, cn407
+kernel_transpose1,0.025,4,1024,16384,0.65536, cn407
+kernel_transpose1,0.025,4,1024,16384,0.65536, cn407
+kernel_transpose1,0.024,4,1024,16384,0.682667, cn407
+kernel_transpose1,0.028,4,1024,16384,0.585143, cn407
+kernel_transpose1,0.024,4,1024,16384,0.682667, cn407
+kernel_transpose1,0.028,4,1024,16384,0.585143, cn407
+kernel_transpose1,0.035,4,1024,16384,0.468114, cn407
+kernel_transpose1,0.028,4,1024,16384,0.585143, cn407
+kernel_transpose1,0.029,4,1024,16384,0.564966, cn407
+kernel_transpose1,0.03,4,2048,32768,1.09227, cn407
+kernel_transpose1,0.028,4,2048,32768,1.17029, cn407
+kernel_transpose1,0.027,4,2048,32768,1.21363, cn407
+kernel_transpose1,0.027,4,2048,32768,1.21363, cn407
+kernel_transpose1,0.031,4,2048,32768,1.05703, cn407
