@@ -1,0 +1,1 @@
+python scripts/setup_env.py --llvm-version 38 --terra-url git@github.com:amaleewilson/terra.git --terra-branch master
