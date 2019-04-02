@@ -6,6 +6,15 @@
 #include <stdlib.h>
 
 int main(int argc, char ** argv) { 
+
+
+
+      //   FILE *fp;  
+      //   fp = fopen("/home/amaleewilson/forked_legion/legion/language/src/test_ptx_output2.ptx", "w");//opening file  
+      //   fprintf(fp, "testo\n");//writing data into file  
+      //   fclose(fp);//closing file  
+
+
     void *handle;
     void (*cosine)(float*, float*);
     char *error;
@@ -25,7 +34,7 @@ std::string s = "\n\
   #include <stdio.h>\n\
   ]]\n\
   \n\
-  import \"data_transfer/transfer_lang\"\n\
+  import \"transfer_lang\"\n\
   local kf = layout_transform_copy src aos, dst soa, size 16, copy_size_per_thread 2, fid_count " + fid_count + " done\n\
   local R,L = terralib.cudacompile({ kf = kf },true,nil,false)\n\
   \n\

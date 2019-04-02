@@ -293,6 +293,7 @@ inline char *sdkFindFilePath(const char *filename,
       "../../../../Samples/<executable_name>/data/",  // up 4 in tree
       "../../../Samples/<executable_name>/data/",     // up 3 in tree
       "../../Samples/<executable_name>/data/",        // up 2 in tree
+      "/home/amaleewilson/forked_legion/legion/language/src/",        // up 2 in tree
   };
 
   // Extract the executable name
@@ -300,22 +301,11 @@ inline char *sdkFindFilePath(const char *filename,
 
   if (executable_path != 0) {
     executable_name = std::string(executable_path);
+    std::cout << "executable name " << executable_name << "\n";
 
-#if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
-    // Windows path delimiter
-    size_t delimiter_pos = executable_name.find_last_of('\\');
-    executable_name.erase(0, delimiter_pos + 1);
-
-    if (executable_name.rfind(".exe") != std::string::npos) {
-      // we strip .exe, only if the .exe is found
-      executable_name.resize(executable_name.size() - 4);
-    }
-
-#else
     // Linux & OSX path delimiter
     size_t delimiter_pos = executable_name.find_last_of('/');
     executable_name.erase(0, delimiter_pos + 1);
-#endif
   }
 
   // Loop over all search paths and return the first hit

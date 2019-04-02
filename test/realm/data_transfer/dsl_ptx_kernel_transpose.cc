@@ -67,14 +67,14 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem);
 static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos);
 
 // define input ptx file for different platforms
-#if defined(_WIN64) || defined(__LP64__)
+//#if defined(_WIN64) || defined(__LP64__)
 //#define PTX_FILE "kernel_transpose_gpu64.ptx"
 #define PTX_FILE "test_ptx_output.ptx"
-#define CUBIN_FILE "kernel_transpose_gpu64.cubin"
-#else
-#define PTX_FILE "kernel_transpose_gpu32.ptx"
-#define CUBIN_FILE "kernel_transpose_gpu32.cubin"
-#endif
+//#define CUBIN_FILE "kernel_transpose_gpu64.cubin"
+//#else
+//#define PTX_FILE "kernel_transpose_gpu32.ptx"
+//#define CUBIN_FILE "kernel_transpose_gpu32.cubin"
+//#endif
 
 CUdevice cuDevice;
 CUcontext cuContext;
@@ -525,20 +525,23 @@ void new_runSoAtoAoSTest(int argc, char **argv, Memory src_mem){
 
 bool inline findModulePath(const char *module_file, std::string &module_path,
                            char **argv, std::string &ptx_source) {
-  char *actual_path = sdkFindFilePath(module_file, "/home/amaleewilson/forked_legion/legion/language/src/test_ptx_output");
-  std::cout << "actual_path" << "\n"; 
+ // const char *patho = "/home/amaleewilson/forked_legion/legion/language/src/test_ptx_output.ptx"; 
+ // const char *patho2 = "test_ptx_output.ptx"; 
+ // std::cout << "patho "  << patho << "\n"; 
+ // char *actual_path = sdkFindFilePath(module_file, patho);
+ // std::cout << "findModulePath actual_path" << actual_path << "\n\n"; 
 
-  if (actual_path) {
-    module_path = actual_path;
-  } else {
-    printf("> findModulePath file not found: <%s> \n", module_file);
-    return false;
-  }
-
-  if (module_path.empty()) {
-    printf("> findModulePath file not found: <%s> \n", module_file);
-    return false;
-  } else {
+//  if (actual_path) {
+//    module_path = actual_path;
+//  } else {
+//    printf("> findModulePath file not found: <%s> \n", module_file);
+//    return false;
+//  }
+//
+//  if (module_path.empty()) {
+//    printf("> findModulePath file not found: <%s> \n", module_file);
+//    return false;
+//  } else {
 
     if (module_path.rfind(".ptx") != std::string::npos) {
       FILE *fp = fopen(module_path.c_str(), "rb");
@@ -554,7 +557,7 @@ bool inline findModulePath(const char *module_file, std::string &module_path,
     }
 
     return true;
-  }
+  //}
 }
 
 static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
@@ -563,6 +566,7 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
   int major = 0, minor = 0;
   char deviceName[100];
   std::string module_path, ptx_source;
+  module_path = "/home/amaleewilson/forked_legion/legion/language/src/test_ptx_output.ptx";
 
   cuDevice = findCudaDeviceDRV(argc, (const char **)argv);
 
@@ -574,12 +578,12 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
 
   // first search for the module path before we load the results
   if (!findModulePath(PTX_FILE, module_path, argv, ptx_source)) {
-    if (!findModulePath(CUBIN_FILE, module_path, argv, ptx_source)) {
+    //if (!findModulePath(CUBIN_FILE, module_path, argv, ptx_source)) {
       printf(
           "> findModulePath could not find <matrixMul_kernel> ptx or cubin\n");
       status = CUDA_ERROR_NOT_FOUND;
       goto Error;
-    }
+    //}
   } else {
     printf("> initCUDA loading module: <%s>\n", module_path.c_str());
   }
@@ -587,6 +591,7 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
   std::cout << "module path " << module_path << "\n";
 
   if (module_path.rfind("ptx") != std::string::npos) {
+    std::cout << "this should be printing\n";
     // in this branch we use compilation with parameters
     const unsigned int jitNumOptions = 3;
     CUjit_option *jitOptions = new CUjit_option[jitNumOptions];
@@ -619,6 +624,8 @@ static CUresult initCUDA(int argc, char **argv, CUfunction *SoAtoAos) {
     goto Error;
   }
 
+
+  std::cout << "about to call getfunction\n";
   status = cuModuleGetFunction(&cuFunction, cuModule, "kf_test"); 
 
   if (CUDA_SUCCESS != status) {

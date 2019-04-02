@@ -1,2 +1,2 @@
-g++ c_terra.cc  -o c_terra -I../terra/release/include/terra -L../terra/release/lib -lterra -ldl -lz -pthread; ./c_terra
-g++ c_hello.cc  -o c_hello -I../terra/release/include/terra -L../terra/release/lib -lterra -ldl -lz -pthread -I/projects/opt/centos7/cuda/9.1/include -L/projects/opt/centos7/cuda/9.1/lib64 -lcuda -lcudart; ./c_hello
+g++ c_terra.cc  -o c_terra -I../terra/release/include/terra -L../terra/release/lib -lterra -ldl -pthread; ./c_terra
+g++ c_hello.cc  -o c_hello -I../terra/release/include/terra -L../terra/release/lib -lterra -ldl -pthread -I/projects/opt/centos7/cuda/9.1/include -L/projects/opt/centos7/cuda/9.1/lib64 -lcuda -lcudart; ./c_hello

@@ -7,6 +7,7 @@ if os.getenv("CI") then
 	return
 end
 import "transfer_lang"
+--require( "transfer_lang")
 
 local C = terralib.includecstring [[
 #include "cuda_runtime.h"
@@ -32,7 +33,7 @@ print("after gen")
    
 print(test_kernel_output)
 
-local R = terralib.cudacompile({ bar = test_kernel_output })
+local R = terralib.cudacompile({ bar = test_kernel_output }, true)
 
 print(R.bar)
  

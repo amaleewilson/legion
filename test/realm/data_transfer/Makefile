@@ -111,7 +111,7 @@ kernel_transpose : kernel_transpose.cc
 	
 dsl_ptx_kernel_transpose : dsl_ptx_kernel_transpose.cc
 	$(NVCC) -ccbin g++ $(I_TERRA) -I./Common  $(INC_FLAGS) -I$(CUDA)/include  -o $@.o -c $@.cc
-	$(NVCC) -ccbin g++  $(L_TERRA) -o $@ $@.o  -L$(CUDA)/lib64/stubs -lcuda -L. -lrealm $(INC_FLAGS) $(NVCC_FLAGS)
+	$(NVCC) -ccbin g++  $(L_TERRA) -o $@ $@.o -lz  -L$(CUDA)/lib64/stubs -lcuda -L. -lrealm $(INC_FLAGS) $(NVCC_FLAGS)
 	
 dsl_kernel_transpose : dsl_kernel_transpose.cc
 	$(NVCC) -ccbin g++ -I./Common $(INC_FLAGS) -I$(CUDA)/include  -o $@.o -c $@.cc
