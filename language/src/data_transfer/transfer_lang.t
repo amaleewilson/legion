@@ -88,8 +88,8 @@ end
 terralib.includepath = terralib.includepath..";/usr/local/cuda/include"
 
 
-local transfer_language = {
-  name = "transfer_language",
+local transfer_lang = {
+  name = "transfer_lang",
   entrypoints = {"layout_transform_copy"},
   keywords = {"layout_transform_copy", "aos", "soa", "size", "fid_count", "copy_size_per_thread", "src", "dst", "done"},
 }
@@ -97,7 +97,7 @@ local transfer_language = {
 sync = terralib.externfunction("cudaThreadSynchronize", {} -> int)
 
 
-function transfer_language:expression(lex)
+function transfer_lang:expression(lex)
     
   local info = parser:parse(lex)
   return function(environment_function)
@@ -110,5 +110,5 @@ function transfer_language:expression(lex)
 end
 
 
-return transfer_language
+return transfer_lang
 
